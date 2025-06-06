@@ -82,8 +82,8 @@ export default function BrowsePage() {
       if (!packData || !packPins) throw new Error('Failed to get pack data')
 
       if (format === 'maps') {
-        // Create Google Maps URL with all locations
-        generateGoogleMapsListURL(packData, packPins.map(item => (item as any).pins))
+        // Open Google Maps directly without modal
+        openGoogleMapsDirectly(packData, packPins.map(item => (item as any).pins))
       } else if (format === 'qr') {
         // Generate QR code for the pack
         generateQRCode(packData, packPins.map(item => (item as any).pins))
@@ -96,42 +96,50 @@ export default function BrowsePage() {
 
   // Generate Google Maps URL with multiple locations (like a list)
   const generateGoogleMapsListURL = (packData: any, pins: any[]) => {
-    // Debug: log the pins to see what data we're getting
-    console.log('Pins data:', pins)
+    // Check if pins have valid coordinates
+    const pinsWithCoords = pins.filter(pin => pin.latitude !== 0 || pin.longitude !== 0)
+    const pinsWithoutCoords = pins.filter(pin => pin.latitude === 0 && pin.longitude === 0)
     
-    // Filter out pins with invalid coordinates and create coordinate strings
-    const validPins = pins.filter(pin => pin.latitude && pin.longitude && pin.latitude !== 0 && pin.longitude !== 0)
-    console.log('Valid pins:', validPins)
-    
-    if (validPins.length === 0) {
-      alert('No valid coordinates found for these pins. Please check the pin pack data.')
-      return
+    if (pinsWithCoords.length === 0 && pinsWithoutCoords.length > 0) {
+      // All pins are from a Google Maps list URL - check if we have the original list URL
+      const hasListUrl = pinsWithoutCoords.some(pin => 
+        pin.google_maps_url && (
+          pin.google_maps_url.includes('/lists/') || 
+          pin.google_maps_url.includes('list/') ||
+          (pin.google_maps_url.includes('maps.app.goo.gl') && !pin.google_maps_url.includes('@'))
+        )
+      )
+      
+      if (hasListUrl) {
+        // Open the original Google Maps list URL directly
+        const listUrl = pinsWithoutCoords[0].google_maps_url
+        showGoogleMapsListModal(packData, pins, listUrl)
+        return
+      } else {
+        alert('No valid coordinates found for these pins. Please check the pin pack data.')
+        return
+      }
     }
     
-    // Create a Google Maps directions URL that includes all locations as waypoints
-    const coordinates = validPins.map(pin => `${pin.latitude},${pin.longitude}`)
-    console.log('Coordinates:', coordinates)
+    // Create a Google Maps search URL that shows the first location with coordinates
+    const firstPin = pinsWithCoords[0] || pins[0]
+    const mainUrl = pinsWithCoords.length > 0 
+      ? `https://www.google.com/maps/search/${firstPin.latitude},${firstPin.longitude}`
+      : `https://www.google.com/maps/search/${encodeURIComponent(packData.title + ' ' + packData.city)}`
     
-    // Google Maps directions URL with multiple waypoints (shows all locations at once)
-    const directionsUrl = `https://www.google.com/maps/dir/${coordinates.join('/')}`
-    console.log('Directions URL:', directionsUrl)
-    
-    // Also create a search URL that shows the area with all pins
-    const bounds = calculateBounds(validPins)
-    const centerLat = (bounds.north + bounds.south) / 2
-    const centerLng = (bounds.east + bounds.west) / 2
-    const searchUrl = `https://www.google.com/maps/@${centerLat},${centerLng},12z`
-    
-    // Create individual location URLs for each pin (only valid ones)
-    const individualUrls = validPins.map(pin => ({
+    // Create individual location URLs for each pin
+    const individualUrls = pins.map(pin => ({
       title: pin.title,
       description: pin.description,
-      url: `https://www.google.com/maps/search/${pin.latitude},${pin.longitude}`,
-      coordinates: `${pin.latitude},${pin.longitude}`
+      url: (pin.latitude !== 0 || pin.longitude !== 0) 
+        ? `https://www.google.com/maps/search/${pin.latitude},${pin.longitude}`
+        : pin.google_maps_url || `https://www.google.com/maps/search/${encodeURIComponent(pin.title)}`,
+      coordinates: (pin.latitude !== 0 || pin.longitude !== 0) ? `${pin.latitude},${pin.longitude}` : 'Google Maps URL',
+      hasCoordinates: pin.latitude !== 0 || pin.longitude !== 0
     }))
     
     // Open sharing modal with the URL and instructions
-    showGoogleMapsModal(packData, validPins, directionsUrl, individualUrls, searchUrl)
+    showGoogleMapsModal(packData, pins, mainUrl, individualUrls)
   }
 
   // Calculate bounds for all pins to center the map view
@@ -144,6 +152,91 @@ export default function BrowsePage() {
       south: Math.min(...lats),
       east: Math.max(...lngs),
       west: Math.min(...lngs)
+    }
+  }
+
+  // Show modal specifically for Google Maps list URLs
+  const showGoogleMapsListModal = (packData: any, pins: any[], listUrl: string) => {
+    const modalHtml = `
+      <div id="pinpack-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;">
+        <div style="background: white; border-radius: 16px; max-width: 500px; width: 90%; padding: 0;">
+          <div style="background: linear-gradient(135deg, #fb7185, #f59e0b); padding: 24px; border-radius: 16px 16px 0 0; color: white;">
+            <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: bold;">📋 ${packData.title}</h2>
+            <p style="margin: 0; opacity: 0.9;">${packData.city}, ${packData.country} • Google Maps List</p>
+          </div>
+          
+          <div style="padding: 24px;">
+            <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px; padding: 20px; margin-bottom: 20px; text-align: center;">
+              <h3 style="margin: 0 0 12px 0; color: #92400e; font-size: 18px;">🗺️ This is a Google Maps List!</h3>
+              <p style="margin: 0 0 16px 0; color: #92400e; line-height: 1.5;">This pin pack was created from a Google Maps list. Click below to open the complete list directly in Google Maps.</p>
+              <a href="${listUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; text-decoration: none; font-size: 16px; font-weight: bold; padding: 16px 24px; border-radius: 12px; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                🚀 Open Complete List in Google Maps
+              </a>
+            </div>
+            
+            <div style="background: #f1f5f9; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+              <h4 style="margin: 0 0 12px 0; color: #1e293b; font-size: 16px;">📱 What you'll get:</h4>
+              <ul style="margin: 0; padding-left: 20px; color: #64748b; font-size: 14px; line-height: 1.5;">
+                <li>Complete Google Maps list with all ${pins.length} places</li>
+                <li>Ability to save the entire list to your Google Maps</li>
+                <li>Get directions to any place in the list</li>
+                <li>Access offline if you save it to your phone</li>
+              </ul>
+            </div>
+            
+            <button onclick="document.body.removeChild(document.getElementById('pinpack-modal'))" style="background: #64748b; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%;">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    `
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml)
+  }
+
+  // Open Google Maps directly without any modal
+  const openGoogleMapsDirectly = (packData: any, pins: any[]) => {
+    // Check if pins have valid coordinates
+    const pinsWithCoords = pins.filter(pin => pin.latitude !== 0 || pin.longitude !== 0)
+    const pinsWithoutCoords = pins.filter(pin => pin.latitude === 0 && pin.longitude === 0)
+    
+    if (pinsWithCoords.length === 0 && pinsWithoutCoords.length > 0) {
+      // All pins are from a Google Maps list URL - check if we have the original list URL
+      const hasListUrl = pinsWithoutCoords.some(pin => 
+        pin.google_maps_url && (
+          pin.google_maps_url.includes('/lists/') || 
+          pin.google_maps_url.includes('list/') ||
+          (pin.google_maps_url.includes('maps.app.goo.gl') && !pin.google_maps_url.includes('@'))
+        )
+      )
+      
+      if (hasListUrl) {
+        // Open the original Google Maps list URL directly
+        const listUrl = pinsWithoutCoords[0].google_maps_url
+        window.open(listUrl, '_blank')
+        return
+      } else {
+        alert('No valid coordinates found for these pins. Please check the pin pack data.')
+        return
+      }
+    }
+    
+    // If we have pins with coordinates, create a directions URL with all waypoints
+    if (pinsWithCoords.length > 1) {
+      // Create Google Maps directions URL with multiple waypoints
+      const coordinates = pinsWithCoords.map(pin => `${pin.latitude},${pin.longitude}`)
+      const directionsUrl = `https://www.google.com/maps/dir/${coordinates.join('/')}`
+      window.open(directionsUrl, '_blank')
+    } else if (pinsWithCoords.length === 1) {
+      // Single location - open directly
+      const pin = pinsWithCoords[0]
+      const singleUrl = `https://www.google.com/maps/search/${pin.latitude},${pin.longitude}`
+      window.open(singleUrl, '_blank')
+    } else {
+      // Fallback to search by pack title and city
+      const fallbackUrl = `https://www.google.com/maps/search/${encodeURIComponent(packData.title + ' ' + packData.city)}`
+      window.open(fallbackUrl, '_blank')
     }
   }
 
@@ -163,10 +256,13 @@ export default function BrowsePage() {
               <h3 style="margin: 0 0 12px 0; color: #1e293b; font-size: 18px;">📍 Locations in this pack:</h3>
               <div style="max-height: 200px; overflow-y: auto;">
                 ${individualUrls.map(location => `
-                  <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #3b82f6;">
+                  <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${location.hasCoordinates ? '#3b82f6' : '#f59e0b'};">
                     <div style="font-weight: bold; color: #1e293b; margin-bottom: 4px;">${location.title}</div>
                     <div style="color: #64748b; font-size: 14px; margin-bottom: 8px;">${location.description}</div>
-                    <a href="${location.url}" target="_blank" style="background: #3b82f6; color: white; text-decoration: none; font-size: 14px; padding: 6px 12px; border-radius: 6px; font-weight: bold;">📍 Open in Google Maps</a>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                      <a href="${location.url}" target="_blank" style="background: ${location.hasCoordinates ? '#3b82f6' : '#f59e0b'}; color: white; text-decoration: none; font-size: 14px; padding: 6px 12px; border-radius: 6px; font-weight: bold;">📍 Open in Google Maps</a>
+                      <span style="font-size: 12px; color: #64748b;">${location.hasCoordinates ? '🔵 With coordinates' : '🟠 Original URL'}</span>
+                    </div>
                   </div>
                 `).join('')}
               </div>
@@ -304,7 +400,7 @@ export default function BrowsePage() {
                 placeholder="Search by city, title, or description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-14 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             
@@ -314,7 +410,7 @@ export default function BrowsePage() {
               <select
                 value={selectedCountry}
                 onChange={(e) => setSelectedCountry(e.target.value)}
-                className="pl-10 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-w-48"
+                className="pl-14 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-w-48"
               >
                 <option value="">All Countries</option>
                 {countries.map(country => (

@@ -35,6 +35,12 @@ export default function RootLayout({
                   <a href="/browse" className="text-gray-600 hover:text-primary-600 px-3 py-2">
                     Browse Packs
                   </a>
+                  <a href="/about" className="text-gray-600 hover:text-primary-600 px-3 py-2">
+                    About Us
+                  </a>
+                  <a href="/manage" className="text-gray-600 hover:text-primary-600 px-3 py-2">
+                    Your Pins
+                  </a>
                   <a href="/create" className="btn-primary">
                     Create Pack
                   </a>

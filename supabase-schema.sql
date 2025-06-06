@@ -30,7 +30,11 @@ CREATE TABLE pin_packs (
     country TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     creator_location TEXT,
+    creator_id TEXT, -- Simple creator ID for MVP (can be localStorage ID)
     pin_count INTEGER NOT NULL DEFAULT 0,
+    download_count INTEGER NOT NULL DEFAULT 0,
+    average_rating DECIMAL(3, 2) DEFAULT 0.00,
+    rating_count INTEGER NOT NULL DEFAULT 0,
     CONSTRAINT positive_price CHECK (price >= 0)
 );
 
@@ -43,18 +47,44 @@ CREATE TABLE pin_pack_pins (
     UNIQUE(pin_pack_id, pin_id)
 );
 
+-- Table to track downloads
+CREATE TABLE pack_downloads (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pin_pack_id UUID NOT NULL REFERENCES pin_packs(id) ON DELETE CASCADE,
+    downloaded_at TIMESTAMPTZ DEFAULT NOW(),
+    download_type TEXT DEFAULT 'view', -- 'view', 'kml', 'qr', etc.
+    user_location TEXT,
+    user_ip TEXT
+);
+
+-- Table to store ratings and reviews
+CREATE TABLE pack_ratings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pin_pack_id UUID NOT NULL REFERENCES pin_packs(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review TEXT,
+    reviewer_location TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_pins_category ON pins(category);
 CREATE INDEX idx_pins_created_at ON pins(created_at);
 CREATE INDEX idx_pin_packs_city_country ON pin_packs(city, country);
 CREATE INDEX idx_pin_packs_created_at ON pin_packs(created_at);
+CREATE INDEX idx_pin_packs_creator_id ON pin_packs(creator_id);
 CREATE INDEX idx_pin_pack_pins_pack_id ON pin_pack_pins(pin_pack_id);
 CREATE INDEX idx_pin_pack_pins_pin_id ON pin_pack_pins(pin_id);
+CREATE INDEX idx_pack_downloads_pack_id ON pack_downloads(pin_pack_id);
+CREATE INDEX idx_pack_downloads_date ON pack_downloads(downloaded_at);
+CREATE INDEX idx_pack_ratings_pack_id ON pack_ratings(pin_pack_id);
 
 -- Enable RLS on all tables (required by Supabase)
 ALTER TABLE pins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pin_packs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pin_pack_pins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pack_downloads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pack_ratings ENABLE ROW LEVEL SECURITY;
 
 -- Create permissive policies for MVP (anyone can read/write)
 -- In production, you'd want more restrictive policies
@@ -78,6 +108,20 @@ CREATE POLICY "Anyone can view pin pack pins" ON pin_pack_pins
     FOR SELECT USING (true);
 
 CREATE POLICY "Anyone can insert pin pack pins" ON pin_pack_pins
+    FOR INSERT WITH CHECK (true);
+
+-- Pack downloads policies
+CREATE POLICY "Anyone can view downloads" ON pack_downloads
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert downloads" ON pack_downloads
+    FOR INSERT WITH CHECK (true);
+
+-- Pack ratings policies
+CREATE POLICY "Anyone can view ratings" ON pack_ratings
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert ratings" ON pack_ratings
     FOR INSERT WITH CHECK (true);
 
 -- Optional: Create a view for easier querying of complete pin packs

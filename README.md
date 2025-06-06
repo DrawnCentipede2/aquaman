@@ -5,6 +5,7 @@ A marketplace where locals can create and sell curated Google Maps pin collectio
 ## 🌟 Features
 
 - **Create Pin Packs**: Locals can create collections of Google Maps pins
+- **🚀 NEW! Google Maps List Import**: Import places from existing Google Maps lists
 - **Browse & Download**: Travelers can browse and download pin packs
 - **Local Verification**: Simple IP-based location verification for creators
 - **One-Click Import**: Download pins as text files for easy Google Maps import
@@ -57,8 +58,12 @@ Open [http://localhost:3000](http://localhost:3000) to see your app!
 ### For Locals (Pin Pack Creators)
 1. Visit `/create` to create a new pin pack
 2. Add basic information (title, description, city, country)
-3. Add individual pins with Google Maps URLs
-4. Submit to make it available for download
+3. **NEW!** Import from Google Maps List:
+   - Share your Google Maps list URL for quick import guidance
+   - Or paste multiple Google Maps URLs to quickly add several places
+   - Edit each imported place to add your personal insights
+4. Or add individual pins manually with Google Maps URLs
+5. Submit to make it available for download
 
 ### For Travelers (Pin Pack Buyers)
 1. Browse available pin packs on the homepage

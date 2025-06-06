@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { MapPin, Plus, Trash2, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { MapPin, Plus, Trash2, Save, HelpCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // Interface for a single pin
@@ -24,17 +24,173 @@ export default function CreatePackPage() {
   
   // State for pins in the pack
   const [pins, setPins] = useState<Pin[]>([])
-  const [currentPin, setCurrentPin] = useState<Pin>({
-    title: '',
-    description: '',
-    google_maps_url: '',
-    category: 'restaurant',
-    latitude: 0,
-    longitude: 0
-  })
+  
+  // State for Google Maps list import
+  const [googleMapsListUrl, setGoogleMapsListUrl] = useState('')
+  const [importedPlaces, setImportedPlaces] = useState<any[]>([])
+  const [isImporting, setIsImporting] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   
   // State for form submission
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [userId, setUserId] = useState<string>('')
+
+  // Enhanced user identification with IP backup for better persistence
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        // Try to get existing user ID from localStorage
+        let id = localStorage.getItem('pinpacks_user_id')
+        
+        if (!id) {
+          // Get user's IP for backup identification
+          try {
+            const response = await fetch('https://ipapi.co/json/')
+            const data = await response.json()
+            const userIP = data.ip || 'unknown'
+            const userLocation = `${data.city}, ${data.country_name}` || 'Unknown'
+            
+            // Create a more persistent user ID based on IP + timestamp + random
+            const timestamp = Date.now()
+            const random = Math.random().toString(36).substr(2, 6)
+            id = `user_${userIP.replace(/\./g, '_')}_${timestamp}_${random}`
+            
+            // Store in localStorage with additional metadata
+            localStorage.setItem('pinpacks_user_id', id)
+            localStorage.setItem('pinpacks_user_ip', userIP)
+            localStorage.setItem('pinpacks_user_location', userLocation)
+            localStorage.setItem('pinpacks_user_created', new Date().toISOString())
+            
+            console.log('New user created:', { id, userIP, userLocation })
+          } catch (err) {
+            // Fallback if IP service fails
+            const timestamp = Date.now()
+            const random = Math.random().toString(36).substr(2, 9)
+            id = `user_local_${timestamp}_${random}`
+            localStorage.setItem('pinpacks_user_id', id)
+            console.log('Fallback user created:', id)
+          }
+        } else {
+          console.log('Existing user found:', id)
+        }
+        
+        setUserId(id)
+      } catch (err) {
+        console.error('Error initializing user:', err)
+        // Final fallback
+        const fallbackId = 'user_' + Math.random().toString(36).substr(2, 9)
+        localStorage.setItem('pinpacks_user_id', fallbackId)
+        setUserId(fallbackId)
+      }
+    }
+    
+    initializeUser()
+  }, [])
+
+  // Function to import places from Google Maps list URL
+  const importFromGoogleMapsList = async () => {
+    if (!googleMapsListUrl) {
+      alert('Please enter a Google Maps list URL or individual place URL')
+      return
+    }
+
+    setIsImporting(true)
+    try {
+      // Check if it's a valid Google Maps URL (including shortened URLs)
+      const isValidGoogleMapsUrl = 
+        googleMapsListUrl.includes('maps.google.com') || 
+        googleMapsListUrl.includes('goo.gl') ||
+        googleMapsListUrl.includes('maps.app.goo.gl')
+
+      if (!isValidGoogleMapsUrl) {
+        throw new Error('Please enter a valid Google Maps URL.')
+      }
+
+      // Handle different types of URLs silently in the background
+      const isListUrl = googleMapsListUrl.includes('/lists/') || googleMapsListUrl.includes('list/')
+      const isSinglePlace = googleMapsListUrl.includes('goo.gl') || 
+                           googleMapsListUrl.includes('@') || 
+                           googleMapsListUrl.includes('place/')
+
+      if (isSinglePlace) {
+        // Import single place directly
+        quickAddFromUrls(googleMapsListUrl)
+      } else if (isListUrl) {
+        // For list URLs, show guidance on extracting individual places
+        alert(
+          '📋 Google Maps List Detected!\n\n' +
+          'To import places from your list:\n' +
+          '1. Open your Google Maps list\n' +
+          '2. Click on each place in the list\n' +
+          '3. Copy each place URL\n' +
+          '4. Come back and paste each URL here (one at a time)\n\n' +
+          'This ensures we get all the place details correctly!'
+        )
+      } else {
+        // Try to import as a single place anyway
+        quickAddFromUrls(googleMapsListUrl)
+      }
+      
+      // Clear the URL field
+      setGoogleMapsListUrl('')
+      
+    } catch (err) {
+      alert('Could not import from this URL. Please make sure it\'s a valid Google Maps URL.')
+      console.error('Import error:', err)
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  // Function to quickly add multiple places from URLs
+  const quickAddFromUrls = (urlsText: string) => {
+    if (!urlsText.trim()) return
+
+    const urls = urlsText.split('\n').filter(url => url.trim())
+    const newPins: Pin[] = []
+
+    urls.forEach((url, index) => {
+      const trimmedUrl = url.trim()
+      // Accept various Google Maps URL formats including shortened ones
+      if (trimmedUrl.includes('maps.google.com') || 
+          trimmedUrl.includes('goo.gl') || 
+          trimmedUrl.includes('maps.app.goo.gl')) {
+        const coords = extractCoordinates(trimmedUrl)
+        
+        // Create a basic pin - user can edit details later
+        const pin: Pin = {
+          title: `Imported Place ${pins.length + newPins.length + 1}`,
+          description: 'Edit this description to add your personal insights!',
+          google_maps_url: trimmedUrl,
+          category: 'other',
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        }
+        newPins.push(pin)
+      }
+    })
+
+    if (newPins.length > 0) {
+      setPins([...pins, ...newPins])
+      const shortUrlCount = newPins.filter(pin => 
+        pin.google_maps_url.includes('goo.gl') || 
+        pin.google_maps_url.includes('maps.app.goo.gl')
+      ).length
+      
+      if (shortUrlCount > 0) {
+        alert(
+          `✅ Successfully imported ${newPins.length} places!\n\n` +
+          `📝 Note: ${shortUrlCount} of these are shortened URLs which may not show coordinates initially.\n` +
+          `This is normal - the places will still work when shared!\n\n` +
+          `Now you can edit each place to add your personal descriptions and choose the right categories.`
+        )
+      } else {
+        alert(`✅ Successfully imported ${newPins.length} places!\n\nNow you can edit each place to add your personal descriptions and choose the right categories.`)
+      }
+    } else {
+      alert('No valid Google Maps URLs found. Please check your URLs and make sure they include "maps.google.com" or "goo.gl".')
+    }
+  }
 
   // Function to extract coordinates from Google Maps URL
   const extractCoordinates = (url: string) => {
@@ -43,14 +199,18 @@ export default function CreatePackPage() {
     try {
       // Multiple patterns to match different Google Maps URL formats
       const patterns = [
-        // Standard @lat,lng format
+        // Standard @lat,lng format (most common)
         /@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Place ID format with coordinates
+        // Place ID format with coordinates (!3d and !4d)
         /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/,
-        // Direct coordinates in URL
-        /(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Query parameter format
-        /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/
+        // Direct coordinates in URL (lat,lng format)
+        /(?:^|[^\d])(-?\d+\.\d+),(-?\d+\.\d+)(?:[^\d]|$)/,
+        // Query parameter format (?q=lat,lng)
+        /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+        // Center parameter format
+        /[?&]center=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+        // Location parameter format
+        /[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/
       ]
       
       for (const pattern of patterns) {
@@ -67,6 +227,13 @@ export default function CreatePackPage() {
         }
       }
       
+      // Special handling for shortened URLs - they often don't contain coordinates
+      if (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) {
+        console.log('Shortened URL detected - coordinates may not be available until resolved')
+        // For shortened URLs, we'll return 0,0 but let the user know this is normal
+        return { latitude: 0, longitude: 0 }
+      }
+      
       console.log('No valid coordinates found, returning 0,0')
       return { latitude: 0, longitude: 0 }
     } catch (err) {
@@ -75,60 +242,18 @@ export default function CreatePackPage() {
     }
   }
 
-  // Function to add a pin to the pack
-  const addPin = () => {
-    if (!currentPin.title || !currentPin.google_maps_url) {
-      alert('Please fill in at least the title and Google Maps URL')
-      return
-    }
 
-    // Extract coordinates from URL
-    const coords = extractCoordinates(currentPin.google_maps_url)
-    
-    // Warn user if no coordinates could be extracted
-    if (coords.latitude === 0 && coords.longitude === 0) {
-      const proceed = confirm(
-        `⚠️ Warning: Could not extract location coordinates from the Google Maps URL.\n\n` +
-        `This pin may not work properly in Google Maps. The URL should contain coordinates.\n\n` +
-        `Try getting a new URL by:\n` +
-        `1. Opening Google Maps\n` +
-        `2. Searching for the location\n` +
-        `3. Clicking on the location pin\n` +
-        `4. Clicking "Share" → "Copy link"\n\n` +
-        `Do you want to add this pin anyway?`
-      )
-      if (!proceed) return
-    }
-    
-    const newPin: Pin = {
-      ...currentPin,
-      latitude: coords.latitude,
-      longitude: coords.longitude
-    }
-
-    setPins([...pins, newPin])
-    
-    // Show success message with coordinate info
-    if (coords.latitude !== 0 || coords.longitude !== 0) {
-      alert(`✅ "${currentPin.title}" added to your pack!\nCoordinates: ${coords.latitude}, ${coords.longitude}`)
-    } else {
-      alert(`⚠️ "${currentPin.title}" added to your pack, but without coordinates.`)
-    }
-    
-    // Reset current pin form
-    setCurrentPin({
-      title: '',
-      description: '',
-      google_maps_url: '',
-      category: 'restaurant',
-      latitude: 0,
-      longitude: 0
-    })
-  }
 
   // Function to remove a pin from the pack
   const removePin = (index: number) => {
     setPins(pins.filter((_, i) => i !== index))
+  }
+
+  // Function to update a specific pin
+  const updatePin = (index: number, updatedPin: Partial<Pin>) => {
+    const newPins = [...pins]
+    newPins[index] = { ...newPins[index], ...updatedPin }
+    setPins(newPins)
   }
 
   // Function to get user's approximate location (for local verification)
@@ -157,22 +282,67 @@ export default function CreatePackPage() {
       // Get user location for verification
       const location = await getUserLocation()
 
-      // Create the pin pack in database
-      const { data: packData, error: packError } = await supabase
-        .from('pin_packs')
-        .insert({
-          title: packTitle,
-          description: packDescription,
-          price: price,
-          city: city,
-          country: country,
-          creator_location: location,
-          pin_count: pins.length
-        })
-        .select()
-        .single()
+      // Try with new schema first, fallback to basic schema if it fails
+      let insertedPack;
+      let packError;
 
-      if (packError) throw packError
+      try {
+        // Attempt with new fields (for updated database)
+        const result = await supabase
+          .from('pin_packs')
+          .insert({
+            title: packTitle,
+            description: packDescription,
+            price: price,
+            city: city,
+            country: country,
+            creator_location: location,
+            pin_count: pins.length,
+            creator_id: userId,
+            download_count: 0,
+            average_rating: 0,
+            rating_count: 0
+          })
+          .select()
+          .single()
+        
+        insertedPack = result.data
+        packError = result.error
+      } catch (newSchemaError) {
+        console.log('New schema failed, trying basic schema:', newSchemaError)
+        
+        // Fallback to basic schema (for older database)
+        try {
+          const result = await supabase
+            .from('pin_packs')
+            .insert({
+              title: packTitle,
+              description: packDescription,
+              price: price,
+              city: city,
+              country: country,
+              creator_location: location,
+              pin_count: pins.length
+            })
+            .select()
+            .single()
+          
+          insertedPack = result.data
+          packError = result.error
+        } catch (basicSchemaError) {
+          console.error('Both schemas failed:', basicSchemaError)
+          throw new Error('Database insertion failed with both new and basic schemas')
+        }
+      }
+
+      if (packError) {
+        console.error('Pack creation error:', packError)
+        throw new Error(`Database error: ${packError.message}`)
+      }
+
+      if (!insertedPack) {
+        throw new Error('No pack data returned from database')
+      }
 
       // Create all pins
       const pinsToInsert = pins.map(pin => ({
@@ -190,7 +360,7 @@ export default function CreatePackPage() {
 
       // Link pins to the pack
       const pinPackPins = pinsData.map(pin => ({
-        pin_pack_id: packData.id,
+        pin_pack_id: insertedPack.id,
         pin_id: pin.id
       }))
 
@@ -323,95 +493,107 @@ export default function CreatePackPage() {
             </div>
           </div>
 
-          {/* Add Pin Form */}
-          <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-white/20">
-            <div className="flex items-center mb-6">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-3 rounded-lg mr-4">
-                <Plus className="h-6 w-6 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Add a Pin</h2>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pin Title *
-                </label>
-                <input
-                  type="text"
-                  value={currentPin.title}
-                  onChange={(e) => setCurrentPin({...currentPin, title: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="e.g., Café Central"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Google Maps URL *
-                </label>
-                <input
-                  type="url"
-                  value={currentPin.google_maps_url}
-                  onChange={(e) => setCurrentPin({...currentPin, google_maps_url: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="https://maps.google.com/..."
-                />
-                <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <p className="text-xs text-blue-700 font-medium mb-1">
-                    📍 How to get a Google Maps URL:
-                  </p>
-                  <ol className="text-xs text-blue-600 space-y-1">
-                    <li>1. Search for the location on Google Maps</li>
-                    <li>2. Click on the location pin or result</li>
-                    <li>3. Click "Share" → "Copy link"</li>
-                    <li>4. Paste it here!</li>
-                  </ol>
+          {/* Google Maps List Import */}
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 p-8 rounded-2xl shadow-xl border border-orange-200">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <div className="bg-gradient-to-r from-orange-500 to-red-600 p-3 rounded-lg mr-4">
+                  <MapPin className="h-6 w-6 text-white" />
                 </div>
+                <h2 className="text-2xl font-bold text-gray-900">Import Google Maps List</h2>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Category
-                </label>
-                <select
-                  value={currentPin.category}
-                  onChange={(e) => setCurrentPin({...currentPin, category: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="restaurant">Restaurant</option>
-                  <option value="cafe">Café</option>
-                  <option value="attraction">Attraction</option>
-                  <option value="shopping">Shopping</option>
-                  <option value="nightlife">Nightlife</option>
-                  <option value="culture">Culture</option>
-                  <option value="outdoor">Outdoor</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={currentPin.description}
-                  onChange={(e) => setCurrentPin({...currentPin, description: e.target.value})}
-                  rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="Why is this place special?"
-                />
-              </div>
-              
+              {/* Help Button */}
               <button
-                onClick={addPin}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center"
+                onClick={() => setShowHelp(!showHelp)}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+                title="Need help creating a Google Maps list?"
               >
-                <Plus className="h-5 w-5 mr-2" />
-                Add Pin to Pack
+                <HelpCircle className="h-6 w-6" />
               </button>
             </div>
+            
+            {/* Help Section (Collapsible) */}
+            {showHelp && (
+              <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 mb-6">
+                <h3 className="text-lg font-semibold text-blue-900 mb-3">❓ How to Create a Google Maps List</h3>
+                <div className="space-y-3 text-sm text-blue-800">
+                  <div>
+                    <p className="font-medium mb-2">📱 On Mobile:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Open Google Maps app</li>
+                      <li>Search for a place</li>
+                      <li>Tap on the place to open its details</li>
+                      <li>Tap "Save" and choose "New list" or select existing list</li>
+                      <li>Repeat for other places</li>
+                      <li>Share your list: Go to "Your lists" → Select list → "Share"</li>
+                    </ol>
+                  </div>
+                  
+                  <div>
+                    <p className="font-medium mb-2">💻 On Desktop:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Go to maps.google.com</li>
+                      <li>Search for a place and click on it</li>
+                      <li>Click "Save" and choose "New list" or existing list</li>
+                      <li>Add more places to your list</li>
+                      <li>Share: Go to "Your places" → "Lists" → Select list → "Share"</li>
+                    </ol>
+                  </div>
+                  
+                  <div className="bg-blue-100 p-3 rounded-lg">
+                    <p className="font-medium text-blue-900">💡 Pro Tip:</p>
+                    <p className="text-blue-700">You can paste either individual place URLs or list URLs here. If it's a list, we'll guide you on extracting the places!</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="bg-white/70 p-6 rounded-xl border border-orange-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">🚀 Import Your Places</h3>
+              <p className="text-gray-700 mb-4">
+                Paste your Google Maps list URL here to automatically import all places:
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Google Maps URL
+                  </label>
+                  <input
+                    type="url"
+                    value={googleMapsListUrl}
+                    onChange={(e) => setGoogleMapsListUrl(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="https://maps.app.goo.gl/... or https://maps.google.com/lists/..."
+                  />
+                  <p className="text-xs text-gray-600 mt-1">
+                    Create a list in Google Maps first, then share it and paste the URL here
+                  </p>
+                </div>
+                
+                <button
+                  onClick={importFromGoogleMapsList}
+                  disabled={isImporting}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isImporting ? (
+                    <>
+                      <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-5 w-5 mr-2" />
+                      Import Google Maps List
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
+
+
         </div>
 
         {/* Pins List and Submit */}
@@ -422,36 +604,112 @@ export default function CreatePackPage() {
                 <Save className="h-6 w-6 text-white" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900">
-                Pins in Pack ({pins.length})
+                {/* Smart title based on how pins were added */}
+                {importedPlaces.length > 0 && pins.length === importedPlaces.length ? (
+                  `Google List (${pins.length} places)`
+                ) : importedPlaces.length > 0 && pins.length > importedPlaces.length ? (
+                  `Mixed Pack (${importedPlaces.length} from list + ${pins.length - importedPlaces.length} manual)`
+                ) : (
+                  `Pin Pack (${pins.length} pins)`
+                )}
               </h2>
             </div>
             
             {pins.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                <p>No pins added yet</p>
-                <p className="text-sm">Add pins using the form on the left</p>
+                <p>No places imported yet</p>
+                <p className="text-sm">Import a Google Maps list using the form on the left</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {pins.map((pin, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900">{pin.title}</h3>
-                        <p className="text-sm text-gray-600 mt-1">{pin.description}</p>
-                        <div className="text-xs text-gray-500 mt-2">
-                          <span className="bg-gray-100 px-2 py-1 rounded">
-                            {pin.category}
-                          </span>
-                        </div>
+                  <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                    <div className="space-y-3">
+                      {/* Pin Title (Editable) */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Pin Title
+                        </label>
+                        <input
+                          type="text"
+                          value={pin.title}
+                          onChange={(e) => updatePin(index, { title: e.target.value })}
+                          className="w-full text-lg font-medium text-gray-900 border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Enter pin title"
+                        />
                       </div>
-                      <button
-                        onClick={() => removePin(index)}
-                        className="text-red-500 hover:text-red-700 ml-4"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+
+                      {/* Description (Editable) */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Your Personal Description
+                        </label>
+                        <textarea
+                          value={pin.description}
+                          onChange={(e) => updatePin(index, { description: e.target.value })}
+                          rows={2}
+                          className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Why is this place special? Share your local insights..."
+                        />
+                      </div>
+
+                      {/* Category and Controls */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                              Category
+                            </label>
+                            <select
+                              value={pin.category}
+                              onChange={(e) => updatePin(index, { category: e.target.value })}
+                              className="border border-gray-200 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              <option value="restaurant">Restaurant</option>
+                              <option value="cafe">Café</option>
+                              <option value="attraction">Attraction</option>
+                              <option value="shopping">Shopping</option>
+                              <option value="nightlife">Nightlife</option>
+                              <option value="culture">Culture</option>
+                              <option value="outdoor">Outdoor</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+
+                          {/* Coordinates Info */}
+                          {(pin.latitude !== 0 || pin.longitude !== 0) && (
+                            <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                              ✅ Location: {pin.latitude.toFixed(4)}, {pin.longitude.toFixed(4)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Remove Button */}
+                        <button
+                          onClick={() => removePin(index)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                          title="Remove this pin"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {/* URL Preview */}
+                      <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                        <span className="font-medium">Google Maps:</span> 
+                        <a 
+                          href={pin.google_maps_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 ml-1 break-all"
+                        >
+                          {pin.google_maps_url.length > 50 
+                            ? pin.google_maps_url.substring(0, 50) + '...' 
+                            : pin.google_maps_url
+                          }
+                        </a>
+                      </div>
                     </div>
                   </div>
                 ))}
