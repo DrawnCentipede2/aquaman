@@ -30,56 +30,31 @@ export default function ManagePage() {
   const [userId, setUserId] = useState<string>('')
 
 
-  // Enhanced user identification with IP backup for better persistence
+  // Check for authenticated user and use email-based system
   useEffect(() => {
-    const initializeUser = async () => {
-      try {
-        // Try to get existing user ID from localStorage
-        let id = localStorage.getItem('pinpacks_user_id')
-        
-        if (!id) {
-          // Get user's IP for backup identification
-          try {
-            const response = await fetch('https://ipapi.co/json/')
-            const data = await response.json()
-            const userIP = data.ip || 'unknown'
-            const userLocation = `${data.city}, ${data.country_name}` || 'Unknown'
-            
-            // Create a more persistent user ID based on IP + timestamp + random
-            const timestamp = Date.now()
-            const random = Math.random().toString(36).substr(2, 6)
-            id = `user_${userIP.replace(/\./g, '_')}_${timestamp}_${random}`
-            
-            // Store in localStorage with additional metadata
-            localStorage.setItem('pinpacks_user_id', id)
-            localStorage.setItem('pinpacks_user_ip', userIP)
-            localStorage.setItem('pinpacks_user_location', userLocation)
-            localStorage.setItem('pinpacks_user_created', new Date().toISOString())
-            
-            console.log('New user created:', { id, userIP, userLocation })
-          } catch (err) {
-            // Fallback if IP service fails
-            const timestamp = Date.now()
-            const random = Math.random().toString(36).substr(2, 9)
-            id = `user_local_${timestamp}_${random}`
-            localStorage.setItem('pinpacks_user_id', id)
-            console.log('Fallback user created:', id)
-          }
-        } else {
-          console.log('Existing user found:', id)
-        }
-        
-        setUserId(id)
-      } catch (err) {
-        console.error('Error initializing user:', err)
-        // Final fallback
-        const fallbackId = 'user_' + Math.random().toString(36).substr(2, 9)
-        localStorage.setItem('pinpacks_user_id', fallbackId)
-        setUserId(fallbackId)
+    const checkAuth = () => {
+      // Check if user is authenticated via new email system
+      const userProfile = localStorage.getItem('pinpacks_user_profile')
+      const savedUserId = localStorage.getItem('pinpacks_user_id')
+      
+      if (userProfile) {
+        // User is authenticated via email system
+        const profile = JSON.parse(userProfile)
+        setUserId(profile.userId)
+        console.log('Authenticated user found:', profile.email)
+      } else if (savedUserId) {
+        // User has old system ID - still allow them to use it
+        setUserId(savedUserId)
+        console.log('Legacy user found:', savedUserId)
+      } else {
+        // No authentication found - redirect to sign in
+        alert('Please sign in first to view your pin packs')
+        window.location.href = '/auth'
+        return
       }
     }
     
-    initializeUser()
+    checkAuth()
   }, [])
 
   // Load user's pin packs when user ID is available
@@ -101,15 +76,35 @@ export default function ManagePage() {
       let packs = []
       
       try {
-        // Attempt with creator_id filter (new schema)
-        const { data: newSchemaPacks, error: packsError } = await supabase
+        // First try with the exact creator_id match
+        const { data: exactPacks, error: exactError } = await supabase
           .from('pin_packs')
           .select('*')
           .eq('creator_id', userId)
           .order('created_at', { ascending: false })
 
-        if (packsError) throw packsError
-        packs = newSchemaPacks || []
+        if (exactError) throw exactError
+        packs = exactPacks || []
+        
+        // If no packs found and user has email, try to find packs by email domain
+        if (packs.length === 0) {
+          const userEmail = localStorage.getItem('pinpacks_user_email')
+          if (userEmail) {
+            console.log('No packs found with exact user ID, trying email-based search...')
+            const emailDomain = userEmail.split('@')[0] // Get part before @
+            
+            const { data: emailPacks, error: emailError } = await supabase
+              .from('pin_packs')
+              .select('*')
+              .ilike('creator_id', `%${emailDomain}%`)
+              .order('created_at', { ascending: false })
+
+            if (!emailError && emailPacks) {
+              packs = emailPacks
+              console.log(`Found ${emailPacks.length} packs via email search`)
+            }
+          }
+        }
         
       } catch (creatorIdError) {
         console.log('creator_id column not found, trying IP-based fallback...')
@@ -331,18 +326,35 @@ export default function ManagePage() {
           <div className="grid md:grid-cols-2 gap-4 text-sm">
             <div className="bg-white/70 p-4 rounded-lg">
               <p><strong>User ID:</strong> <code className="bg-gray-100 px-2 py-1 rounded text-xs">{userId}</code></p>
-              <p className="mt-2"><strong>IP Address:</strong> {localStorage.getItem('pinpacks_user_ip') || 'Not available'}</p>
+              <p className="mt-2"><strong>Email:</strong> {localStorage.getItem('pinpacks_user_email') || 'Not available'}</p>
               <p className="mt-2"><strong>Location:</strong> {localStorage.getItem('pinpacks_user_location') || 'Not available'}</p>
             </div>
             <div className="bg-white/70 p-4 rounded-lg">
               <p><strong>Profile Created:</strong> {localStorage.getItem('pinpacks_user_created') ? new Date(localStorage.getItem('pinpacks_user_created')!).toLocaleString() : 'Not available'}</p>
               <p className="mt-2"><strong>Total Packs:</strong> {userPacks.length}</p>
+              <p className="mt-2"><strong>Auth Status:</strong> 
+                <span className={`ml-2 px-2 py-1 rounded text-xs ${localStorage.getItem('pinpacks_user_profile') ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                  {localStorage.getItem('pinpacks_user_profile') ? 'Email Authenticated' : 'Legacy User'}
+                </span>
+              </p>
             </div>
           </div>
           
-          <div className="mt-4 text-xs text-blue-600">
-            💡 <strong>Note:</strong> Your profile is automatically saved based on your IP address and browser. 
-            This ensures your pin packs persist even if you restart the server.
+          <div className="mt-4 space-y-2">
+            <div className="text-xs text-blue-600">
+              💡 <strong>Note:</strong> Your profile is now linked to your email address for better persistence.
+            </div>
+            {userPacks.length === 0 && (
+              <div className="text-xs text-orange-600 bg-orange-50 p-3 rounded border border-orange-200">
+                🔄 <strong>Missing your old pin packs?</strong> They might have been created before email authentication. 
+                <button 
+                  onClick={() => window.location.href = '/auth'} 
+                  className="ml-2 text-orange-800 underline hover:no-underline"
+                >
+                  Sign in with a different email
+                </button> or check the browser console for more details.
+              </div>
+            )}
           </div>
         </div>
 

@@ -41,6 +41,9 @@ export default function RootLayout({
                   <a href="/manage" className="text-gray-600 hover:text-primary-600 px-3 py-2">
                     Your Pins
                   </a>
+                  <a href="/auth" className="text-gray-600 hover:text-primary-600 px-3 py-2">
+                    Sign In
+                  </a>
                   <a href="/create" className="btn-primary">
                     Create Pack
                   </a>

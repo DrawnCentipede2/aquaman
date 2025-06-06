@@ -35,56 +35,31 @@ export default function CreatePackPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [userId, setUserId] = useState<string>('')
 
-  // Enhanced user identification with IP backup for better persistence
+  // Check for authenticated user or redirect to sign in
   useEffect(() => {
-    const initializeUser = async () => {
-      try {
-        // Try to get existing user ID from localStorage
-        let id = localStorage.getItem('pinpacks_user_id')
-        
-        if (!id) {
-          // Get user's IP for backup identification
-          try {
-            const response = await fetch('https://ipapi.co/json/')
-            const data = await response.json()
-            const userIP = data.ip || 'unknown'
-            const userLocation = `${data.city}, ${data.country_name}` || 'Unknown'
-            
-            // Create a more persistent user ID based on IP + timestamp + random
-            const timestamp = Date.now()
-            const random = Math.random().toString(36).substr(2, 6)
-            id = `user_${userIP.replace(/\./g, '_')}_${timestamp}_${random}`
-            
-            // Store in localStorage with additional metadata
-            localStorage.setItem('pinpacks_user_id', id)
-            localStorage.setItem('pinpacks_user_ip', userIP)
-            localStorage.setItem('pinpacks_user_location', userLocation)
-            localStorage.setItem('pinpacks_user_created', new Date().toISOString())
-            
-            console.log('New user created:', { id, userIP, userLocation })
-          } catch (err) {
-            // Fallback if IP service fails
-            const timestamp = Date.now()
-            const random = Math.random().toString(36).substr(2, 9)
-            id = `user_local_${timestamp}_${random}`
-            localStorage.setItem('pinpacks_user_id', id)
-            console.log('Fallback user created:', id)
-          }
-        } else {
-          console.log('Existing user found:', id)
-        }
-        
-        setUserId(id)
-      } catch (err) {
-        console.error('Error initializing user:', err)
-        // Final fallback
-        const fallbackId = 'user_' + Math.random().toString(36).substr(2, 9)
-        localStorage.setItem('pinpacks_user_id', fallbackId)
-        setUserId(fallbackId)
+    const checkAuth = () => {
+      // Check if user is authenticated via new email system
+      const userProfile = localStorage.getItem('pinpacks_user_profile')
+      const savedUserId = localStorage.getItem('pinpacks_user_id')
+      
+      if (userProfile) {
+        // User is authenticated via email system
+        const profile = JSON.parse(userProfile)
+        setUserId(profile.userId)
+        console.log('Authenticated user found:', profile.email)
+      } else if (savedUserId) {
+        // User has old system ID - still allow them to use it
+        setUserId(savedUserId)
+        console.log('Legacy user found:', savedUserId)
+      } else {
+        // No authentication found - redirect to sign in
+        alert('Please sign in first to create pin packs')
+        window.location.href = '/auth'
+        return
       }
     }
     
-    initializeUser()
+    checkAuth()
   }, [])
 
   // Function to import places from Google Maps list URL
