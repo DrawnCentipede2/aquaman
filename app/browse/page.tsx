@@ -333,8 +333,6 @@ export default function BrowsePage() {
     }
   }
 
-
-
   // Generate QR Code for easy sharing
   const generateQRCode = (packData: any, pins: any[]) => {
     // Filter out pins with invalid coordinates
@@ -394,13 +392,12 @@ export default function BrowsePage() {
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <input
                 type="text"
                 placeholder="Search by city, title, or description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-14 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             
@@ -410,7 +407,7 @@ export default function BrowsePage() {
               <select
                 value={selectedCountry}
                 onChange={(e) => setSelectedCountry(e.target.value)}
-                className="pl-14 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-w-48"
+                                  className="pl-16 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-w-48"
               >
                 <option value="">All Countries</option>
                 {countries.map(country => (
@@ -483,63 +480,249 @@ export default function BrowsePage() {
 
         {/* Pin Packs Grid */}
         {!loading && !error && filteredPacks.length > 0 && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredPacks.map((pack) => (
-              <div 
-                key={pack.id} 
-                className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
-              >
-                {/* Card header with gradient */}
-                <div className="h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
-                
-                <div className="p-8">
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                        {pack.title}
-                      </h3>
-                      <div className="flex items-center text-sm text-gray-500 mb-3">
-                        <MapPin className="h-4 w-4 mr-1 text-blue-500" />
-                        <span className="font-medium">{pack.city}, {pack.country}</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                        ${pack.price}
-                      </div>
-                      {pack.price === 0 && (
-                        <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
-                          FREE
-                        </span>
-                      )}
-                    </div>
+          <div className="space-y-12">
+            {/* Trending Worldwide Section */}
+            {searchTerm === '' && selectedCountry === '' && (
+              <div>
+                <div className="flex items-center mb-6">
+                  <div className="bg-gradient-to-r from-orange-500 to-red-600 p-2 rounded-lg mr-3">
+                    <Star className="h-6 w-6 text-white" />
                   </div>
-                  
-                  <p className="text-gray-600 mb-6 leading-relaxed">
-                    {pack.description}
-                  </p>
-                  
-                  <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center text-gray-600">
-                      <Users className="h-4 w-4 mr-2 text-blue-500" />
-                      <span className="font-medium">{pack.pin_count} pins</span>
-                    </div>
-                    <div className="flex items-center text-yellow-600">
-                      <Star className="h-4 w-4 mr-1 text-yellow-400 fill-current" />
-                      <span className="font-medium">Local Made</span>
-                    </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">🔥 Trending Worldwide</h2>
+                    <p className="text-gray-600">Most popular pin packs from around the globe</p>
                   </div>
-                  
-                                    <button
-                    onClick={() => openPinPack(pack.id, 'maps')}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
-                  >
-                    <Download className="h-5 w-5 mr-2" />
-                    Open in Google Maps
-                  </button>
+                </div>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+                  {filteredPacks
+                    .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+                    .slice(0, 6)
+                    .map((pack) => (
+                      <div 
+                        key={`trending-${pack.id}`} 
+                        className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
+                      >
+                        {/* Card header with gradient */}
+                        <div className="h-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500"></div>
+                        
+                        <div className="p-8">
+                          <div className="flex items-start justify-between mb-6">
+                            <div className="flex-1">
+                              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-orange-600 transition-colors">
+                                {pack.title}
+                              </h3>
+                              <div className="flex items-center text-sm text-gray-500 mb-3">
+                                <MapPin className="h-4 w-4 mr-1 text-orange-500" />
+                                <span className="font-medium">{pack.city}, {pack.country}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                                ${pack.price}
+                              </div>
+                              {pack.price === 0 && (
+                                <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
+                                  FREE
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <p className="text-gray-600 mb-6 leading-relaxed">
+                            {pack.description}
+                          </p>
+                          
+                          <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border border-orange-200">
+                            <div className="flex items-center text-gray-600">
+                              <Users className="h-4 w-4 mr-2 text-orange-500" />
+                              <span className="font-medium">{pack.pin_count} pins</span>
+                            </div>
+                            <div className="flex items-center text-orange-600">
+                              <Star className="h-4 w-4 mr-1 text-orange-400 fill-current" />
+                              <span className="font-medium">{pack.download_count || 0} downloads</span>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => openPinPack(pack.id, 'maps')}
+                            className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-orange-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
+                          >
+                            <Download className="h-5 w-5 mr-2" />
+                            Open in Google Maps
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* Trending by City Section */}
+            {searchTerm === '' && selectedCountry === '' && (
+              <div>
+                <div className="flex items-center mb-6">
+                  <div className="bg-gradient-to-r from-purple-500 to-indigo-600 p-2 rounded-lg mr-3">
+                    <MapPin className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">🏙️ Trending by City</h2>
+                    <p className="text-gray-600">Popular destinations with the most pin packs</p>
+                  </div>
+                </div>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+                  {/* Group by city and show most popular cities */}
+                  {Object.entries(
+                    filteredPacks.reduce((acc, pack) => {
+                      const cityKey = `${pack.city}, ${pack.country}`
+                      if (!acc[cityKey]) {
+                        acc[cityKey] = []
+                      }
+                      acc[cityKey].push(pack)
+                      return acc
+                    }, {} as Record<string, any[]>)
+                  )
+                    .sort(([, a], [, b]) => b.length - a.length)
+                    .slice(0, 6)
+                    .map(([cityKey, cityPacks]) => {
+                      const topPack = cityPacks.sort((a, b) => (b.download_count || 0) - (a.download_count || 0))[0]
+                      return (
+                        <div 
+                          key={`city-${cityKey}`} 
+                          className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
+                        >
+                          {/* Card header with gradient */}
+                          <div className="h-2 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500"></div>
+                          
+                          <div className="p-8">
+                            <div className="flex items-start justify-between mb-6">
+                              <div className="flex-1">
+                                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
+                                  {topPack.title}
+                                </h3>
+                                <div className="flex items-center text-sm text-gray-500 mb-3">
+                                  <MapPin className="h-4 w-4 mr-1 text-purple-500" />
+                                  <span className="font-medium">{cityKey}</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                                  ${topPack.price}
+                                </div>
+                                {topPack.price === 0 && (
+                                  <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
+                                    FREE
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <p className="text-gray-600 mb-6 leading-relaxed">
+                              {topPack.description}
+                            </p>
+                            
+                            <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
+                              <div className="flex items-center text-gray-600">
+                                <Users className="h-4 w-4 mr-2 text-purple-500" />
+                                <span className="font-medium">{topPack.pin_count} pins</span>
+                              </div>
+                              <div className="flex items-center text-purple-600">
+                                <Star className="h-4 w-4 mr-1 text-purple-400 fill-current" />
+                                <span className="font-medium">{cityPacks.length} packs in city</span>
+                              </div>
+                            </div>
+                            
+                            <button
+                              onClick={() => openPinPack(topPack.id, 'maps')}
+                              className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-purple-600 hover:to-indigo-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
+                            >
+                              <Download className="h-5 w-5 mr-2" />
+                              Open in Google Maps
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* All Pin Packs Section */}
+            <div>
+              <div className="flex items-center mb-6">
+                <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-lg mr-3">
+                  <MapPin className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {searchTerm || selectedCountry ? 'Search Results' : '📍 All Pin Packs'}
+                  </h2>
+                  <p className="text-gray-600">
+                    {searchTerm || selectedCountry 
+                      ? `${filteredPacks.length} pack${filteredPacks.length !== 1 ? 's' : ''} matching your search`
+                      : 'Complete collection of pin packs from locals worldwide'
+                    }
+                  </p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {filteredPacks.map((pack) => (
+                  <div 
+                    key={pack.id} 
+                    className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
+                  >
+                    {/* Card header with gradient */}
+                    <div className="h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+                    
+                    <div className="p-8">
+                      <div className="flex items-start justify-between mb-6">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                            {pack.title}
+                          </h3>
+                          <div className="flex items-center text-sm text-gray-500 mb-3">
+                            <MapPin className="h-4 w-4 mr-1 text-blue-500" />
+                            <span className="font-medium">{pack.city}, {pack.country}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                            ${pack.price}
+                          </div>
+                          {pack.price === 0 && (
+                            <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
+                              FREE
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <p className="text-gray-600 mb-6 leading-relaxed">
+                        {pack.description}
+                      </p>
+                      
+                      <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center text-gray-600">
+                          <Users className="h-4 w-4 mr-2 text-blue-500" />
+                          <span className="font-medium">{pack.pin_count} pins</span>
+                        </div>
+                        <div className="flex items-center text-yellow-600">
+                          <Star className="h-4 w-4 mr-1 text-yellow-400 fill-current" />
+                          <span className="font-medium">Local Made</span>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={() => openPinPack(pack.id, 'maps')}
+                        className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
+                      >
+                        <Download className="h-5 w-5 mr-2" />
+                        Open in Google Maps
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

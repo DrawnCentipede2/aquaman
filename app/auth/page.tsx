@@ -7,14 +7,40 @@ export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [userProfile, setUserProfile] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
-  // Check if user is already logged in
+  // Check if user is already logged in - do this immediately without showing sign-in form
   useEffect(() => {
-    const savedProfile = localStorage.getItem('pinpacks_user_profile')
-    if (savedProfile) {
-      setUserProfile(JSON.parse(savedProfile))
+    const checkInitialAuth = () => {
+      setIsCheckingAuth(true)
+      const savedProfile = localStorage.getItem('pinpacks_user_profile')
+      if (savedProfile) {
+        setUserProfile(JSON.parse(savedProfile))
+      }
+      setIsCheckingAuth(false)
     }
+    
+    checkInitialAuth()
   }, [])
+
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center">
+            <div className="flex justify-center mb-6">
+              <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 rounded-full">
+                <User className="h-12 w-12 text-white" />
+              </div>
+            </div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Checking your profile...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // Simple email-based authentication
   const handleAuth = async () => {
@@ -32,7 +58,7 @@ export default function AuthPage() {
       // Create user profile
       const userProfile = {
         email: email.trim().toLowerCase(),
-        userId: `user_${email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}`,
+        userId: email.trim().toLowerCase(),  // Use email directly as user ID - no timestamp
         ip: locationData.ip || 'unknown',
         location: `${locationData.city}, ${locationData.country_name}` || 'Unknown',
         created: new Date().toISOString(),
@@ -47,6 +73,9 @@ export default function AuthPage() {
       localStorage.setItem('pinpacks_user_location', userProfile.location)
 
       setUserProfile(userProfile)
+      
+      // Trigger storage event to update navigation
+      window.dispatchEvent(new Event('storage'))
       
       alert(`✅ Welcome! You're now logged in as ${userProfile.email}`)
     } catch (err) {
@@ -66,6 +95,10 @@ export default function AuthPage() {
     localStorage.removeItem('pinpacks_user_location')
     setUserProfile(null)
     setEmail('')
+    
+    // Trigger storage event to update navigation
+    window.dispatchEvent(new Event('storage'))
+    
     alert('👋 You have been logged out.')
   }
 
@@ -160,7 +193,7 @@ export default function AuthPage() {
             </div>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent mb-4">
-            Sign In
+            Profile
           </h1>
           <p className="text-xl text-gray-600">
             Enter your email to access your pin packs
@@ -203,8 +236,8 @@ export default function AuthPage() {
                 </>
               ) : (
                 <>
-                  <User className="h-5 w-5 mr-2" />
-                  Sign In
+                                <User className="h-5 w-5 mr-2" />
+              Sign In to Your Profile
                 </>
               )}
             </button>

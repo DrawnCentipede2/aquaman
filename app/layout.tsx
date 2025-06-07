@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import Navigation from '@/components/Navigation'
 
 export const metadata: Metadata = {
   title: 'PinPacks - Local Travel Pins by Locals',
@@ -22,32 +23,13 @@ export default function RootLayout({
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center">
                   <h1 className="text-2xl font-bold text-primary-600">
-                    📍 PinPacks
+                    🗺️ PinPacks
                   </h1>
                   <span className="ml-2 text-sm text-gray-500">
                     by locals, for travelers
                   </span>
                 </div>
-                <nav className="flex space-x-4">
-                  <a href="/" className="text-gray-600 hover:text-primary-600 px-3 py-2">
-                    Home
-                  </a>
-                  <a href="/browse" className="text-gray-600 hover:text-primary-600 px-3 py-2">
-                    Browse Packs
-                  </a>
-                  <a href="/about" className="text-gray-600 hover:text-primary-600 px-3 py-2">
-                    About Us
-                  </a>
-                  <a href="/manage" className="text-gray-600 hover:text-primary-600 px-3 py-2">
-                    Your Pins
-                  </a>
-                  <a href="/auth" className="text-gray-600 hover:text-primary-600 px-3 py-2">
-                    Sign In
-                  </a>
-                  <a href="/create" className="btn-primary">
-                    Create Pack
-                  </a>
-                </nav>
+                <Navigation />
               </div>
             </div>
           </header>

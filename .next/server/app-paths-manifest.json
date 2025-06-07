@@ -1,7 +1,6 @@
 {
   "/page": "app/page.js",
+  "/browse/page": "app/browse/page.js",
   "/manage/page": "app/manage/page.js",
-  "/auth/page": "app/auth/page.js",
-  "/create/page": "app/create/page.js",
-  "/browse/page": "app/browse/page.js"
+  "/auth/page": "app/auth/page.js"
 }

@@ -314,49 +314,7 @@ export default function ManagePage() {
           </p>
         </div>
 
-        {/* User Debug Panel */}
-        <div className="bg-blue-50/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-blue-200 mb-8">
-          <div className="flex items-center mb-4">
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-2 rounded-lg mr-3">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-            <h3 className="text-lg font-bold text-blue-800">Your User Profile (Debug Info)</h3>
-          </div>
-          
-          <div className="grid md:grid-cols-2 gap-4 text-sm">
-            <div className="bg-white/70 p-4 rounded-lg">
-              <p><strong>User ID:</strong> <code className="bg-gray-100 px-2 py-1 rounded text-xs">{userId}</code></p>
-              <p className="mt-2"><strong>Email:</strong> {localStorage.getItem('pinpacks_user_email') || 'Not available'}</p>
-              <p className="mt-2"><strong>Location:</strong> {localStorage.getItem('pinpacks_user_location') || 'Not available'}</p>
-            </div>
-            <div className="bg-white/70 p-4 rounded-lg">
-              <p><strong>Profile Created:</strong> {localStorage.getItem('pinpacks_user_created') ? new Date(localStorage.getItem('pinpacks_user_created')!).toLocaleString() : 'Not available'}</p>
-              <p className="mt-2"><strong>Total Packs:</strong> {userPacks.length}</p>
-              <p className="mt-2"><strong>Auth Status:</strong> 
-                <span className={`ml-2 px-2 py-1 rounded text-xs ${localStorage.getItem('pinpacks_user_profile') ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                  {localStorage.getItem('pinpacks_user_profile') ? 'Email Authenticated' : 'Legacy User'}
-                </span>
-              </p>
-            </div>
-          </div>
-          
-          <div className="mt-4 space-y-2">
-            <div className="text-xs text-blue-600">
-              💡 <strong>Note:</strong> Your profile is now linked to your email address for better persistence.
-            </div>
-            {userPacks.length === 0 && (
-              <div className="text-xs text-orange-600 bg-orange-50 p-3 rounded border border-orange-200">
-                🔄 <strong>Missing your old pin packs?</strong> They might have been created before email authentication. 
-                <button 
-                  onClick={() => window.location.href = '/auth'} 
-                  className="ml-2 text-orange-800 underline hover:no-underline"
-                >
-                  Sign in with a different email
-                </button> or check the browser console for more details.
-              </div>
-            )}
-          </div>
-        </div>
+
 
         {/* Analytics Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">

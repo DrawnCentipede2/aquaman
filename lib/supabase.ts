@@ -32,6 +32,11 @@ export interface PinPack {
   created_at: string
   creator_location: string
   pin_count: number
+  // Optional analytics fields (may not be present in all queries)
+  creator_id?: string
+  download_count?: number
+  average_rating?: number
+  rating_count?: number
 }
 
 export interface PinPackPin {
