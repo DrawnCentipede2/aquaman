@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import Navigation from '@/components/Navigation'
+import { MapPin } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'PinPacks - Local Travel Pins by Locals',
@@ -28,8 +29,9 @@ export default function RootLayout({
                     className="flex items-center space-x-2 text-coral-500 hover:text-coral-600 transition-colors duration-200 cursor-pointer group"
                     title="Go to home page"
                   >
-                    <div className="text-3xl group-hover:scale-110 transition-transform duration-200">
-                      🗺️
+                    <div className="group-hover:scale-110 transition-transform duration-200">
+                      {/* Single pin icon */}
+                      <MapPin className="h-8 w-8" />
                     </div>
                     <span className="text-2xl font-bold tracking-tight">
                       PinPacks

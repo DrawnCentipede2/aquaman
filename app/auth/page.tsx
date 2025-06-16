@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User, Mail, MapPin, ArrowRight, LogOut, Settings } from 'lucide-react'
+import { User, Mail, MapPin, ArrowRight, LogOut, CreditCard, Globe, DollarSign, HelpCircle, Settings, Bell } from 'lucide-react'
 
 export default function AuthPage() {
   const [email, setEmail] = useState('')
@@ -37,44 +37,40 @@ export default function AuthPage() {
     )
   }
 
-  // Simple email-based authentication
-  const handleAuth = async () => {
+  // Simple email-based sign in for existing users
+  const handleSignIn = async () => {
     if (!email.trim()) {
-      alert('Please enter a valid email address')
+      alert('Please enter your email address')
       return
     }
 
     setIsLoading(true)
     try {
-      // Get user's IP and location for enhanced profile
-      const response = await fetch('https://ipapi.co/json/')
-      const locationData = await response.json()
+      // For now, we'll simulate checking if user exists
+      // In a real app, you'd check against a database
+      const existingProfile = localStorage.getItem(`pinpacks_profile_${email.trim().toLowerCase()}`)
       
-      // Create user profile
-      const userProfile = {
-        email: email.trim().toLowerCase(),
-        userId: email.trim().toLowerCase(),
-        ip: locationData.ip || 'unknown',
-        location: `${locationData.city}, ${locationData.country_name}` || 'Unknown',
-        created: new Date().toISOString(),
-        lastLogin: new Date().toISOString()
+      if (existingProfile) {
+        // User exists, sign them in
+        const profile = JSON.parse(existingProfile)
+        profile.lastLogin = new Date().toISOString()
+        
+        localStorage.setItem('pinpacks_user_profile', JSON.stringify(profile))
+        localStorage.setItem('pinpacks_user_id', profile.userId)
+        localStorage.setItem('pinpacks_user_email', profile.email)
+        
+        setUserProfile(profile)
+        window.dispatchEvent(new Event('storage'))
+      } else {
+        // User doesn't exist, redirect to signup
+        alert('No account found with this email. Please create a new account.')
+        window.location.href = '/signup'
+        return
       }
-
-      // Save to localStorage
-      localStorage.setItem('pinpacks_user_profile', JSON.stringify(userProfile))
-      localStorage.setItem('pinpacks_user_id', userProfile.userId)
-      localStorage.setItem('pinpacks_user_email', userProfile.email)
-      localStorage.setItem('pinpacks_user_ip', userProfile.ip)
-      localStorage.setItem('pinpacks_user_location', userProfile.location)
-
-      setUserProfile(userProfile)
-      
-      // Trigger storage event to update navigation
-      window.dispatchEvent(new Event('storage'))
       
     } catch (err) {
-      alert('Failed to authenticate. Please try again.')
-      console.error('Auth error:', err)
+      alert('Failed to sign in. Please try again.')
+      console.error('Sign in error:', err)
     } finally {
       setIsLoading(false)
     }
@@ -103,14 +99,14 @@ export default function AuthPage() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-500 mb-6">
               <div className="text-2xl font-bold text-white">
-                {userProfile.email.charAt(0).toUpperCase()}
+                {userProfile.name?.charAt(0).toUpperCase() || userProfile.email.charAt(0).toUpperCase()}
               </div>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Welcome back!
+              Account Settings
             </h1>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              You're all set to create amazing pin packs and share your favorite places with travelers.
+              Manage your profile, payment methods, and preferences
             </p>
           </div>
 
@@ -119,13 +115,16 @@ export default function AuthPage() {
             <div className="p-8">
               <div className="flex items-center mb-6">
                 <div className="w-16 h-16 bg-coral-500 rounded-full flex items-center justify-center text-white text-xl font-bold mr-4">
-                  {userProfile.email.charAt(0).toUpperCase()}
+                  {userProfile.name?.charAt(0).toUpperCase() || userProfile.email.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">
-                    {userProfile.email.split('@')[0]}
+                    {userProfile.name || userProfile.email.split('@')[0]}
                   </h2>
                   <p className="text-gray-600">{userProfile.email}</p>
+                  <span className="inline-block bg-coral-100 text-coral-700 text-xs font-semibold px-2 py-1 rounded-full mt-1">
+                    Verified Member
+                  </span>
                 </div>
               </div>
               
@@ -151,47 +150,109 @@ export default function AuthPage() {
             </div>
           </div>
 
-          {/* Action Cards */}
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
-            {/* Create Pin Pack */}
-            <a 
-              href="/create"
-              className="card-airbnb card-airbnb-hover group p-8 text-center"
-            >
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-4 group-hover:bg-coral-200 transition-colors">
-                <MapPin className="h-8 w-8 text-coral-500" />
+          {/* Account Settings Cards */}
+          <div className="grid md:grid-cols-3 gap-4 mb-8">
+            {/* Payment Methods */}
+            <div className="card-airbnb card-airbnb-hover group p-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-3 group-hover:bg-green-200 transition-colors">
+                <CreditCard className="h-6 w-6 text-green-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-coral-600 transition-colors">
-                Create Pin Pack
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">
+                Payment Methods
               </h3>
-              <p className="text-gray-600 mb-4">
-                Share your favorite local spots with travelers around the world.
+              <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                Manage your credit cards, PayPal, and other payment options.
               </p>
-              <div className="flex items-center justify-center text-coral-500 font-medium">
-                <span>Get started</span>
-                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              <div className="flex items-center text-green-600 font-medium text-sm">
+                <span>Manage payments</span>
+                <ArrowRight className="h-3 w-3 ml-2 group-hover:translate-x-1 transition-transform" />
               </div>
-            </a>
+            </div>
 
-            {/* Manage Pins */}
-            <a 
-              href="/manage"
-              className="card-airbnb card-airbnb-hover group p-8 text-center"
-            >
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4 group-hover:bg-gray-200 transition-colors">
-                <Settings className="h-8 w-8 text-gray-500" />
+            {/* Language & Region */}
+            <div className="card-airbnb card-airbnb-hover group p-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-3 group-hover:bg-blue-200 transition-colors">
+                <Globe className="h-6 w-6 text-blue-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-gray-700 transition-colors">
-                Manage Your Pins
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                Language & Region
               </h3>
-              <p className="text-gray-600 mb-4">
-                View, edit, and manage all your pin packs in one place.
+              <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                Set your preferred language, currency, and time zone.
               </p>
-              <div className="flex items-center justify-center text-gray-500 font-medium">
-                <span>Manage pins</span>
-                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              <div className="flex items-center text-blue-600 font-medium text-sm">
+                <span>Update preferences</span>
+                <ArrowRight className="h-3 w-3 ml-2 group-hover:translate-x-1 transition-transform" />
               </div>
-            </a>
+            </div>
+
+            {/* Currency Settings */}
+            <div className="card-airbnb card-airbnb-hover group p-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-100 mb-3 group-hover:bg-yellow-200 transition-colors">
+                <DollarSign className="h-6 w-6 text-yellow-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-yellow-600 transition-colors">
+                Currency
+              </h3>
+              <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                Choose your preferred currency for prices and payments.
+              </p>
+              <div className="flex items-center text-yellow-600 font-medium text-sm">
+                <span>Change currency</span>
+                <ArrowRight className="h-3 w-3 ml-2 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
+            {/* Notifications */}
+            <div className="card-airbnb card-airbnb-hover group p-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-purple-100 mb-3 group-hover:bg-purple-200 transition-colors">
+                <Bell className="h-6 w-6 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
+                Notifications
+              </h3>
+              <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                Control how and when you receive notifications from us.
+              </p>
+              <div className="flex items-center text-purple-600 font-medium text-sm">
+                <span>Manage notifications</span>
+                <ArrowRight className="h-3 w-3 ml-2 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
+            {/* Privacy & Security */}
+            <div className="card-airbnb card-airbnb-hover group p-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-3 group-hover:bg-gray-200 transition-colors">
+                <Settings className="h-6 w-6 text-gray-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-gray-700 transition-colors">
+                Privacy & Security
+              </h3>
+              <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                Update your privacy settings and security preferences.
+              </p>
+              <div className="flex items-center text-gray-600 font-medium text-sm">
+                <span>Security settings</span>
+                <ArrowRight className="h-3 w-3 ml-2 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
+            {/* Support */}
+            <div className="card-airbnb card-airbnb-hover group p-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-coral-100 mb-3 group-hover:bg-coral-200 transition-colors">
+                <HelpCircle className="h-6 w-6 text-coral-500" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-coral-600 transition-colors">
+                Support
+              </h3>
+              <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                Get help, contact us, or visit our help center.
+              </p>
+              <div className="flex items-center text-coral-500 font-medium text-sm">
+                <span>Get support</span>
+                <ArrowRight className="h-3 w-3 ml-2 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
           </div>
 
           {/* Logout */}
@@ -209,7 +270,7 @@ export default function AuthPage() {
     )
   }
 
-  // Login form - Airbnb-inspired design
+  // Sign in form for existing users
   return (
     <div className="min-h-screen bg-gray-25 flex items-center justify-center">
       <div className="max-w-md w-full mx-4">
@@ -219,14 +280,14 @@ export default function AuthPage() {
             <User className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            Welcome to PinPacks
+            Welcome back
           </h1>
           <p className="text-gray-600">
-            Sign in to create and manage your pin packs
+            Sign in to your PinPacks account
           </p>
         </div>
 
-        {/* Login Card */}
+        {/* Sign In Card */}
         <div className="card-airbnb">
           <div className="p-8">
             <div className="space-y-6">
@@ -242,13 +303,13 @@ export default function AuthPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
                     className="input-airbnb pl-10 w-full"
-                    onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSignIn()}
                   />
                 </div>
               </div>
 
               <button
-                onClick={handleAuth}
+                onClick={handleSignIn}
                 disabled={isLoading || !email.trim()}
                 className="w-full btn-primary py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -259,7 +320,7 @@ export default function AuthPage() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">
-                    Continue
+                    Sign in
                     <ArrowRight className="h-5 w-5 ml-2" />
                   </div>
                 )}
@@ -268,10 +329,13 @@ export default function AuthPage() {
           </div>
         </div>
 
-        {/* Info */}
+        {/* Sign Up Link */}
         <div className="mt-6 text-center">
-          <p className="text-sm text-gray-500">
-            We'll use this email to create your profile and manage your pin packs.
+          <p className="text-sm text-gray-600">
+            Don't have an account?{' '}
+            <a href="/signup" className="text-coral-500 hover:text-coral-600 font-medium">
+              Create one here
+            </a>
           </p>
         </div>
       </div>

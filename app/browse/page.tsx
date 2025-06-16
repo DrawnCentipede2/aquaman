@@ -351,7 +351,7 @@ export default function BrowsePage() {
                 const userProfile = localStorage.getItem('pinpacks_user_profile')
                 if (!userProfile) {
                   e.preventDefault()
-                  window.location.href = '/auth'
+                  window.location.href = '/signup'
                 }
               }}
               className="btn-primary inline-flex items-center text-lg px-8 py-4"

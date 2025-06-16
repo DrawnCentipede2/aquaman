@@ -403,21 +403,20 @@ export default function LandingPage() {
                     ? `/browse?search=${encodeURIComponent(searchQuery)}`
                     : '/browse'
                 }}
-                className="search-bar p-2 flex items-center"
+                className="search-bar p-2 flex items-center w-full"
               >
                 <div className="flex-1 flex items-center">
                   <Search className="h-5 w-5 text-gray-400 ml-4 mr-3" />
                   <input
                     type="text"
                     placeholder="Where do you want to explore?"
-                    className="flex-1 border-none outline-none text-gray-700 text-lg placeholder-gray-400 bg-transparent"
+                    className="flex-1 border-none outline-none text-gray-700 text-lg placeholder-gray-400 bg-transparent w-full"
                   />
                 </div>
                 <button 
                   type="submit"
-                  className="btn-primary ml-4 px-8 py-4 text-lg"
+                  className="btn-primary ml-4 px-8 py-4 text-lg flex items-center"
                 >
-                  <Search className="h-5 w-5 mr-2" />
                   Search
                 </button>
               </form>
@@ -478,7 +477,7 @@ export default function LandingPage() {
                   const userProfile = localStorage.getItem('pinpacks_user_profile')
                   if (!userProfile) {
                     e.preventDefault()
-                    window.location.href = '/auth'
+                    window.location.href = '/signup'
                   }
                 }}
                 className="btn-primary inline-flex items-center text-lg px-8 py-4"
@@ -626,7 +625,7 @@ export default function LandingPage() {
                 const userProfile = localStorage.getItem('pinpacks_user_profile')
                 if (!userProfile) {
                   e.preventDefault()
-                  window.location.href = '/auth'
+                  window.location.href = '/signup'
                 }
               }}
               className="btn-outline border-white text-white hover:bg-white hover:text-coral-500 inline-flex items-center text-lg px-8 py-4"

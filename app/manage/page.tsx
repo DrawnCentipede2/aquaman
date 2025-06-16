@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BarChart3, Download, Edit, Eye, MapPin, Star, Trash2, TrendingUp, Users, Calendar } from 'lucide-react'
+import { BarChart3, Download, Edit, Eye, MapPin, Star, Trash2, TrendingUp, Users, Calendar, Package, DollarSign } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 // Interface for pin pack with analytics
@@ -28,7 +28,6 @@ export default function ManagePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string>('')
-
 
   // Check for authenticated user and use email-based system
   useEffect(() => {
@@ -198,51 +197,46 @@ export default function ManagePage() {
         .delete()
         .eq('pin_pack_id', packId)
 
-      // 2. Delete download records
+      // 2. Delete pins
+      await supabase
+        .from('pins')
+        .delete()
+        .eq('pack_id', packId)
+
+      // 3. Delete downloads
       await supabase
         .from('pack_downloads')
         .delete()
         .eq('pin_pack_id', packId)
 
-      // 3. Delete rating records
-      await supabase
-        .from('pack_ratings')
-        .delete()
-        .eq('pin_pack_id', packId)
-
-      // 4. Finally delete the pin pack itself
-      const { error } = await supabase
+      // 4. Delete the pin pack itself
+      const { error: deleteError } = await supabase
         .from('pin_packs')
         .delete()
         .eq('id', packId)
 
-      if (error) throw error
+      if (deleteError) throw deleteError
 
-      alert(`✅ "${packTitle}" has been deleted successfully!`)
+      // Update local state
+      setUserPacks(userPacks.filter(pack => pack.id !== packId))
+      alert('Pin pack deleted successfully! 🗑️')
       
-      // Reload the packs list
-      loadUserPacks()
-    } catch (err) {
-      alert('Failed to delete the pin pack. Please try again.')
-      console.error('Error deleting pack:', err)
+    } catch (error) {
+      console.error('Error deleting pin pack:', error)
+      alert('Failed to delete pin pack. Please try again.')
     }
   }
 
-  // Function to edit a pin pack
+  // Function to edit pin pack (placeholder - could expand to inline editing)
   const editPinPack = (pack: PinPackWithAnalytics) => {
-    const newTitle = prompt('Enter new title:', pack.title)
-    if (!newTitle || newTitle === pack.title) return
-
-    const newDescription = prompt('Enter new description:', pack.description)
-    if (newDescription === null) return // User cancelled
-
-    updatePinPack(pack.id, {
-      title: newTitle,
-      description: newDescription
-    })
+    // For now, just allow editing title and description via prompt
+    const newTitle = prompt('Edit pack title:', pack.title)
+    if (newTitle && newTitle !== pack.title) {
+      updatePinPack(pack.id, { title: newTitle })
+    }
   }
 
-  // Function to update a pin pack
+  // Function to update pin pack
   const updatePinPack = async (packId: string, updates: { title?: string, description?: string }) => {
     try {
       const { error } = await supabase
@@ -252,234 +246,252 @@ export default function ManagePage() {
 
       if (error) throw error
 
-      alert('✅ Pin pack updated successfully!')
+      // Update local state
+      setUserPacks(userPacks.map(pack => 
+        pack.id === packId ? { ...pack, ...updates } : pack
+      ))
       
-      // Reload the packs list
-      loadUserPacks()
-    } catch (err) {
-      alert('Failed to update the pin pack. Please try again.')
-      console.error('Error updating pack:', err)
+      alert('Pin pack updated successfully! ✅')
+    } catch (error) {
+      console.error('Error updating pin pack:', error)
+      alert('Failed to update pin pack. Please try again.')
     }
   }
-
-
 
   // Function to get analytics summary
   const getAnalyticsSummary = () => {
     const totalPacks = userPacks.length
-    const totalDownloads = userPacks.reduce((sum, pack) => sum + pack.download_count, 0)
-    const totalRatings = userPacks.reduce((sum, pack) => sum + pack.rating_count, 0)
-    const averageRating = totalRatings > 0 
-      ? userPacks.reduce((sum, pack) => sum + (pack.average_rating * pack.rating_count), 0) / totalRatings
-      : 0
-    const recentDownloads = userPacks.reduce((sum, pack) => sum + pack.recent_downloads, 0)
-
-    return {
-      totalPacks,
-      totalDownloads,
-      totalRatings,
-      averageRating,
-      recentDownloads
-    }
+    const totalDownloads = userPacks.reduce((sum, pack) => sum + (pack.download_count || 0), 0)
+    const totalRecentDownloads = userPacks.reduce((sum, pack) => sum + pack.recent_downloads, 0)
+    const totalEarnings = userPacks.reduce((sum, pack) => sum + (pack.price * (pack.download_count || 0)), 0)
+    
+    return { totalPacks, totalDownloads, totalRecentDownloads, totalEarnings }
   }
 
   const analytics = getAnalyticsSummary()
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-25 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your pin packs...</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
+          </div>
+          <p className="text-gray-600 text-lg">Loading your pin packs...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen bg-gray-25">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex justify-center mb-6">
-            <div className="bg-gradient-to-r from-purple-500 to-pink-600 p-4 rounded-full">
-              <BarChart3 className="h-12 w-12 text-white" />
+        <div className="mb-12">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center mb-4">
+                <Package className="h-8 w-8 text-coral-500 mr-3" />
+                <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
+                  Manage Your Packs
+                </h1>
+              </div>
+              <p className="text-xl text-gray-600">
+                Track performance and manage your pin pack collections
+              </p>
             </div>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-purple-800 to-pink-800 bg-clip-text text-transparent mb-4">
-            Your Pin Packs
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Manage your pin packs, track performance, and see how travelers are discovering your local insights.
-          </p>
-        </div>
-
-
-
-        {/* Analytics Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20">
-            <div className="flex items-center">
-              <div className="bg-blue-500 p-3 rounded-lg">
-                <MapPin className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{analytics.totalPacks}</p>
-                <p className="text-sm text-gray-600">Total Packs</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20">
-            <div className="flex items-center">
-              <div className="bg-green-500 p-3 rounded-lg">
-                <Download className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{analytics.totalDownloads}</p>
-                <p className="text-sm text-gray-600">Total Downloads</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20">
-            <div className="flex items-center">
-              <div className="bg-yellow-500 p-3 rounded-lg">
-                <Star className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{analytics.averageRating.toFixed(1)}</p>
-                <p className="text-sm text-gray-600">Avg Rating</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20">
-            <div className="flex items-center">
-              <div className="bg-purple-500 p-3 rounded-lg">
-                <Users className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{analytics.totalRatings}</p>
-                <p className="text-sm text-gray-600">Total Reviews</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20">
-            <div className="flex items-center">
-              <div className="bg-orange-500 p-3 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{analytics.recentDownloads}</p>
-                <p className="text-sm text-gray-600">This Week</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-
-        {/* Pin Packs List */}
-        <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-white/20">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Your Pin Packs</h2>
             <a 
               href="/create"
-              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center"
+              className="btn-primary flex items-center"
             >
-              <MapPin className="h-4 w-4 mr-2" />
+              <Package className="h-4 w-4 mr-2" />
               Create New Pack
             </a>
           </div>
+        </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-red-800">{error}</p>
+        {/* Analytics Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-coral-100 rounded-full flex items-center justify-center mr-4">
+                <Package className="h-6 w-6 text-coral-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Packs</p>
+                <p className="text-2xl font-bold text-gray-900">{analytics.totalPacks}</p>
+              </div>
             </div>
-          )}
+          </div>
 
-          {userPacks.length === 0 ? (
-            <div className="text-center py-12">
-              <MapPin className="h-24 w-24 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">No pin packs yet</h3>
-              <p className="text-gray-600 mb-6">Create your first pin pack to start sharing your local insights!</p>
-              <a 
-                href="/create"
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 inline-flex items-center"
-              >
-                <MapPin className="h-5 w-5 mr-2" />
-                Create Your First Pack
-              </a>
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+                <Download className="h-6 w-6 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Downloads</p>
+                <p className="text-2xl font-bold text-gray-900">{analytics.totalDownloads}</p>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {userPacks.map((pack) => (
-                <div key={pack.id} className="border border-gray-200 rounded-xl p-6 bg-white hover:shadow-lg transition-shadow">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900 mb-1">{pack.title}</h3>
-                          <p className="text-gray-600">{pack.city}, {pack.country}</p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => editPinPack(pack)}
-                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-2 rounded-lg transition-colors"
-                            title="Edit pack"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => deletePinPack(pack.id, pack.title)}
-                            className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                            title="Delete pack"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <p className="text-gray-700 mb-4">{pack.description}</p>
-                      
-                      {/* Pack Stats */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                        <div className="text-center p-3 bg-blue-50 rounded-lg">
-                          <p className="text-lg font-bold text-blue-600">{pack.pin_count}</p>
-                          <p className="text-xs text-blue-600">Pins</p>
-                        </div>
-                        <div className="text-center p-3 bg-green-50 rounded-lg">
-                          <p className="text-lg font-bold text-green-600">{pack.download_count}</p>
-                          <p className="text-xs text-green-600">Downloads</p>
-                        </div>
-                        <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                          <div className="flex items-center justify-center">
-                            <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                            <p className="text-lg font-bold text-yellow-600">
-                              {pack.rating_count > 0 ? pack.average_rating.toFixed(1) : '-'}
-                            </p>
-                          </div>
-                          <p className="text-xs text-yellow-600">{pack.rating_count} reviews</p>
-                        </div>
-                        <div className="text-center p-3 bg-purple-50 rounded-lg">
-                          <p className="text-lg font-bold text-purple-600">{pack.recent_downloads}</p>
-                          <p className="text-xs text-purple-600">This week</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center text-xs text-gray-500">
-                        <Calendar className="h-4 w-4 mr-1" />
-                        Created {new Date(pack.created_at).toLocaleDateString()}
-                      </div>
+          </div>
+
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                <TrendingUp className="h-6 w-6 text-green-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Recent Downloads</p>
+                <p className="text-2xl font-bold text-gray-900">{analytics.totalRecentDownloads}</p>
+                <p className="text-xs text-gray-400">Last 7 days</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
+                <DollarSign className="h-6 w-6 text-yellow-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Earnings</p>
+                <p className="text-2xl font-bold text-gray-900">${analytics.totalEarnings.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="card-airbnb p-6 mb-8 bg-red-50 border border-red-200">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                <Trash2 className="h-6 w-6 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-red-900">Error</h3>
+                <p className="text-red-700">{error}</p>
+                <button 
+                  onClick={loadUserPacks}
+                  className="text-red-600 hover:text-red-800 font-medium mt-2"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pin Packs Grid */}
+        {userPacks.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+              <Package className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">No pin packs yet</h3>
+            <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+              Create your first pin pack and start sharing your favorite places with travelers.
+            </p>
+            <a 
+              href="/create"
+              className="btn-primary inline-flex items-center text-lg px-8 py-4"
+            >
+              <Package className="h-5 w-5 mr-2" />
+              Create Your First Pack
+            </a>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userPacks.map((pack) => (
+              <div key={pack.id} className="card-airbnb card-airbnb-hover group">
+                {/* Pack Image Placeholder */}
+                <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  
+                  {/* Price Badge */}
+                  <div className="absolute top-3 left-3">
+                    <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-gray-900">
+                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                    </span>
+                  </div>
+
+                  {/* Pin Count */}
+                  <div className="absolute top-3 right-3">
+                    <span className="bg-coral-500 text-white px-2 py-1 rounded-lg text-sm font-medium">
+                      {pack.pin_count} pins
+                    </span>
+                  </div>
+
+                  {/* Recent Activity Badge */}
+                  {pack.recent_downloads > 0 && (
+                    <div className="absolute bottom-3 left-3">
+                      <span className="bg-green-500 text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center">
+                        <TrendingUp className="h-3 w-3 mr-1" />
+                        {pack.recent_downloads} recent
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pack Content */}
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-coral-600 transition-colors">
+                        {pack.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 flex items-center mt-1">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {pack.city}, {pack.country}
+                      </p>
                     </div>
                   </div>
+
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
+                    {pack.description || 'No description provided'}
+                  </p>
+
+                  {/* Stats Row */}
+                  <div className="flex items-center justify-between mb-4 text-sm text-gray-500">
+                    <div className="flex items-center">
+                      <Download className="h-3 w-3 mr-1" />
+                      <span>{pack.download_count || 0} downloads</span>
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="h-3 w-3 mr-1" />
+                      <span>{new Date(pack.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => editPinPack(pack)}
+                      className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center"
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => window.open(`/browse`, '_blank')}
+                      className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      View
+                    </button>
+                    <button
+                      onClick={() => deletePinPack(pack.id, pack.title)}
+                      className="px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

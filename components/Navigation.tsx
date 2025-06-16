@@ -2,14 +2,14 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { User, Plus, Search } from 'lucide-react'
+import { User, Plus, Heart, ShoppingCart, Package, Settings } from 'lucide-react'
 
 export default function Navigation() {
   const pathname = usePathname()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // null = checking, false = not auth, true = auth
   const [userProfile, setUserProfile] = useState<any>(null)
 
-  // Check authentication status
+  // Check authentication status immediately on mount
   useEffect(() => {
     const checkAuth = () => {
       const userProfileData = localStorage.getItem('pinpacks_user_profile')
@@ -22,6 +22,7 @@ export default function Navigation() {
       }
     }
     
+    // Check immediately without delay
     checkAuth()
     
     // Listen for storage changes (when user signs in/out)
@@ -47,35 +48,65 @@ export default function Navigation() {
     return `${baseClasses} text-gray-700 hover:text-gray-900`
   }
 
-  // Handle Create Pack click - redirect to login if not authenticated
-  const handleCreatePackClick = (e: React.MouseEvent) => {
-    if (!isAuthenticated) {
-      e.preventDefault()
-      window.location.href = '/auth'
-    }
-    // If authenticated, let the normal link work
+  // Don't render anything until we've checked authentication status
+  if (isAuthenticated === null) {
+    return (
+      <nav className="flex items-center space-x-1">
+        {/* Show a minimal loading state */}
+        <div className="hidden md:flex items-center space-x-1">
+          <div className="px-4 py-2 text-sm font-medium text-gray-400 rounded-full">
+            Loading...
+          </div>
+        </div>
+        <div className="flex items-center space-x-3 ml-6 pl-6 border-l border-gray-200">
+          <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+        </div>
+      </nav>
+    )
   }
 
   return (
     <nav className="flex items-center space-x-1">
-      {/* Main navigation links - removed Browse Packs since it's on home page */}
+      {/* Main navigation links - different for authenticated vs non-authenticated */}
       <div className="hidden md:flex items-center space-x-1">
-        <a href="/" className={getLinkClasses('/')}>
-          Home
-        </a>
-        <a href="/about" className={getLinkClasses('/about')}>
-          About
-        </a>
-        <a href="/manage" className={getLinkClasses('/manage')}>
-          Your Pins
-        </a>
+        {isAuthenticated ? (
+          <>
+            {/* Authenticated Navigation */}
+            <a href="/wishlist" className={getLinkClasses('/wishlist')}>
+              <Heart className="h-4 w-4 inline mr-1" />
+              Wishlist
+            </a>
+            <a href="/cart" className={getLinkClasses('/cart')}>
+              <ShoppingCart className="h-4 w-4 inline mr-1" />
+              Cart
+            </a>
+            <a href="/create" className={getLinkClasses('/create')}>
+              <Plus className="h-4 w-4 inline mr-1" />
+              Create Pack
+            </a>
+            <a href="/manage" className={getLinkClasses('/manage')}>
+              <Package className="h-4 w-4 inline mr-1" />
+              Manage Packs
+            </a>
+          </>
+        ) : (
+          <>
+            {/* Non-authenticated Navigation - just browse options */}
+            <a href="/" className={getLinkClasses('/')}>
+              Home
+            </a>
+            <a href="/browse" className={getLinkClasses('/browse')}>
+              Browse
+            </a>
+          </>
+        )}
       </div>
 
       {/* Right side actions - Different based on authentication */}
       <div className="flex items-center space-x-3 ml-6 pl-6 border-l border-gray-200">
         {!isAuthenticated ? (
           <>
-            {/* Not authenticated - Show Sign In and Create Pack (redirects to login) */}
+            {/* Not authenticated - Show Sign In and Create Pack (different pages) */}
             <a 
               href="/auth" 
               className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all duration-200"
@@ -85,12 +116,11 @@ export default function Navigation() {
             </a>
 
             <a 
-              href="/create" 
-              onClick={handleCreatePackClick}
+              href="/signup"
               className="inline-flex items-center space-x-2 btn-primary text-sm font-semibold shadow-lg"
             >
               <Plus className="h-4 w-4" />
-              <span>Create Pack</span>
+              <span>Join Now</span>
             </a>
           </>
         ) : (
@@ -101,14 +131,14 @@ export default function Navigation() {
               className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all duration-200"
             >
               <div className="w-8 h-8 bg-coral-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                {userProfile?.email?.charAt(0).toUpperCase() || 'U'}
+                {userProfile?.name?.charAt(0).toUpperCase() || userProfile?.email?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div className="hidden sm:block">
                 <div className="text-sm font-medium text-gray-900">
-                  {userProfile?.email?.split('@')[0] || 'Profile'}
+                  {userProfile?.name || userProfile?.email?.split('@')[0] || 'Profile'}
                 </div>
                 <div className="text-xs text-gray-500">
-                  Profile & Settings
+                  Account Settings
                 </div>
               </div>
               <span className="inline-block w-2 h-2 bg-green-400 rounded-full"></span>
