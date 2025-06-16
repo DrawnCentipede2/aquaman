@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MapPin, Download, Star, Users, Plus, Shield, Globe, Heart, ArrowRight, CheckCircle, QrCode } from 'lucide-react'
+import { MapPin, Download, Star, Users, Plus, Shield, Globe, Heart, ArrowRight, CheckCircle, QrCode, Search, Filter } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 
@@ -98,7 +98,7 @@ export default function LandingPage() {
   const generateKML = (title: string, description: string, pins: any[]) => {
     const placemarks = pins.map(pin => `
     <Placemark>
-      <name>${escapeXML(pin.title)}</name>
+      <n>${escapeXML(pin.title)}</n>
       <description><![CDATA[
         <p>${escapeXML(pin.description)}</p>
         <p><strong>Category:</strong> ${escapeXML(pin.category)}</p>
@@ -119,7 +119,7 @@ export default function LandingPage() {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>${escapeXML(title)}</name>
+    <n>${escapeXML(title)}</n>
     <description>${escapeXML(description)}</description>
     ${placemarks}
   </Document>
@@ -369,144 +369,120 @@ export default function LandingPage() {
   ]
 
   return (
-    <div className="min-h-screen">
-      {/* Hero section */}
-      <div className="relative bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 overflow-hidden">
-        <div className="absolute inset-0 bg-white/20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-          <div className="text-center">
-            <div className="flex justify-center mb-8">
-              <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 rounded-full">
-                <MapPin className="h-16 w-16 text-white" />
-              </div>
-            </div>
-            <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent mb-8">
-              Travel Like a Local
+    <div className="min-h-screen bg-white">
+      {/* Airbnb-inspired Hero Section */}
+      <div className="relative min-h-[600px] flex items-center justify-center bg-gradient-to-br from-coral-50 via-white to-gray-50 overflow-hidden">
+        {/* Background pattern */}
+        <div className="absolute inset-0 opacity-40">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-coral-200 rounded-full filter blur-3xl"></div>
+          <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-primary-200 rounded-full filter blur-3xl"></div>
+        </div>
+        
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          {/* Hero content */}
+          <div className="space-y-8 animate-fade-in-up">
+            <h1 className="text-5xl md:text-7xl font-bold text-gray-900 leading-tight">
+              Find amazing places
               <br />
-              <span className="text-5xl md:text-6xl">Not a Tourist</span>
+              <span className="text-coral-500">created by locals</span>
             </h1>
-            <p className="text-2xl md:text-3xl text-gray-600 mb-12 max-w-4xl mx-auto leading-relaxed">
-              Get curated pin collections from real locals who know their cities inside out. 
-              Skip the tourist traps and discover authentic experiences.
-            </p>
             
-            <div className="flex flex-col sm:flex-row justify-center gap-6 mb-16">
-              <a href="/browse" className="group relative bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold text-xl px-12 py-5 rounded-2xl shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-700 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <span className="relative flex items-center">
-                  <Globe className="h-6 w-6 mr-3" />
-                  Browse Pin Packs
-                </span>
-              </a>
-              <a href="/create" className="group bg-white/90 backdrop-blur-sm text-gray-800 font-bold text-xl px-12 py-5 rounded-2xl border-2 border-gray-200 hover:border-purple-300 hover:bg-white hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300">
-                <span className="flex items-center">
-                  <Plus className="h-6 w-6 mr-3" />
-                  Create Your Pack
-                </span>
-              </a>
+            <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+              Discover authentic travel experiences through curated pin collections from people who know their cities best.
+            </p>
+
+            {/* Airbnb-style search bar with redirect functionality */}
+            <div className="mt-12 max-w-2xl mx-auto">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const searchInput = e.currentTarget.querySelector('input') as HTMLInputElement
+                  const searchQuery = searchInput.value.trim()
+                  // Redirect to browse page with search query
+                  window.location.href = searchQuery 
+                    ? `/browse?search=${encodeURIComponent(searchQuery)}`
+                    : '/browse'
+                }}
+                className="search-bar p-2 flex items-center"
+              >
+                <div className="flex-1 flex items-center">
+                  <Search className="h-5 w-5 text-gray-400 ml-4 mr-3" />
+                  <input
+                    type="text"
+                    placeholder="Where do you want to explore?"
+                    className="flex-1 border-none outline-none text-gray-700 text-lg placeholder-gray-400 bg-transparent"
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="btn-primary ml-4 px-8 py-4 text-lg"
+                >
+                  <Search className="h-5 w-5 mr-2" />
+                  Search
+                </button>
+              </form>
             </div>
 
             {/* Quick stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-white/30">
-                <div className="text-4xl font-bold text-blue-600 mb-2">{pinPacks.length}+</div>
-                <div className="text-gray-700 font-medium">Pin Packs Available</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 max-w-3xl mx-auto">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-coral-500 mb-1">{pinPacks.length}+</div>
+                <div className="text-gray-600 font-medium">Pin Packs</div>
               </div>
-              <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-white/30">
-                <div className="text-4xl font-bold text-purple-600 mb-2">100%</div>
-                <div className="text-gray-700 font-medium">Created by Locals</div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-coral-500 mb-1">100%</div>
+                <div className="text-gray-600 font-medium">Local Made</div>
               </div>
-              <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-white/30">
-                <div className="text-4xl font-bold text-green-600 mb-2">Free</div>
-                <div className="text-gray-700 font-medium">During MVP Phase</div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-coral-500 mb-1">Free</div>
+                <div className="text-gray-600 font-medium">During Beta</div>
               </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
-          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
-        </div>
-      </div>
-
-      {/* How It Works Section */}
-      <div className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              How PinPacks Works
-            </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Simple, authentic, and created by the people who know best - the locals.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-12">
-            <div className="text-center">
-              <div className="bg-gradient-to-r from-blue-500 to-purple-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Users className="h-10 w-10 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Locals Create</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Real locals curate collections of their favorite hidden gems, authentic restaurants, 
-                and must-visit spots that tourists never find.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="bg-gradient-to-r from-purple-500 to-pink-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Shield className="h-10 w-10 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">We Verify</h3>
-              <p className="text-gray-600 leading-relaxed">
-                We ensure creators are actually local to the areas they're sharing. 
-                No fake recommendations or tourist traps allowed.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Download className="h-10 w-10 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">You Explore</h3>
-              <p className="text-gray-600 leading-relaxed">
-                Download pin collections directly to your phone and explore cities like a local. 
-                One-click import to Google Maps.
-              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Featured Pin Packs */}
-      <div className="py-24 bg-gray-50">
+      {/* Featured Pin Packs Section */}
+      <div className="py-20 bg-gray-25">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              Featured Pin Packs
+              Explore places recommended by locals
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Discover the most popular collections created by locals around the world.
+              Hand-picked locations from people who call these places home.
             </p>
           </div>
 
           {loading && (
-            <div className="text-center py-16">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="mt-6 text-gray-600 text-lg">Loading amazing pin packs...</p>
+            <div className="text-center py-20">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
+              </div>
+              <p className="text-gray-600 text-lg">Finding amazing places...</p>
             </div>
           )}
 
           {!loading && pinPacks.length === 0 && (
-            <div className="text-center py-16">
-              <MapPin className="h-20 w-20 text-gray-400 mx-auto mb-6" />
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Be the First!</h3>
-              <p className="text-gray-600 text-lg mb-8">
-                No pin packs yet. Create the first one and help travelers discover your city!
+            <div className="text-center py-20">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+                <MapPin className="h-10 w-10 text-gray-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Be the first to share!</h3>
+              <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+                No pin packs yet. Create the first one and help travelers discover your city.
               </p>
-              <a href="/create" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold text-lg px-8 py-4 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center">
+              <a 
+                href="/create" 
+                onClick={(e) => {
+                  const userProfile = localStorage.getItem('pinpacks_user_profile')
+                  if (!userProfile) {
+                    e.preventDefault()
+                    window.location.href = '/auth'
+                  }
+                }}
+                className="btn-primary inline-flex items-center text-lg px-8 py-4"
+              >
                 <Plus className="h-5 w-5 mr-2" />
                 Create First Pin Pack
               </a>
@@ -515,67 +491,66 @@ export default function LandingPage() {
 
           {!loading && pinPacks.length > 0 && (
             <>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-                {pinPacks.map((pack) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
+                {pinPacks.map((pack, index) => (
                   <div 
                     key={pack.id} 
-                    className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
+                    className="card-airbnb card-airbnb-hover group"
+                    style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <div className="h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+                    {/* Card image placeholder */}
+                    <div className="h-64 bg-gradient-to-br from-coral-100 to-gray-100 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                      <div className="absolute top-4 right-4">
+                        <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-coral-600">
+                          {pack.pin_count} pins
+                        </div>
+                      </div>
+                      <div className="absolute bottom-4 left-4 text-white">
+                        <div className="flex items-center space-x-1 text-sm">
+                          <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                          <span className="font-medium">Local favorite</span>
+                        </div>
+                      </div>
+                    </div>
                     
-                    <div className="p-8">
-                      <div className="flex items-start justify-between mb-6">
+                    <div className="p-6">
+                      <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-coral-600 transition-colors line-clamp-1">
                             {pack.title}
                           </h3>
                           <div className="flex items-center text-sm text-gray-500 mb-3">
-                            <MapPin className="h-4 w-4 mr-1 text-blue-500" />
-                            <span className="font-medium">{pack.city}, {pack.country}</span>
+                            <MapPin className="h-4 w-4 mr-1" />
+                            <span>{pack.city}, {pack.country}</span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                            ${pack.price}
+                          <div className="text-2xl font-bold text-gray-900">
+                            {pack.price === 0 ? 'Free' : `$${pack.price}`}
                           </div>
-                          {pack.price === 0 && (
-                            <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
-                              FREE
-                            </span>
-                          )}
                         </div>
                       </div>
                       
-                      <p className="text-gray-600 mb-6 leading-relaxed">
+                      <p className="text-gray-600 mb-6 leading-relaxed line-clamp-2">
                         {pack.description}
                       </p>
                       
-                      <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center text-gray-600">
-                          <Users className="h-4 w-4 mr-2 text-blue-500" />
-                          <span className="font-medium">{pack.pin_count} pins</span>
-                        </div>
-                        <div className="flex items-center text-yellow-600">
-                          <Star className="h-4 w-4 mr-1 text-yellow-400 fill-current" />
-                          <span className="font-medium">Local Made</span>
-                        </div>
-                      </div>
-                      
-                                                          <button
-                    onClick={() => openPinPack(pack.id, 'maps')}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
-                  >
-                    <Download className="h-5 w-5 mr-2" />
-                    Open in Google Maps
-                  </button>
+                      <button
+                        onClick={() => openPinPack(pack.id, 'maps')}
+                        className="w-full btn-primary flex items-center justify-center group"
+                      >
+                        <Download className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                        Open in Google Maps
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
               
               <div className="text-center">
-                <a href="/browse" className="bg-gradient-to-r from-gray-700 to-gray-900 text-white font-semibold text-lg px-8 py-4 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center">
-                  View All Pin Packs
+                <a href="/browse" className="btn-secondary inline-flex items-center text-lg px-8 py-4">
+                  Show all destinations
                   <ArrowRight className="h-5 w-5 ml-2" />
                 </a>
               </div>
@@ -584,64 +559,80 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Testimonials */}
-      <div className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* How It Works Section */}
+      <div className="py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              What People Are Saying
+              How PinPacks works
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Real experiences from travelers and locals using PinPacks.
+              Simple, authentic, and created by the people who know best.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="bg-gradient-to-br from-blue-50 to-purple-50 p-8 rounded-2xl border border-blue-100">
-                <div className="flex items-center mb-6">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                    {testimonial.avatar}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-900">{testimonial.name}</h4>
-                    <p className="text-sm text-gray-600">{testimonial.location}</p>
-                  </div>
-                </div>
-                
-                <div className="flex mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                  ))}
-                </div>
-                
-                <p className="text-gray-700 leading-relaxed italic">
-                  "{testimonial.text}"
-                </p>
+          <div className="grid md:grid-cols-3 gap-12">
+            <div className="text-center group">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-100 mb-6 group-hover:bg-coral-200 transition-colors">
+                <Users className="h-10 w-10 text-coral-500" />
               </div>
-            ))}
+              <h3 className="text-2xl font-semibold text-gray-900 mb-4">Locals create</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Real people who live in these places share their favorite hidden gems and authentic experiences.
+              </p>
+            </div>
+
+            <div className="text-center group">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-100 mb-6 group-hover:bg-coral-200 transition-colors">
+                <Shield className="h-10 w-10 text-coral-500" />
+              </div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-4">We verify</h3>
+              <p className="text-gray-600 leading-relaxed">
+                We ensure all recommendations come from verified locals to guarantee authentic experiences.
+              </p>
+            </div>
+
+            <div className="text-center group">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-100 mb-6 group-hover:bg-coral-200 transition-colors">
+                <Globe className="h-10 w-10 text-coral-500" />
+              </div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-4">You explore</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Download collections directly to your phone and explore cities like a local with one-click Google Maps.
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* CTA Section */}
-      <div className="py-24 bg-gradient-to-r from-blue-600 to-purple-700">
+      <div className="py-20 gradient-coral">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-            Ready to Travel Like a Local?
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 text-shadow">
+            Ready to explore like a local?
           </h2>
-          <p className="text-xl text-blue-100 mb-12">
-            Join thousands of travelers discovering authentic experiences through local recommendations.
+          <p className="text-xl text-white/90 mb-12 text-shadow">
+            Join thousands discovering authentic places through local recommendations.
           </p>
           
           <div className="flex flex-col sm:flex-row justify-center gap-6">
-            <a href="/browse" className="bg-white text-blue-600 font-bold text-xl px-10 py-5 rounded-2xl hover:bg-blue-50 transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center justify-center">
-              <Globe className="h-6 w-6 mr-3" />
-              Start Exploring
+            <a href="/browse" className="btn-secondary bg-white text-coral-500 hover:bg-gray-50 inline-flex items-center text-lg px-8 py-4">
+              <Globe className="h-5 w-5 mr-2" />
+              Browse destinations
             </a>
-            <a href="/create" className="border-2 border-white text-white font-bold text-xl px-10 py-5 rounded-2xl hover:bg-white hover:text-blue-600 transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center justify-center">
-              <Heart className="h-6 w-6 mr-3" />
-              Share Your City
+            <a 
+              href="/create" 
+              onClick={(e) => {
+                const userProfile = localStorage.getItem('pinpacks_user_profile')
+                if (!userProfile) {
+                  e.preventDefault()
+                  window.location.href = '/auth'
+                }
+              }}
+              className="btn-outline border-white text-white hover:bg-white hover:text-coral-500 inline-flex items-center text-lg px-8 py-4"
+            >
+              <Heart className="h-5 w-5 mr-2" />
+              Share your city
             </a>
           </div>
         </div>

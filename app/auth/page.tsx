@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User, Mail, MapPin, ArrowRight } from 'lucide-react'
+import { User, Mail, MapPin, ArrowRight, LogOut, Settings } from 'lucide-react'
 
 export default function AuthPage() {
   const [email, setEmail] = useState('')
@@ -9,7 +9,7 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
-  // Check if user is already logged in - do this immediately without showing sign-in form
+  // Check if user is already logged in
   useEffect(() => {
     const checkInitialAuth = () => {
       setIsCheckingAuth(true)
@@ -26,17 +26,12 @@ export default function AuthPage() {
   // Show loading state while checking authentication
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center">
-            <div className="flex justify-center mb-6">
-              <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 rounded-full">
-                <User className="h-12 w-12 text-white" />
-              </div>
-            </div>
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Checking your profile...</p>
+      <div className="min-h-screen bg-gray-25 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
           </div>
+          <p className="text-gray-600 text-lg">Checking your profile...</p>
         </div>
       </div>
     )
@@ -58,7 +53,7 @@ export default function AuthPage() {
       // Create user profile
       const userProfile = {
         email: email.trim().toLowerCase(),
-        userId: email.trim().toLowerCase(),  // Use email directly as user ID - no timestamp
+        userId: email.trim().toLowerCase(),
         ip: locationData.ip || 'unknown',
         location: `${locationData.city}, ${locationData.country_name}` || 'Unknown',
         created: new Date().toISOString(),
@@ -77,7 +72,6 @@ export default function AuthPage() {
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
-      alert(`✅ Welcome! You're now logged in as ${userProfile.email}`)
     } catch (err) {
       alert('Failed to authenticate. Please try again.')
       console.error('Auth error:', err)
@@ -98,83 +92,116 @@ export default function AuthPage() {
     
     // Trigger storage event to update navigation
     window.dispatchEvent(new Event('storage'))
-    
-    alert('👋 You have been logged out.')
   }
 
   // If user is logged in, show profile
   if (userProfile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <div className="min-h-screen bg-gray-25">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          {/* Header */}
           <div className="text-center mb-12">
-            <div className="flex justify-center mb-6">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-4 rounded-full">
-                <User className="h-12 w-12 text-white" />
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-500 mb-6">
+              <div className="text-2xl font-bold text-white">
+                {userProfile.email.charAt(0).toUpperCase()}
               </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-green-800 to-emerald-800 bg-clip-text text-transparent mb-4">
-              Welcome Back!
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              Welcome back!
             </h1>
-            <p className="text-xl text-gray-600">
-              You're successfully authenticated and ready to manage your pin packs.
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              You're all set to create amazing pin packs and share your favorite places with travelers.
             </p>
           </div>
 
-          {/* User Profile Card */}
-          <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-white/20 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Profile</h2>
-            
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Email</label>
-                  <p className="text-lg text-gray-900">{userProfile.email}</p>
+          {/* Profile Card */}
+          <div className="card-airbnb max-w-2xl mx-auto mb-8">
+            <div className="p-8">
+              <div className="flex items-center mb-6">
+                <div className="w-16 h-16 bg-coral-500 rounded-full flex items-center justify-center text-white text-xl font-bold mr-4">
+                  {userProfile.email.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Location</label>
-                  <p className="text-lg text-gray-900">{userProfile.location}</p>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {userProfile.email.split('@')[0]}
+                  </h2>
+                  <p className="text-gray-600">{userProfile.email}</p>
                 </div>
               </div>
-              <div className="space-y-4">
+              
+              <div className="grid md:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Member Since</label>
-                  <p className="text-lg text-gray-900">{new Date(userProfile.created).toLocaleDateString()}</p>
+                  <label className="block text-sm font-semibold text-gray-900 mb-1">
+                    Location
+                  </label>
+                  <p className="text-gray-600 flex items-center">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    {userProfile.location}
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">User ID</label>
-                  <p className="text-sm font-mono text-gray-700 bg-gray-100 p-2 rounded">{userProfile.userId}</p>
+                  <label className="block text-sm font-semibold text-gray-900 mb-1">
+                    Member since
+                  </label>
+                  <p className="text-gray-600">
+                    {new Date(userProfile.created).toLocaleDateString()}
+                  </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <a 
-              href="/manage"
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center justify-center"
-            >
-              <MapPin className="h-5 w-5 mr-2" />
-              Manage Your Pins
-              <ArrowRight className="h-5 w-5 ml-2" />
-            </a>
+          {/* Action Cards */}
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            {/* Create Pin Pack */}
             <a 
               href="/create"
-              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold text-lg px-8 py-4 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center justify-center"
+              className="card-airbnb card-airbnb-hover group p-8 text-center"
             >
-              <MapPin className="h-5 w-5 mr-2" />
-              Create New Pack
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-4 group-hover:bg-coral-200 transition-colors">
+                <MapPin className="h-8 w-8 text-coral-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-coral-600 transition-colors">
+                Create Pin Pack
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Share your favorite local spots with travelers around the world.
+              </p>
+              <div className="flex items-center justify-center text-coral-500 font-medium">
+                <span>Get started</span>
+                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </a>
+
+            {/* Manage Pins */}
+            <a 
+              href="/manage"
+              className="card-airbnb card-airbnb-hover group p-8 text-center"
+            >
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4 group-hover:bg-gray-200 transition-colors">
+                <Settings className="h-8 w-8 text-gray-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-gray-700 transition-colors">
+                Manage Your Pins
+              </h3>
+              <p className="text-gray-600 mb-4">
+                View, edit, and manage all your pin packs in one place.
+              </p>
+              <div className="flex items-center justify-center text-gray-500 font-medium">
+                <span>Manage pins</span>
+                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </div>
             </a>
           </div>
 
-          {/* Logout Button */}
+          {/* Logout */}
           <div className="text-center">
             <button
               onClick={handleLogout}
-              className="text-gray-600 hover:text-gray-800 font-medium px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="btn-secondary inline-flex items-center"
             >
-              Logout
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign out
             </button>
           </div>
         </div>
@@ -182,76 +209,70 @@ export default function AuthPage() {
     )
   }
 
-  // Login form
+  // Login form - Airbnb-inspired design
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <div className="flex justify-center mb-6">
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 rounded-full">
-              <User className="h-12 w-12 text-white" />
-            </div>
+    <div className="min-h-screen bg-gray-25 flex items-center justify-center">
+      <div className="max-w-md w-full mx-4">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-500 mb-6">
+            <User className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent mb-4">
-            Profile
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            Welcome to PinPacks
           </h1>
-          <p className="text-xl text-gray-600">
-            Enter your email to access your pin packs
+          <p className="text-gray-600">
+            Sign in to create and manage your pin packs
           </p>
         </div>
 
-        {/* Login Form */}
-        <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-white/20">
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="your@email.com"
-                  required
-                />
+        {/* Login Card */}
+        <div className="card-airbnb">
+          <div className="p-8">
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Email address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="input-airbnb pl-10 w-full"
+                    onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
+                  />
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                We'll use this to identify your account and link your pin packs
-              </p>
+
+              <button
+                onClick={handleAuth}
+                disabled={isLoading || !email.trim()}
+                className="w-full btn-primary py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    Signing in...
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center">
+                    Continue
+                    <ArrowRight className="h-5 w-5 ml-2" />
+                  </div>
+                )}
+              </button>
             </div>
-
-            <button
-              onClick={handleAuth}
-              disabled={isLoading || !email.trim()}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
-            >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Signing In...
-                </>
-              ) : (
-                <>
-                                <User className="h-5 w-5 mr-2" />
-              Sign In to Your Profile
-                </>
-              )}
-            </button>
           </div>
+        </div>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-800 mb-2">✨ How It Works</h3>
-            <ul className="text-xs text-blue-700 space-y-1">
-              <li>• Enter your email to create/access your account</li>
-              <li>• All your pin packs will be linked to this email</li>
-              <li>• No password needed - simple email-based authentication</li>
-              <li>• Your data is saved locally and synced with your email</li>
-            </ul>
-          </div>
+        {/* Info */}
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-500">
+            We'll use this email to create your profile and manage your pin packs.
+          </p>
         </div>
       </div>
     </div>

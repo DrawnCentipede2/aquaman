@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MapPin, Download, Star, Users, Search, Filter, QrCode } from 'lucide-react'
+import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 
@@ -13,16 +13,25 @@ export default function BrowsePage() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCountry, setSelectedCountry] = useState('')
+  const [priceFilter, setPriceFilter] = useState('all')
+  const [showFilters, setShowFilters] = useState(false)
   
   // Get unique countries for filter
   const countries = Array.from(new Set(pinPacks.map(pack => pack.country))).sort()
 
-  // Load pin packs when component mounts
+  // Load pin packs and check for URL parameters when component mounts
   useEffect(() => {
     loadPinPacks()
+    
+    // Check for search parameter in URL
+    const urlParams = new URLSearchParams(window.location.search)
+    const searchParam = urlParams.get('search')
+    if (searchParam) {
+      setSearchTerm(searchParam)
+    }
   }, [])
 
-  // Filter packs when search term or country changes
+  // Filter packs when search term, country, or price filter changes
   useEffect(() => {
     let filtered = pinPacks
 
@@ -30,7 +39,8 @@ export default function BrowsePage() {
       filtered = filtered.filter(pack => 
         pack.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         pack.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pack.city.toLowerCase().includes(searchTerm.toLowerCase())
+        pack.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        pack.country.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
@@ -38,8 +48,14 @@ export default function BrowsePage() {
       filtered = filtered.filter(pack => pack.country === selectedCountry)
     }
 
+    if (priceFilter === 'free') {
+      filtered = filtered.filter(pack => pack.price === 0)
+    } else if (priceFilter === 'paid') {
+      filtered = filtered.filter(pack => pack.price > 0)
+    }
+
     setFilteredPacks(filtered)
-  }, [pinPacks, searchTerm, selectedCountry])
+  }, [pinPacks, searchTerm, selectedCountry, priceFilter])
 
   // Function to fetch pin packs from Supabase database
   const loadPinPacks = async () => {
@@ -81,11 +97,30 @@ export default function BrowsePage() {
 
       if (!packData || !packPins) throw new Error('Failed to get pack data')
 
+      // Track the download/view
+      try {
+        const locationResponse = await fetch('https://ipapi.co/json/')
+        const locationData = await locationResponse.json()
+        const userLocation = `${locationData.city}, ${locationData.country_name}`
+
+        await supabase.from('pack_downloads').insert({
+          pin_pack_id: packId,
+          download_type: format,
+          user_location: userLocation,
+          user_ip: locationData.ip
+        })
+
+        await supabase
+          .from('pin_packs')
+          .update({ download_count: (packData.download_count || 0) + 1 })
+          .eq('id', packId)
+      } catch (analyticsErr) {
+        console.log('Analytics tracking failed:', analyticsErr)
+      }
+
       if (format === 'maps') {
-        // Open Google Maps directly without modal
         openGoogleMapsDirectly(packData, packPins.map(item => (item as any).pins))
       } else if (format === 'qr') {
-        // Generate QR code for the pack
         generateQRCode(packData, packPins.map(item => (item as any).pins))
       }
     } catch (err) {
@@ -94,260 +129,36 @@ export default function BrowsePage() {
     }
   }
 
-  // Generate Google Maps URL with multiple locations (like a list)
-  const generateGoogleMapsListURL = (packData: any, pins: any[]) => {
-    // Check if pins have valid coordinates
-    const pinsWithCoords = pins.filter(pin => pin.latitude !== 0 || pin.longitude !== 0)
-    const pinsWithoutCoords = pins.filter(pin => pin.latitude === 0 && pin.longitude === 0)
-    
-    if (pinsWithCoords.length === 0 && pinsWithoutCoords.length > 0) {
-      // All pins are from a Google Maps list URL - check if we have the original list URL
-      const hasListUrl = pinsWithoutCoords.some(pin => 
-        pin.google_maps_url && (
-          pin.google_maps_url.includes('/lists/') || 
-          pin.google_maps_url.includes('list/') ||
-          (pin.google_maps_url.includes('maps.app.goo.gl') && !pin.google_maps_url.includes('@'))
-        )
-      )
-      
-      if (hasListUrl) {
-        // Open the original Google Maps list URL directly
-        const listUrl = pinsWithoutCoords[0].google_maps_url
-        showGoogleMapsListModal(packData, pins, listUrl)
-        return
-      } else {
-        alert('No valid coordinates found for these pins. Please check the pin pack data.')
-        return
-      }
-    }
-    
-    // Create a Google Maps search URL that shows the first location with coordinates
-    const firstPin = pinsWithCoords[0] || pins[0]
-    const mainUrl = pinsWithCoords.length > 0 
-      ? `https://www.google.com/maps/search/${firstPin.latitude},${firstPin.longitude}`
-      : `https://www.google.com/maps/search/${encodeURIComponent(packData.title + ' ' + packData.city)}`
-    
-    // Create individual location URLs for each pin
-    const individualUrls = pins.map(pin => ({
-      title: pin.title,
-      description: pin.description,
-      url: (pin.latitude !== 0 || pin.longitude !== 0) 
-        ? `https://www.google.com/maps/search/${pin.latitude},${pin.longitude}`
-        : pin.google_maps_url || `https://www.google.com/maps/search/${encodeURIComponent(pin.title)}`,
-      coordinates: (pin.latitude !== 0 || pin.longitude !== 0) ? `${pin.latitude},${pin.longitude}` : 'Google Maps URL',
-      hasCoordinates: pin.latitude !== 0 || pin.longitude !== 0
-    }))
-    
-    // Open sharing modal with the URL and instructions
-    showGoogleMapsModal(packData, pins, mainUrl, individualUrls)
-  }
-
-  // Calculate bounds for all pins to center the map view
-  const calculateBounds = (pins: any[]) => {
-    const lats = pins.map(pin => parseFloat(pin.latitude))
-    const lngs = pins.map(pin => parseFloat(pin.longitude))
-    
-    return {
-      north: Math.max(...lats),
-      south: Math.min(...lats),
-      east: Math.max(...lngs),
-      west: Math.min(...lngs)
-    }
-  }
-
-  // Show modal specifically for Google Maps list URLs
-  const showGoogleMapsListModal = (packData: any, pins: any[], listUrl: string) => {
-    const modalHtml = `
-      <div id="pinpack-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;">
-        <div style="background: white; border-radius: 16px; max-width: 500px; width: 90%; padding: 0;">
-          <div style="background: linear-gradient(135deg, #fb7185, #f59e0b); padding: 24px; border-radius: 16px 16px 0 0; color: white;">
-            <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: bold;">📋 ${packData.title}</h2>
-            <p style="margin: 0; opacity: 0.9;">${packData.city}, ${packData.country} • Google Maps List</p>
-          </div>
-          
-          <div style="padding: 24px;">
-            <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px; padding: 20px; margin-bottom: 20px; text-align: center;">
-              <h3 style="margin: 0 0 12px 0; color: #92400e; font-size: 18px;">🗺️ This is a Google Maps List!</h3>
-              <p style="margin: 0 0 16px 0; color: #92400e; line-height: 1.5;">This pin pack was created from a Google Maps list. Click below to open the complete list directly in Google Maps.</p>
-              <a href="${listUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; text-decoration: none; font-size: 16px; font-weight: bold; padding: 16px 24px; border-radius: 12px; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                🚀 Open Complete List in Google Maps
-              </a>
-            </div>
-            
-            <div style="background: #f1f5f9; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-              <h4 style="margin: 0 0 12px 0; color: #1e293b; font-size: 16px;">📱 What you'll get:</h4>
-              <ul style="margin: 0; padding-left: 20px; color: #64748b; font-size: 14px; line-height: 1.5;">
-                <li>Complete Google Maps list with all ${pins.length} places</li>
-                <li>Ability to save the entire list to your Google Maps</li>
-                <li>Get directions to any place in the list</li>
-                <li>Access offline if you save it to your phone</li>
-              </ul>
-            </div>
-            
-            <button onclick="document.body.removeChild(document.getElementById('pinpack-modal'))" style="background: #64748b; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%;">
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    `
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml)
-  }
-
-  // Open Google Maps directly without any modal
+  // Open Google Maps directly
   const openGoogleMapsDirectly = (packData: any, pins: any[]) => {
-    // Check if pins have valid coordinates
     const pinsWithCoords = pins.filter(pin => pin.latitude !== 0 || pin.longitude !== 0)
-    const pinsWithoutCoords = pins.filter(pin => pin.latitude === 0 && pin.longitude === 0)
     
-    if (pinsWithCoords.length === 0 && pinsWithoutCoords.length > 0) {
-      // All pins are from a Google Maps list URL - check if we have the original list URL
-      const hasListUrl = pinsWithoutCoords.some(pin => 
-        pin.google_maps_url && (
-          pin.google_maps_url.includes('/lists/') || 
-          pin.google_maps_url.includes('list/') ||
-          (pin.google_maps_url.includes('maps.app.goo.gl') && !pin.google_maps_url.includes('@'))
-        )
-      )
-      
-      if (hasListUrl) {
-        // Open the original Google Maps list URL directly
-        const listUrl = pinsWithoutCoords[0].google_maps_url
-        window.open(listUrl, '_blank')
-        return
+    if (pinsWithCoords.length === 0) {
+      const firstPin = pins[0]
+      if (firstPin?.google_maps_url) {
+        window.open(firstPin.google_maps_url, '_blank')
       } else {
-        alert('No valid coordinates found for these pins. Please check the pin pack data.')
-        return
+        alert('No valid coordinates found for these pins.')
       }
-    }
-    
-    // If we have pins with coordinates, create a directions URL with all waypoints
-    if (pinsWithCoords.length > 1) {
-      // Create Google Maps directions URL with multiple waypoints
-      const coordinates = pinsWithCoords.map(pin => `${pin.latitude},${pin.longitude}`)
-      const directionsUrl = `https://www.google.com/maps/dir/${coordinates.join('/')}`
-      window.open(directionsUrl, '_blank')
-    } else if (pinsWithCoords.length === 1) {
-      // Single location - open directly
-      const pin = pinsWithCoords[0]
-      const singleUrl = `https://www.google.com/maps/search/${pin.latitude},${pin.longitude}`
-      window.open(singleUrl, '_blank')
-    } else {
-      // Fallback to search by pack title and city
-      const fallbackUrl = `https://www.google.com/maps/search/${encodeURIComponent(packData.title + ' ' + packData.city)}`
-      window.open(fallbackUrl, '_blank')
-    }
-  }
-
-  // Show modal with Google Maps sharing options
-  const showGoogleMapsModal = (packData: any, pins: any[], directionsUrl: string, individualUrls: any[], searchUrl?: string) => {
-    // Create modal content
-    const modalHtml = `
-      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;">
-        <div style="background: white; border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; padding: 0;">
-          <div style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); padding: 24px; border-radius: 16px 16px 0 0; color: white;">
-            <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: bold;">${packData.title}</h2>
-            <p style="margin: 0; opacity: 0.9;">${packData.city}, ${packData.country} • ${pins.length} locations</p>
-          </div>
-          
-          <div style="padding: 24px;">
-            <div style="background: #f1f5f9; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
-              <h3 style="margin: 0 0 12px 0; color: #1e293b; font-size: 18px;">📍 Locations in this pack:</h3>
-              <div style="max-height: 200px; overflow-y: auto;">
-                ${individualUrls.map(location => `
-                  <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${location.hasCoordinates ? '#3b82f6' : '#f59e0b'};">
-                    <div style="font-weight: bold; color: #1e293b; margin-bottom: 4px;">${location.title}</div>
-                    <div style="color: #64748b; font-size: 14px; margin-bottom: 8px;">${location.description}</div>
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                      <a href="${location.url}" target="_blank" style="background: ${location.hasCoordinates ? '#3b82f6' : '#f59e0b'}; color: white; text-decoration: none; font-size: 14px; padding: 6px 12px; border-radius: 6px; font-weight: bold;">📍 Open in Google Maps</a>
-                      <span style="font-size: 12px; color: #64748b;">${location.hasCoordinates ? '🔵 With coordinates' : '🟠 Original URL'}</span>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-              <a href="${directionsUrl}" target="_blank" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; text-decoration: none; padding: 16px 24px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.2s; text-align: center; display: block;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                🗺️ View All Locations Together
-              </a>
-              <button onclick="generateQRForModal('${packData.title}', '${directionsUrl}')" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; padding: 16px 24px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                📱 Share QR Code
-              </button>
-            </div>
-            
-            <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin-top: 16px;">
-              <h4 style="margin: 0 0 8px 0; color: #92400e; font-size: 16px;">💡 How to use these locations:</h4>
-              <ol style="margin: 0; padding-left: 20px; color: #92400e; font-size: 14px; line-height: 1.5;">
-                <li><strong>"View All Locations Together"</strong> - Opens Google Maps with all places visible on one map</li>
-                <li><strong>Individual buttons</strong> - Click to open each location separately</li>
-                <li><strong>To save places:</strong> Open any location → Click the pin → Tap "Save" → Add to your list</li>
-                <li><strong>QR Code</strong> - Share this pin pack with others easily</li>
-                <li><strong>Pro tip:</strong> The "View All Together" button shows the best route between all locations!</li>
-              </ol>
-            </div>
-            
-            <button onclick="document.body.removeChild(document.getElementById('pinpack-modal'))" style="background: #64748b; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 16px;">
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    `
-    
-    // Remove any existing modal
-    const existingModal = document.getElementById('pinpack-modal')
-    if (existingModal) {
-      document.body.removeChild(existingModal)
-    }
-    
-    // Create new modal
-    const modal = document.createElement('div')
-    modal.id = 'pinpack-modal'
-    modal.innerHTML = modalHtml
-    document.body.appendChild(modal)
-    
-    // Add QR code function to window
-    ;(window as any).generateQRForModal = (title: string, url: string) => {
-      // Create a QR code that links directly to the Google Maps directions URL
-      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
-      
-      // Remove existing QR modal if any
-      const existingQR = document.getElementById('qr-modal')
-      if (existingQR) document.body.removeChild(existingQR)
-      
-      const qrModal = document.createElement('div')
-      qrModal.id = 'qr-modal'
-      qrModal.innerHTML = `
-        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-          <div style="background: white; padding: 30px; border-radius: 16px; text-align: center; max-width: 400px;">
-            <h3 style="margin: 0 0 20px 0; color: #1e293b;">${title}</h3>
-            <img src="${qrCodeUrl}" alt="QR Code" style="border-radius: 8px; margin-bottom: 20px;" />
-            <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Scan to open all locations directly in Google Maps!<br/><a href="${url}" target="_blank" style="color: #3b82f6;">🗺️ Or click here to open now</a></p>
-            <button onclick="document.body.removeChild(document.getElementById('qr-modal'))" style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold;">Close</button>
-          </div>
-        </div>
-      `
-      document.body.appendChild(qrModal)
-    }
-  }
-
-  // Generate QR Code for easy sharing
-  const generateQRCode = (packData: any, pins: any[]) => {
-    // Filter out pins with invalid coordinates
-    const validPins = pins.filter(pin => pin.latitude && pin.longitude && pin.latitude !== 0 && pin.longitude !== 0)
-    
-    if (validPins.length === 0) {
-      alert('No valid coordinates found for these pins.')
       return
     }
     
-    // Create the same directions URL that shows all locations together
-    const coordinates = validPins.map(pin => `${pin.latitude},${pin.longitude}`)
-    const directionsUrl = `https://www.google.com/maps/dir/${coordinates.join('/')}`
-    
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(directionsUrl)}`
+    if (pinsWithCoords.length === 1) {
+      const pin = pinsWithCoords[0]
+      const url = pin.google_maps_url || `https://www.google.com/maps?q=${pin.latitude},${pin.longitude}`
+      window.open(url, '_blank')
+    } else {
+      const waypoints = pinsWithCoords.map(pin => `${pin.latitude},${pin.longitude}`).join('/')
+      const url = `https://www.google.com/maps/dir/${waypoints}`
+      window.open(url, '_blank')
+    }
+  }
+
+  // Generate QR Code
+  const generateQRCode = (packData: any, pins: any[]) => {
+    const searchQuery = `${packData.title} ${packData.city}`
+    const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(mapsUrl)}`
     
     const qrWindow = window.open('', '_blank', 'width=400,height=500')
     if (qrWindow) {
@@ -356,14 +167,13 @@ export default function BrowsePage() {
           <head><title>QR Code - ${packData.title}</title></head>
           <body style="text-align:center; font-family:Arial; padding:20px;">
             <h2>${packData.title}</h2>
-            <p><strong>Scan to view all ${validPins.length} locations together in Google Maps!</strong></p>
+            <p>Scan this QR code to search for these locations on Google Maps</p>
             <img src="${qrCodeUrl}" alt="QR Code" style="border:1px solid #ccc; border-radius:8px;" />
-            <p style="margin-top:20px; font-size:14px; color:#666;">
-              This QR code opens Google Maps with all locations visible<br>
-              <a href="${directionsUrl}" target="_blank" style="color:#4285f4; text-decoration:none;">🗺️ Open in Google Maps</a>
+            <p style="margin-top:20px; font-size:12px; color:#666;">
+              Or visit: <br><a href="${mapsUrl}" target="_blank">${mapsUrl}</a>
             </p>
             <p style="margin-top:20px;">
-              <button onclick="window.print()" style="background:#4285f4; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer;">Print QR Code</button>
+              <button onclick="window.print()" style="background:#ff5a5f; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer;">Print QR Code</button>
             </p>
           </body>
         </html>
@@ -371,358 +181,280 @@ export default function BrowsePage() {
     }
   }
 
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm('')
+    setSelectedCountry('')
+    setPriceFilter('all')
+    // Update URL to remove search parameter
+    const url = new URL(window.location.href)
+    url.searchParams.delete('search')
+    window.history.replaceState({}, '', url.toString())
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-700 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Browse Pin Packs
-          </h1>
-          <p className="text-xl text-blue-100 max-w-3xl mx-auto">
-            Discover curated collections from locals around the world. 
-            Find authentic experiences for your next adventure.
-          </p>
+    <div className="min-h-screen bg-gray-25">
+      {/* Airbnb-inspired Hero Section */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              Explore amazing places
+            </h1>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Discover hand-picked local recommendations from people who know their cities best.
+            </p>
+          </div>
+
+          {/* Airbnb-style search and filter bar */}
+          <div className="max-w-4xl mx-auto">
+            <div className="search-bar p-1 flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-0">
+              {/* Search input */}
+              <div className="flex-1 flex items-center min-h-[56px]">
+                <Search className="h-5 w-5 text-gray-400 ml-4 mr-3" />
+                <input
+                  type="text"
+                  placeholder="Search destinations, cities, or experiences..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-1 border-none outline-none text-gray-700 text-base placeholder-gray-400 bg-transparent"
+                />
+              </div>
+              
+              {/* Divider for desktop */}
+              <div className="hidden md:block w-px h-8 bg-gray-300 mx-4"></div>
+              
+              {/* Filter button */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center justify-center space-x-2 px-6 py-3 text-gray-700 hover:bg-gray-50 rounded-xl md:rounded-none transition-colors min-h-[56px]"
+              >
+                <Filter className="h-5 w-5" />
+                <span className="font-medium">Filters</span>
+                {(selectedCountry || priceFilter !== 'all') && (
+                  <span className="bg-coral-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                    {[selectedCountry, priceFilter !== 'all' ? priceFilter : ''].filter(Boolean).length}
+                  </span>
+                )}
+              </button>
+              
+              {/* Search button */}
+              <button className="btn-primary ml-2 px-8 py-3 text-base min-h-[56px]">
+                Search
+              </button>
+            </div>
+
+            {/* Expandable filters */}
+            {showFilters && (
+              <div className="mt-4 p-6 bg-white border border-gray-200 rounded-2xl shadow-card">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Country filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Country
+                    </label>
+                    <select
+                      value={selectedCountry}
+                      onChange={(e) => setSelectedCountry(e.target.value)}
+                      className="input-airbnb w-full"
+                    >
+                      <option value="">All countries</option>
+                      {countries.map(country => (
+                        <option key={country} value={country}>{country}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Price filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">
+                      Price
+                    </label>
+                    <select
+                      value={priceFilter}
+                      onChange={(e) => setPriceFilter(e.target.value)}
+                      className="input-airbnb w-full"
+                    >
+                      <option value="all">All prices</option>
+                      <option value="free">Free only</option>
+                      <option value="paid">Paid only</option>
+                    </select>
+                  </div>
+                  
+                  {/* Clear filters */}
+                  <div className="flex items-end">
+                    <button
+                      onClick={clearFilters}
+                      className="btn-secondary w-full"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Results summary */}
+          <div className="max-w-4xl mx-auto mt-6">
+            <p className="text-gray-600">
+              {loading ? 'Searching...' : 
+               searchTerm ? `${filteredPacks.length} results for "${searchTerm}"` :
+               `${filteredPacks.length} amazing places to explore`}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Search and Filter */}
-        <div className="bg-white p-6 rounded-2xl shadow-lg mb-8">
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                placeholder="Search by city, title, or description..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            
-            {/* Country Filter */}
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <select
-                value={selectedCountry}
-                onChange={(e) => setSelectedCountry(e.target.value)}
-                                  className="pl-16 pr-8 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-w-48"
-              >
-                <option value="">All Countries</option>
-                {countries.map(country => (
-                  <option key={country} value={country}>{country}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          {/* Results count */}
-          <div className="mt-4 text-sm text-gray-600">
-            {loading ? 'Loading...' : `${filteredPacks.length} pin pack${filteredPacks.length !== 1 ? 's' : ''} found`}
-          </div>
-        </div>
-
+      {/* Main content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Loading State */}
         {loading && (
-          <div className="text-center py-16">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-6 text-gray-600 text-lg">Loading pin packs...</p>
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
+            </div>
+            <p className="text-gray-600 text-lg">Finding amazing places...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="text-center py-16">
-            <p className="text-red-600 text-lg mb-4">{error}</p>
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-6">
+              <MapPin className="h-8 w-8 text-red-500" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h3>
+            <p className="text-gray-600 text-lg mb-8">{error}</p>
             <button 
               onClick={loadPinPacks}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+              className="btn-primary"
             >
-              Try Again
+              Try again
             </button>
           </div>
         )}
 
         {/* Empty State */}
         {!loading && !error && filteredPacks.length === 0 && pinPacks.length === 0 && (
-          <div className="text-center py-16">
-            <MapPin className="h-20 w-20 text-gray-400 mx-auto mb-6" />
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">No Pin Packs Yet</h3>
-            <p className="text-gray-600 text-lg mb-8">
-              Be the first to create a pin pack and help travelers discover your city!
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+              <MapPin className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">No places yet</h3>
+            <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+              Be the first to share amazing places from your city with travelers around the world.
             </p>
-            <a href="/create" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold text-lg px-8 py-4 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center">
-              Create First Pin Pack
+            <a 
+              href="/create" 
+              onClick={(e) => {
+                const userProfile = localStorage.getItem('pinpacks_user_profile')
+                if (!userProfile) {
+                  e.preventDefault()
+                  window.location.href = '/auth'
+                }
+              }}
+              className="btn-primary inline-flex items-center text-lg px-8 py-4"
+            >
+              <Globe2 className="h-5 w-5 mr-2" />
+              Create first pin pack
             </a>
           </div>
         )}
 
         {/* No Results State */}
         {!loading && !error && filteredPacks.length === 0 && pinPacks.length > 0 && (
-          <div className="text-center py-16">
-            <Search className="h-20 w-20 text-gray-400 mx-auto mb-6" />
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">No Results Found</h3>
-            <p className="text-gray-600 text-lg mb-8">
-              Try adjusting your search terms or filters to find what you're looking for.
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+              <Search className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">No results found</h3>
+            <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+              Try adjusting your search or filters to discover more places.
             </p>
             <button 
-              onClick={() => {
-                setSearchTerm('')
-                setSelectedCountry('')
-              }}
-              className="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+              onClick={clearFilters}
+              className="btn-secondary"
             >
-              Clear Filters
+              Clear all filters
             </button>
           </div>
         )}
 
-        {/* Pin Packs Grid */}
+        {/* Pin Packs Grid - Airbnb-style */}
         {!loading && !error && filteredPacks.length > 0 && (
-          <div className="space-y-12">
-            {/* Trending Worldwide Section */}
-            {searchTerm === '' && selectedCountry === '' && (
-              <div>
-                <div className="flex items-center mb-6">
-                  <div className="bg-gradient-to-r from-orange-500 to-red-600 p-2 rounded-lg mr-3">
-                    <Star className="h-6 w-6 text-white" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredPacks.map((pack, index) => (
+              <div 
+                key={pack.id}
+                className="card-airbnb card-airbnb-hover group cursor-pointer"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                {/* Image placeholder - Airbnb style */}
+                <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  
+                  {/* Heart icon */}
+                  <button className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white rounded-full flex items-center justify-center transition-colors group">
+                    <Heart className="h-4 w-4 text-gray-700 group-hover:text-coral-500 transition-colors" />
+                  </button>
+                  
+                  {/* Price badge */}
+                  <div className="absolute top-3 left-3">
+                    <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-gray-900">
+                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                    </span>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">🔥 Trending Worldwide</h2>
-                    <p className="text-gray-600">Most popular pin packs from around the globe</p>
-                  </div>
-                </div>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-                  {filteredPacks
-                    .sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-                    .slice(0, 6)
-                    .map((pack) => (
-                      <div 
-                        key={`trending-${pack.id}`} 
-                        className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
-                      >
-                        {/* Card header with gradient */}
-                        <div className="h-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500"></div>
-                        
-                        <div className="p-8">
-                          <div className="flex items-start justify-between mb-6">
-                            <div className="flex-1">
-                              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-orange-600 transition-colors">
-                                {pack.title}
-                              </h3>
-                              <div className="flex items-center text-sm text-gray-500 mb-3">
-                                <MapPin className="h-4 w-4 mr-1 text-orange-500" />
-                                <span className="font-medium">{pack.city}, {pack.country}</span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                                ${pack.price}
-                              </div>
-                              {pack.price === 0 && (
-                                <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
-                                  FREE
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <p className="text-gray-600 mb-6 leading-relaxed">
-                            {pack.description}
-                          </p>
-                          
-                          <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border border-orange-200">
-                            <div className="flex items-center text-gray-600">
-                              <Users className="h-4 w-4 mr-2 text-orange-500" />
-                              <span className="font-medium">{pack.pin_count} pins</span>
-                            </div>
-                            <div className="flex items-center text-orange-600">
-                              <Star className="h-4 w-4 mr-1 text-orange-400 fill-current" />
-                              <span className="font-medium">{pack.download_count || 0} downloads</span>
-                            </div>
-                          </div>
-                          
-                          <button
-                            onClick={() => openPinPack(pack.id, 'maps')}
-                            className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-orange-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
-                          >
-                            <Download className="h-5 w-5 mr-2" />
-                            Open in Google Maps
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Trending by City Section */}
-            {searchTerm === '' && selectedCountry === '' && (
-              <div>
-                <div className="flex items-center mb-6">
-                  <div className="bg-gradient-to-r from-purple-500 to-indigo-600 p-2 rounded-lg mr-3">
-                    <MapPin className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">🏙️ Trending by City</h2>
-                    <p className="text-gray-600">Popular destinations with the most pin packs</p>
+                  
+                  {/* Pin count */}
+                  <div className="absolute bottom-3 right-3">
+                    <span className="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
+                      {pack.pin_count} pins
+                    </span>
                   </div>
                 </div>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-                  {/* Group by city and show most popular cities */}
-                  {Object.entries(
-                    filteredPacks.reduce((acc, pack) => {
-                      const cityKey = `${pack.city}, ${pack.country}`
-                      if (!acc[cityKey]) {
-                        acc[cityKey] = []
-                      }
-                      acc[cityKey].push(pack)
-                      return acc
-                    }, {} as Record<string, any[]>)
-                  )
-                    .sort(([, a], [, b]) => b.length - a.length)
-                    .slice(0, 6)
-                    .map(([cityKey, cityPacks]) => {
-                      const topPack = cityPacks.sort((a, b) => (b.download_count || 0) - (a.download_count || 0))[0]
-                      return (
-                        <div 
-                          key={`city-${cityKey}`} 
-                          className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
-                        >
-                          {/* Card header with gradient */}
-                          <div className="h-2 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500"></div>
-                          
-                          <div className="p-8">
-                            <div className="flex items-start justify-between mb-6">
-                              <div className="flex-1">
-                                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
-                                  {topPack.title}
-                                </h3>
-                                <div className="flex items-center text-sm text-gray-500 mb-3">
-                                  <MapPin className="h-4 w-4 mr-1 text-purple-500" />
-                                  <span className="font-medium">{cityKey}</span>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                                  ${topPack.price}
-                                </div>
-                                {topPack.price === 0 && (
-                                  <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
-                                    FREE
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <p className="text-gray-600 mb-6 leading-relaxed">
-                              {topPack.description}
-                            </p>
-                            
-                            <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
-                              <div className="flex items-center text-gray-600">
-                                <Users className="h-4 w-4 mr-2 text-purple-500" />
-                                <span className="font-medium">{topPack.pin_count} pins</span>
-                              </div>
-                              <div className="flex items-center text-purple-600">
-                                <Star className="h-4 w-4 mr-1 text-purple-400 fill-current" />
-                                <span className="font-medium">{cityPacks.length} packs in city</span>
-                              </div>
-                            </div>
-                            
-                            <button
-                              onClick={() => openPinPack(topPack.id, 'maps')}
-                              className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-purple-600 hover:to-indigo-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
-                            >
-                              <Download className="h-5 w-5 mr-2" />
-                              Open in Google Maps
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                </div>
-              </div>
-            )}
-
-            {/* All Pin Packs Section */}
-            <div>
-              <div className="flex items-center mb-6">
-                <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-lg mr-3">
-                  <MapPin className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {searchTerm || selectedCountry ? 'Search Results' : '📍 All Pin Packs'}
-                  </h2>
-                  <p className="text-gray-600">
-                    {searchTerm || selectedCountry 
-                      ? `${filteredPacks.length} pack${filteredPacks.length !== 1 ? 's' : ''} matching your search`
-                      : 'Complete collection of pin packs from locals worldwide'
-                    }
-                  </p>
-                </div>
-              </div>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredPacks.map((pack) => (
-                  <div 
-                    key={pack.id} 
-                    className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden transform hover:-translate-y-2"
-                  >
-                    {/* Card header with gradient */}
-                    <div className="h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
-                    
-                    <div className="p-8">
-                      <div className="flex items-start justify-between mb-6">
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                            {pack.title}
-                          </h3>
-                          <div className="flex items-center text-sm text-gray-500 mb-3">
-                            <MapPin className="h-4 w-4 mr-1 text-blue-500" />
-                            <span className="font-medium">{pack.city}, {pack.country}</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                            ${pack.price}
-                          </div>
-                          {pack.price === 0 && (
-                            <span className="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full mt-1">
-                              FREE
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <p className="text-gray-600 mb-6 leading-relaxed">
-                        {pack.description}
+                
+                {/* Card content */}
+                <div className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-coral-600 transition-colors">
+                        {pack.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 flex items-center mt-1">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {pack.city}, {pack.country}
                       </p>
-                      
-                      <div className="flex items-center justify-between text-sm mb-6 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center text-gray-600">
-                          <Users className="h-4 w-4 mr-2 text-blue-500" />
-                          <span className="font-medium">{pack.pin_count} pins</span>
-                        </div>
-                        <div className="flex items-center text-yellow-600">
-                          <Star className="h-4 w-4 mr-1 text-yellow-400 fill-current" />
-                          <span className="font-medium">Local Made</span>
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={() => openPinPack(pack.id, 'maps')}
-                        className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
-                      >
-                        <Download className="h-5 w-5 mr-2" />
-                        Open in Google Maps
-                      </button>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-500 ml-2">
+                      <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
+                      <span className="text-xs">{pack.download_count || 0}</span>
                     </div>
                   </div>
-                ))}
+                  
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
+                    {pack.description}
+                  </p>
+                  
+                  <button
+                    onClick={() => openPinPack(pack.id, 'maps')}
+                    className="w-full btn-primary text-sm py-2.5 flex items-center justify-center group"
+                  >
+                    <Download className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                    Open in Maps
+                  </button>
+                </div>
               </div>
-            </div>
+            ))}
+          </div>
+        )}
+
+        {/* Load more button if many results */}
+        {!loading && !error && filteredPacks.length > 12 && (
+          <div className="text-center mt-12">
+            <button className="btn-secondary inline-flex items-center text-lg px-8 py-4">
+              Show more places
+            </button>
           </div>
         )}
       </div>
