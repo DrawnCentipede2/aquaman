@@ -265,8 +265,7 @@ export default function CreatePackPage() {
         price: price,
         creator_id: userId,
         pin_count: pins.length,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
       }
 
       console.log('Creating pin pack:', pinPackData)
@@ -285,9 +284,8 @@ export default function CreatePackPage() {
       const newPackId = packResponse[0].id
       console.log('Pin pack created with ID:', newPackId)
 
-      // Insert pins
+      // Insert pins first (without pack_id since it's not in the schema)
       const pinData = pins.map(pin => ({
-        pack_id: newPackId,
         title: pin.title.trim(),
         description: pin.description.trim(),
         google_maps_url: pin.google_maps_url.trim(),
@@ -299,13 +297,34 @@ export default function CreatePackPage() {
 
       console.log('Creating pins:', pinData)
 
-      const { error: pinsError } = await supabase
+      const { data: createdPins, error: pinsError } = await supabase
         .from('pins')
         .insert(pinData)
+        .select()
 
       if (pinsError) {
         console.error('Error creating pins:', pinsError)
         throw pinsError
+      }
+
+      console.log('Pins created:', createdPins)
+
+      // Now create the relationships in pin_pack_pins junction table
+      const relationshipData = createdPins.map(pin => ({
+        pin_pack_id: newPackId,
+        pin_id: pin.id,
+        created_at: new Date().toISOString()
+      }))
+
+      console.log('Creating pin-pack relationships:', relationshipData)
+
+      const { error: relationshipError } = await supabase
+        .from('pin_pack_pins')
+        .insert(relationshipData)
+
+      if (relationshipError) {
+        console.error('Error creating pin-pack relationships:', relationshipError)
+        throw relationshipError
       }
 
       alert('Pin pack created successfully! 🎉')
@@ -323,7 +342,8 @@ export default function CreatePackPage() {
       
     } catch (err) {
       console.error('Error creating pin pack:', err)
-      alert('Failed to create pin pack. Please try again.')
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      alert(`Failed to create pin pack. Error: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }

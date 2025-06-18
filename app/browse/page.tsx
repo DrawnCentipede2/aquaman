@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2 } from 'lucide-react'
+import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 
@@ -12,12 +12,23 @@ export default function BrowsePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCountry, setSelectedCountry] = useState('')
-  const [priceFilter, setPriceFilter] = useState('all')
-  const [showFilters, setShowFilters] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
   
-  // Get unique countries for filter
-  const countries = Array.from(new Set(pinPacks.map(pack => pack.country))).sort()
+  // Enhanced filter states
+  const [ratingFilter, setRatingFilter] = useState('all')
+  const [createdDateFilter, setCreatedDateFilter] = useState('all')
+  const [pinCountFilter, setPinCountFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [showFilterModal, setShowFilterModal] = useState(false)
+  
+  // Get unique values for filter options
+  const categories = ['Solo Travel', 'Couple', 'Family', 'Friends Group', 'Business Travel', 'Adventure', 'Relaxation', 'Cultural', 'Food & Drink', 'Nightlife']
+
+  // Handle search button click
+  const handleSearch = () => {
+    setHasSearched(true)
+    // You could add additional search logic here if needed
+  }
 
   // Load pin packs and check for URL parameters when component mounts
   useEffect(() => {
@@ -31,10 +42,11 @@ export default function BrowsePage() {
     }
   }, [])
 
-  // Filter packs when search term, country, or price filter changes
+  // Enhanced filter logic when any filter changes
   useEffect(() => {
     let filtered = pinPacks
 
+    // Search term filter
     if (searchTerm) {
       filtered = filtered.filter(pack => 
         pack.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -44,18 +56,61 @@ export default function BrowsePage() {
       )
     }
 
-    if (selectedCountry) {
-      filtered = filtered.filter(pack => pack.country === selectedCountry)
+    // People's Choice filter (based on download count as proxy for popularity)
+    if (ratingFilter === 'favorite') {
+      // People's Favorite - most downloaded overall
+      filtered = filtered.filter(pack => (pack.download_count || 0) >= 50)
+    } else if (ratingFilter === 'most_rated') {
+      // Most Rated - moderate to high download count
+      filtered = filtered.filter(pack => (pack.download_count || 0) >= 25)
+    } else if (ratingFilter === 'best_rated') {
+      // Best Rated - highest download count threshold
+      filtered = filtered.filter(pack => (pack.download_count || 0) >= 75)
     }
 
-    if (priceFilter === 'free') {
-      filtered = filtered.filter(pack => pack.price === 0)
-    } else if (priceFilter === 'paid') {
-      filtered = filtered.filter(pack => pack.price > 0)
+    // Created date filter
+    if (createdDateFilter === 'recent') {
+      const oneMonthAgo = new Date()
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+      filtered = filtered.filter(pack => new Date(pack.created_at) >= oneMonthAgo)
+    } else if (createdDateFilter === 'older') {
+      const oneMonthAgo = new Date()
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+      filtered = filtered.filter(pack => new Date(pack.created_at) < oneMonthAgo)
+    }
+
+    // Pin count filter
+    if (pinCountFilter === 'small') {
+      filtered = filtered.filter(pack => pack.pin_count >= 0 && pack.pin_count <= 5)
+    } else if (pinCountFilter === 'medium') {
+      filtered = filtered.filter(pack => pack.pin_count > 5 && pack.pin_count <= 15)
+    } else if (pinCountFilter === 'large') {
+      filtered = filtered.filter(pack => pack.pin_count > 15)
+    }
+
+    // Category filter (for demo purposes, we'll use a random assignment based on pack ID)
+    if (categoryFilter !== 'all') {
+      // In a real app, this would be stored in the database
+      // For demo, we'll filter based on a pattern
+      filtered = filtered.filter(pack => {
+        const packCategories = {
+          'Solo Travel': pack.id.includes('1') || pack.id.includes('4'),
+          'Couple': pack.id.includes('2') || pack.id.includes('5'),
+          'Family': pack.id.includes('3') || pack.id.includes('6'),
+          'Friends Group': pack.id.includes('7') || pack.id.includes('0'),
+          'Business Travel': pack.id.includes('8'),
+          'Adventure': pack.title.toLowerCase().includes('adventure') || pack.title.toLowerCase().includes('outdoor'),
+          'Relaxation': pack.title.toLowerCase().includes('relax') || pack.title.toLowerCase().includes('spa'),
+          'Cultural': pack.title.toLowerCase().includes('culture') || pack.title.toLowerCase().includes('museum'),
+          'Food & Drink': pack.title.toLowerCase().includes('food') || pack.title.toLowerCase().includes('restaurant'),
+          'Nightlife': pack.title.toLowerCase().includes('night') || pack.title.toLowerCase().includes('bar')
+        }
+        return packCategories[categoryFilter as keyof typeof packCategories]
+      })
     }
 
     setFilteredPacks(filtered)
-  }, [pinPacks, searchTerm, selectedCountry, priceFilter])
+  }, [pinPacks, searchTerm, ratingFilter, createdDateFilter, pinCountFilter, categoryFilter])
 
   // Function to fetch pin packs from Supabase database
   const loadPinPacks = async () => {
@@ -184,12 +239,25 @@ export default function BrowsePage() {
   // Clear all filters
   const clearFilters = () => {
     setSearchTerm('')
-    setSelectedCountry('')
-    setPriceFilter('all')
+    setHasSearched(false)
+    setRatingFilter('all')
+    setCreatedDateFilter('all')
+    setPinCountFilter('all')
+    setCategoryFilter('all')
     // Update URL to remove search parameter
     const url = new URL(window.location.href)
     url.searchParams.delete('search')
     window.history.replaceState({}, '', url.toString())
+  }
+
+  // Count active filters for badge
+  const getActiveFilterCount = () => {
+    let count = 0
+    if (ratingFilter !== 'all') count++
+    if (createdDateFilter !== 'all') count++
+    if (pinCountFilter !== 'all') count++
+    if (categoryFilter !== 'all') count++
+    return count
   }
 
   return (
@@ -206,9 +274,9 @@ export default function BrowsePage() {
             </p>
           </div>
 
-          {/* Airbnb-style search and filter bar */}
+          {/* Enhanced Airbnb-style search and filter bar */}
           <div className="max-w-4xl mx-auto">
-            <div className="search-bar p-1 flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-0">
+            <div className="search-bar p-1 flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-0 mb-4">
               {/* Search input */}
               <div className="flex-1 flex items-center min-h-[56px]">
                 <Search className="h-5 w-5 text-gray-400 ml-4 mr-3" />
@@ -221,78 +289,33 @@ export default function BrowsePage() {
                 />
               </div>
               
-              {/* Divider for desktop */}
-              <div className="hidden md:block w-px h-8 bg-gray-300 mx-4"></div>
-              
-              {/* Filter button */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center justify-center space-x-2 px-6 py-3 text-gray-700 hover:bg-gray-50 rounded-xl md:rounded-none transition-colors min-h-[56px]"
-              >
-                <Filter className="h-5 w-5" />
-                <span className="font-medium">Filters</span>
-                {(selectedCountry || priceFilter !== 'all') && (
-                  <span className="bg-coral-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                    {[selectedCountry, priceFilter !== 'all' ? priceFilter : ''].filter(Boolean).length}
-                  </span>
-                )}
-              </button>
+              {/* Filter button - only show after search is performed */}
+              {hasSearched && (
+                <div className="flex items-center px-2">
+                  <div className="hidden md:block w-px h-8 bg-gray-300 mx-2"></div>
+                  <button
+                    onClick={() => setShowFilterModal(true)}
+                    className="flex items-center justify-center space-x-2 px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-full transition-colors border border-gray-300 hover:border-gray-400 min-h-[40px]"
+                  >
+                    <Sliders className="h-4 w-4" />
+                    <span className="font-medium text-sm">Filters</span>
+                    {getActiveFilterCount() > 0 && (
+                      <span className="bg-coral-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                        {getActiveFilterCount()}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
               
               {/* Search button */}
-              <button className="btn-primary ml-2 px-8 py-3 text-base min-h-[56px]">
+              <button 
+                onClick={handleSearch}
+                className="btn-primary ml-2 px-8 py-3 text-base min-h-[56px]"
+              >
                 Search
               </button>
             </div>
-
-            {/* Expandable filters */}
-            {showFilters && (
-              <div className="mt-4 p-6 bg-white border border-gray-200 rounded-2xl shadow-card">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Country filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Country
-                    </label>
-                    <select
-                      value={selectedCountry}
-                      onChange={(e) => setSelectedCountry(e.target.value)}
-                      className="input-airbnb w-full"
-                    >
-                      <option value="">All countries</option>
-                      {countries.map(country => (
-                        <option key={country} value={country}>{country}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  {/* Price filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-900 mb-2">
-                      Price
-                    </label>
-                    <select
-                      value={priceFilter}
-                      onChange={(e) => setPriceFilter(e.target.value)}
-                      className="input-airbnb w-full"
-                    >
-                      <option value="all">All prices</option>
-                      <option value="free">Free only</option>
-                      <option value="paid">Paid only</option>
-                    </select>
-                  </div>
-                  
-                  {/* Clear filters */}
-                  <div className="flex items-end">
-                    <button
-                      onClick={clearFilters}
-                      className="btn-secondary w-full"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Results summary */}
@@ -305,6 +328,204 @@ export default function BrowsePage() {
           </div>
         </div>
       </div>
+
+      {/* Enhanced Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h2 className="text-xl font-semibold text-gray-900">Filters</h2>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-8">
+              {/* People's Choice */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">People's Choice</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <button
+                    onClick={() => setRatingFilter('all')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      ratingFilter === 'all'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    All places
+                  </button>
+                  <button
+                    onClick={() => setRatingFilter('favorite')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      ratingFilter === 'favorite'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    People's Favorite
+                  </button>
+                  <button
+                    onClick={() => setRatingFilter('most_rated')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      ratingFilter === 'most_rated'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    Most Rated
+                  </button>
+                  <button
+                    onClick={() => setRatingFilter('best_rated')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      ratingFilter === 'best_rated'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    Best Rated
+                  </button>
+                </div>
+              </div>
+
+              {/* Created Date */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">When Created</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <button
+                    onClick={() => setCreatedDateFilter('all')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      createdDateFilter === 'all'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    Any time
+                  </button>
+                  <button
+                    onClick={() => setCreatedDateFilter('recent')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      createdDateFilter === 'recent'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    Less than 1 month
+                  </button>
+                  <button
+                    onClick={() => setCreatedDateFilter('older')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      createdDateFilter === 'older'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    More than 1 month
+                  </button>
+                </div>
+              </div>
+
+              {/* Number of Pins */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Collection Size</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <button
+                    onClick={() => setPinCountFilter('all')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      pinCountFilter === 'all'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    All sizes
+                  </button>
+                  <button
+                    onClick={() => setPinCountFilter('small')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      pinCountFilter === 'small'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    Small (0-5)
+                  </button>
+                  <button
+                    onClick={() => setPinCountFilter('medium')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      pinCountFilter === 'medium'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    Medium (6-15)
+                  </button>
+                  <button
+                    onClick={() => setPinCountFilter('large')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      pinCountFilter === 'large'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    Large (15+)
+                  </button>
+                </div>
+              </div>
+
+              {/* Travel Categories */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Travel Categories</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <button
+                    onClick={() => setCategoryFilter('all')}
+                    className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                      categoryFilter === 'all'
+                        ? 'border-coral-500 text-gray-900'
+                        : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                    }`}
+                  >
+                    All categories
+                  </button>
+                  {categories.map(category => (
+                    <button
+                      key={category}
+                      onClick={() => setCategoryFilter(category)}
+                      className={`p-3 border-2 rounded-xl text-center transition-colors ${
+                        categoryFilter === category
+                          ? 'border-coral-500 text-gray-900'
+                          : 'border-gray-300 hover:border-gray-400 text-gray-900'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center justify-between rounded-b-2xl">
+              <button
+                onClick={clearFilters}
+                className="text-gray-600 hover:text-gray-800 font-medium underline"
+              >
+                Clear all filters
+              </button>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="btn-primary px-8 py-3"
+              >
+                Show {filteredPacks.length} places
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -415,7 +636,7 @@ export default function BrowsePage() {
                 </div>
                 
                 {/* Card content */}
-                <div className="p-4">
+                <div className="p-6">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-coral-600 transition-colors">
