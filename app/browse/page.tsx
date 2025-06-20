@@ -21,6 +21,9 @@ export default function BrowsePage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [showFilterModal, setShowFilterModal] = useState(false)
   
+  // Wishlist state - track which items are in wishlist
+  const [wishlistItems, setWishlistItems] = useState<string[]>([])
+  
   // Get unique values for filter options
   const categories = ['Solo Travel', 'Couple', 'Family', 'Friends Group', 'Business Travel', 'Adventure', 'Relaxation', 'Cultural', 'Food & Drink', 'Nightlife']
 
@@ -39,6 +42,21 @@ export default function BrowsePage() {
     const searchParam = urlParams.get('search')
     if (searchParam) {
       setSearchTerm(searchParam)
+    }
+  }, [])
+
+  // Load wishlist from localStorage when component mounts
+  useEffect(() => {
+    const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+    if (savedWishlist) {
+      try {
+        const wishlist = JSON.parse(savedWishlist)
+        // Extract just the IDs for easier checking
+        const wishlistIds = wishlist.map((item: any) => item.id)
+        setWishlistItems(wishlistIds)
+      } catch (error) {
+        console.error('Error loading wishlist:', error)
+      }
     }
   }, [])
 
@@ -129,6 +147,66 @@ export default function BrowsePage() {
       console.error('Error loading pin packs:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Function to add item to wishlist
+  const addToWishlist = (pack: PinPack) => {
+    try {
+      // Get current wishlist from localStorage
+      const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+      let currentWishlist = savedWishlist ? JSON.parse(savedWishlist) : []
+      
+      // Check if item is already in wishlist
+      const isAlreadyInWishlist = currentWishlist.some((item: any) => item.id === pack.id)
+      
+      if (!isAlreadyInWishlist) {
+        // Add the pack to wishlist
+        currentWishlist.push(pack)
+        
+        // Save to localStorage
+        localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
+        
+        // Update local state
+        setWishlistItems(prev => [...prev, pack.id])
+        
+        console.log('Added to wishlist:', pack.title)
+      }
+    } catch (error) {
+      console.error('Error adding to wishlist:', error)
+    }
+  }
+
+  // Function to remove item from wishlist
+  const removeFromWishlist = (packId: string) => {
+    try {
+      // Get current wishlist from localStorage
+      const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+      let currentWishlist = savedWishlist ? JSON.parse(savedWishlist) : []
+      
+      // Remove the item
+      currentWishlist = currentWishlist.filter((item: any) => item.id !== packId)
+      
+      // Save to localStorage
+      localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
+      
+      // Update local state
+      setWishlistItems(prev => prev.filter(id => id !== packId))
+      
+      console.log('Removed from wishlist:', packId)
+    } catch (error) {
+      console.error('Error removing from wishlist:', error)
+    }
+  }
+
+  // Function to toggle wishlist status
+  const toggleWishlist = (pack: PinPack) => {
+    const isInWishlist = wishlistItems.includes(pack.id)
+    
+    if (isInWishlist) {
+      removeFromWishlist(pack.id)
+    } else {
+      addToWishlist(pack)
     }
   }
 
@@ -608,6 +686,7 @@ export default function BrowsePage() {
             {filteredPacks.map((pack, index) => (
               <div 
                 key={pack.id}
+                onClick={() => window.location.href = `/pack/${pack.id}`}
                 className="card-airbnb card-airbnb-hover group cursor-pointer"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
@@ -615,9 +694,21 @@ export default function BrowsePage() {
                 <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                   
-                  {/* Heart icon */}
-                  <button className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white rounded-full flex items-center justify-center transition-colors group">
-                    <Heart className="h-4 w-4 text-gray-700 group-hover:text-coral-500 transition-colors" />
+                  {/* Heart icon - Add to wishlist */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation() // Prevent card click when clicking heart
+                      toggleWishlist(pack)
+                    }}
+                    className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white rounded-full flex items-center justify-center transition-colors group"
+                  >
+                    <Heart 
+                      className={`h-4 w-4 transition-colors ${
+                        wishlistItems.includes(pack.id) 
+                          ? 'text-coral-500 fill-current' 
+                          : 'text-gray-700 group-hover:text-coral-500'
+                      }`} 
+                    />
                   </button>
                   
                   {/* Price badge */}
@@ -658,11 +749,11 @@ export default function BrowsePage() {
                   </p>
                   
                   <button
-                    onClick={() => openPinPack(pack.id, 'maps')}
+                    onClick={() => window.location.href = `/pack/${pack.id}`}
                     className="w-full btn-primary text-sm py-2.5 flex items-center justify-center group"
                   >
                     <Download className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
-                    Open in Maps
+                    View Details
                   </button>
                 </div>
               </div>
