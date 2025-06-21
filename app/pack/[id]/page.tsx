@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, QrCode, ExternalLink } from 'lucide-react'
+import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+import { exportToGoogleMyMaps } from '@/lib/googleMaps'
 
 export default function PackDetailPage() {
   const params = useParams()
@@ -19,6 +20,12 @@ export default function PackDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
+  const [cartItems, setCartItems] = useState<string[]>([])
+  
+  // Enhanced delivery modal state
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
+  const [deliveryStep, setDeliveryStep] = useState<'options' | 'mymaps' | 'manual' | 'both'>('options')
+  const [savedPlaces, setSavedPlaces] = useState<string[]>([])
   
   // Image gallery state for navigating through pack photos
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -69,8 +76,9 @@ export default function PackDetailPage() {
     }
   }, [packId])
 
-  // Load user's wishlist from browser storage
+  // Load user's wishlist and cart from browser storage
   const loadWishlist = () => {
+    // Load wishlist
     const savedWishlist = localStorage.getItem('pinpacks_wishlist')
     if (savedWishlist) {
       try {
@@ -79,6 +87,18 @@ export default function PackDetailPage() {
         setWishlistItems(wishlistIds)
       } catch (error) {
         console.error('Error loading wishlist:', error)
+      }
+    }
+    
+    // Load shopping cart
+    const savedCart = localStorage.getItem('pinpacks_cart')
+    if (savedCart) {
+      try {
+        const cart = JSON.parse(savedCart)
+        const cartIds = cart.map((item: any) => item.id)
+        setCartItems(cartIds)
+      } catch (error) {
+        console.error('Error loading cart:', error)
       }
     }
   }
@@ -244,6 +264,59 @@ export default function PackDetailPage() {
     }
   }
 
+  // Add item to shopping cart
+  const addToCart = (pack: PinPack) => {
+    try {
+      const savedCart = localStorage.getItem('pinpacks_cart')
+      let currentCart = savedCart ? JSON.parse(savedCart) : []
+      
+      const isAlreadyInCart = currentCart.some((item: any) => item.id === pack.id)
+      
+      if (!isAlreadyInCart) {
+        currentCart.push(pack)
+        localStorage.setItem('pinpacks_cart', JSON.stringify(currentCart))
+        setCartItems(prev => [...prev, pack.id])
+        console.log('Added to cart:', pack.title)
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error)
+    }
+  }
+
+  // Remove item from shopping cart
+  const removeFromCart = (packId: string) => {
+    try {
+      const savedCart = localStorage.getItem('pinpacks_cart')
+      let currentCart = savedCart ? JSON.parse(savedCart) : []
+      
+      currentCart = currentCart.filter((item: any) => item.id !== packId)
+      localStorage.setItem('pinpacks_cart', JSON.stringify(currentCart))
+      setCartItems(prev => prev.filter(id => id !== packId))
+      console.log('Removed from cart:', packId)
+    } catch (error) {
+      console.error('Error removing from cart:', error)
+    }
+  }
+
+  // Toggle cart status
+  const toggleCart = (pack: PinPack) => {
+    if (cartItems.includes(pack.id)) {
+      removeFromCart(pack.id)
+    } else {
+      addToCart(pack)
+    }
+  }
+
+  // Handle payment
+  const handlePayment = (pack: PinPack) => {
+    if (!cartItems.includes(pack.id)) {
+      addToCart(pack)
+    }
+    
+    console.log('Proceeding to payment for:', pack.title)
+    alert(`Payment feature coming soon! ${pack.title} has been added to your cart.`)
+  }
+
   // Navigate to another similar pack's detail page
   const navigateToSimilarPack = (similarPackId: string) => {
     router.push(`/pack/${similarPackId}`)
@@ -295,6 +368,49 @@ export default function PackDetailPage() {
     }
   }
 
+  // Enhanced delivery system functions
+  const handleEnhancedExport = () => {
+    setShowDeliveryModal(true)
+    setDeliveryStep('options')
+  }
+
+  const generateMyMapsKML = async () => {
+    try {
+      const message = await exportToGoogleMyMaps(pack, pins)
+      return message
+    } catch (error) {
+      console.error('Export error:', error)
+      throw new Error('Failed to export to Google My Maps. Please try again.')
+    }
+  }
+
+  const generateIndividualLinks = () => {
+    return pins.map(pin => ({
+      id: pin.id,
+      name: pin.name || pin.title,
+      description: pin.description,
+      googleMapsUrl: pin.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pin.name || pin.title}, ${pack?.city}`)}`
+    }))
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch (error) {
+      console.error('Failed to copy:', error)
+      return false
+    }
+  }
+
+  const markPlaceAsSaved = (placeId: string) => {
+    setSavedPlaces(prev => [...prev, placeId])
+  }
+
+  const openMyMapsImportPage = () => {
+    window.open('https://www.google.com/maps/d/', '_blank')
+  }
+
   // Show loading screen while pack data is being loaded
   if (loading) {
     return (
@@ -340,7 +456,7 @@ export default function PackDetailPage() {
             className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            Back
+            Keep exploring
           </button>
         </div>
       </div>
@@ -525,15 +641,13 @@ export default function PackDetailPage() {
                               </span>
                             )}
                           </div>
-                          {/* Star rating display */}
-                          <div className="flex items-center space-x-1">
-                            {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                className={`h-4 w-4 ${
-                                  i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                                }`}
-                              />
+                          {/* Star rating */}
+                          <div className="flex items-center space-x-1 mb-2">
+                            {Array.from({ length: review.rating }, (_, i) => (
+                              <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
+                            ))}
+                            {Array.from({ length: 5 - review.rating }, (_, i) => (
+                              <Star key={i + review.rating} className="h-4 w-4 text-gray-300 fill-current" />
                             ))}
                           </div>
                         </div>
@@ -551,7 +665,7 @@ export default function PackDetailPage() {
           <div className="space-y-6">
             
             {/* Booking/Download card with pricing and actions */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 sticky top-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
               <div className="text-center mb-6">
                 <div className="text-3xl font-bold text-gray-900 mb-2">
                   {pack.price === 0 ? 'Free' : `$${pack.price}`}
@@ -560,23 +674,48 @@ export default function PackDetailPage() {
               </div>
 
               <div className="space-y-4">
-                <button
-                  onClick={openInGoogleMaps}
-                  className="w-full btn-primary flex items-center justify-center text-lg py-4"
-                >
-                  <Download className="h-5 w-5 mr-2" />
-                  Open in Google Maps
-                </button>
+                {pack.price > 0 ? (
+                  <>
+                    {/* Pay button for paid packs */}
+                    <button
+                      onClick={() => handlePayment(pack)}
+                      className="w-full btn-primary flex items-center justify-center text-lg py-4"
+                    >
+                      <CreditCard className="h-5 w-5 mr-2" />
+                      Pay ${pack.price}
+                    </button>
+                    
+                    {/* Add to cart button */}
+                    <button
+                      onClick={() => toggleCart(pack)}
+                      className={`w-full flex items-center justify-center py-3 transition-all ${
+                        cartItems.includes(pack.id)
+                          ? 'btn-secondary bg-coral-50 text-coral-600 border-coral-200'
+                          : 'btn-secondary'
+                      }`}
+                    >
+                      <ShoppingCart className="h-4 w-4 mr-2" />
+                      {cartItems.includes(pack.id) ? 'In Cart' : 'Add to Cart'}
+                    </button>
+                  </>
+                ) : (
+                  /* Free pack - direct download */
+                  <button
+                    onClick={openInGoogleMaps}
+                    className="w-full btn-primary flex items-center justify-center text-lg py-4"
+                  >
+                    <Download className="h-5 w-5 mr-2" />
+                    Get Free Pack
+                  </button>
+                                  )}
                 
+                {/* Enhanced Export button */}
                 <button
-                  onClick={() => {
-                    // QR code functionality would be implemented here
-                    console.log('Generate QR code')
-                  }}
-                  className="w-full btn-secondary flex items-center justify-center"
+                  onClick={handleEnhancedExport}
+                  className="w-full btn-secondary flex items-center justify-center py-3 mt-4"
                 >
-                  <QrCode className="h-4 w-4 mr-2" />
-                  Get QR Code
+                  <Download className="h-4 w-4 mr-2" />
+                  Get Your Places
                 </button>
               </div>
 
@@ -597,16 +736,7 @@ export default function PackDetailPage() {
               </div>
             </div>
 
-            {/* Local tips section with helpful travel advice */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">💡 Local Tips</h3>
-              <div className="space-y-3 text-sm text-gray-700">
-                <p>• Best visited during morning hours (9 AM - 12 PM)</p>
-                <p>• Bring comfortable walking shoes</p>
-                <p>• Most places accept card payments</p>
-                <p>• English is widely spoken</p>
-              </div>
-            </div>
+
           </div>
         </div>
 
@@ -633,10 +763,16 @@ export default function PackDetailPage() {
                   <div
                     key={similarPack.id}
                     onClick={() => navigateToSimilarPack(similarPack.id)}
-                    className="flex-none w-80 card-airbnb card-airbnb-hover group cursor-pointer"
+                    className="flex-none w-80 card-airbnb group cursor-pointer"
                   >
                     {/* Similar pack image with overlays */}
                     <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative overflow-hidden">
+                      {/* Google Maps background - no zoom to avoid blurry rectangle */}
+                      <img 
+                        src="/google-maps-bg.svg"
+                        alt="Map background"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                       
                       {/* Heart icon for adding to wishlist */}
@@ -645,7 +781,7 @@ export default function PackDetailPage() {
                           e.stopPropagation()
                           toggleWishlist(similarPack)
                         }}
-                        className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white rounded-full flex items-center justify-center transition-colors group z-10"
+                        className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm z-10"
                       >
                         <Heart 
                           className={`h-4 w-4 transition-colors ${
@@ -656,15 +792,10 @@ export default function PackDetailPage() {
                         />
                       </button>
                       
-                      {/* Price badge */}
-                      <div className="absolute top-3 left-3">
-                        <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-gray-900">
-                          {similarPack.price === 0 ? 'Free' : `$${similarPack.price}`}
-                        </span>
-                      </div>
+
                       
                       {/* Pin count badge */}
-                      <div className="absolute bottom-3 right-3">
+                      <div className="absolute bottom-3 right-3 z-10">
                         <span className="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
                           {similarPack.pin_count} pins
                         </span>
@@ -685,7 +816,7 @@ export default function PackDetailPage() {
                         </div>
                         <div className="flex items-center text-sm text-gray-500 ml-2">
                           <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
-                          <span className="text-xs">{similarPack.download_count || 0}</span>
+                          <span className="text-xs">{((similarPack.download_count || 0) % 50 + 350) / 100}</span>
                         </div>
                       </div>
                       
@@ -700,6 +831,396 @@ export default function PackDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Enhanced Delivery Modal */}
+      {showDeliveryModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-2xl font-bold text-gray-900">Get Your Places</h2>
+              <button
+                onClick={() => setShowDeliveryModal(false)}
+                className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+              {deliveryStep === 'options' && (
+                <div className="p-6 space-y-6">
+                  <div className="text-center mb-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      Choose how you want to use your places
+                    </h3>
+                    <p className="text-gray-600">
+                      We'll help you get the best experience for your needs
+                    </p>
+                  </div>
+
+                  {/* Option 1: My Maps (Recommended) */}
+                  <div className="relative">
+                    <div className="absolute -top-2 -right-2 bg-coral-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                      Recommended
+                    </div>
+                    <button
+                      onClick={() => setDeliveryStep('mymaps')}
+                      className="w-full p-6 border-2 border-coral-200 bg-coral-50 hover:bg-coral-100 rounded-2xl text-left transition-colors group"
+                    >
+                      <div className="flex items-start space-x-4">
+                        <div className="w-12 h-12 bg-coral-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <MapPin className="h-6 w-6 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                            Complete Experience (My Maps)
+                          </h4>
+                          <p className="text-gray-600 mb-3">
+                            Get all places with descriptions in Google My Maps
+                          </p>
+                          <div className="space-y-1 text-sm text-gray-700">
+                            <div className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                              Keeps all descriptions and tips
+                            </div>
+                            <div className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                              Works perfectly on mobile
+                            </div>
+                            <div className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                              Offline access available
+                            </div>
+                            <div className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                              Easy sharing with friends
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-coral-500 transition-colors" />
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Option 2: Regular Google Maps */}
+                  <button
+                    onClick={() => setDeliveryStep('manual')}
+                    className="w-full p-6 border-2 border-gray-200 hover:border-gray-300 rounded-2xl text-left transition-colors group"
+                  >
+                    <div className="flex items-start space-x-4">
+                      <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Smartphone className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                          Regular Google Maps
+                        </h4>
+                        <p className="text-gray-600 mb-3">
+                          Save places individually to your main Google Maps
+                        </p>
+                        <div className="space-y-1 text-sm text-gray-700">
+                          <div className="flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                            In your main Google Maps account
+                          </div>
+                          <div className="flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                            Shows in search suggestions
+                          </div>
+                          <div className="flex items-center">
+                            <Clock className="h-4 w-4 text-amber-500 mr-2" />
+                            Takes 5-10 minutes to set up
+                          </div>
+                          <div className="flex items-center">
+                            <Clock className="h-4 w-4 text-amber-500 mr-2" />
+                            Custom descriptions not included
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
+                    </div>
+                  </button>
+
+                  {/* Option 3: Both */}
+                  <button
+                    onClick={() => setDeliveryStep('both')}
+                    className="w-full p-6 border-2 border-purple-200 bg-purple-50 hover:bg-purple-100 rounded-2xl text-left transition-colors group"
+                  >
+                    <div className="flex items-start space-x-4">
+                      <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Star className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                          Best of Both Worlds
+                        </h4>
+                        <p className="text-gray-600 mb-3">
+                          Get My Maps file + individual links for manual saving
+                        </p>
+                        <div className="space-y-1 text-sm text-gray-700">
+                          <div className="flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                            Complete My Maps experience
+                          </div>
+                          <div className="flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                            Plus individual place links
+                          </div>
+                          <div className="flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                            Maximum flexibility
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-purple-500 transition-colors" />
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              {deliveryStep === 'mymaps' && (
+                <div className="p-6 space-y-6">
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <MapPin className="h-8 w-8 text-coral-500" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      My Maps - Complete Experience
+                    </h3>
+                    <p className="text-gray-600">
+                      Get all {pins.length} places with descriptions in one organized map
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-2xl p-6">
+                    <h4 className="font-semibold text-gray-900 mb-4">How it works:</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-6 h-6 bg-coral-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">1</div>
+                        <p className="text-gray-700">We'll download a file with all your places</p>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <div className="w-6 h-6 bg-coral-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">2</div>
+                        <p className="text-gray-700">We'll open Google My Maps for you</p>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <div className="w-6 h-6 bg-coral-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">3</div>
+                        <p className="text-gray-700">Click "Import" and upload your downloaded file</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={() => setDeliveryStep('options')}
+                      className="flex-1 btn-secondary py-3"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await generateMyMapsKML()
+                          openMyMapsImportPage()
+                          setShowDeliveryModal(false)
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Failed to export')
+                        }
+                      }}
+                      className="flex-2 btn-primary py-3 flex items-center justify-center"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download & Open My Maps
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {deliveryStep === 'manual' && (
+                <div className="p-6 space-y-6">
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Smartphone className="h-8 w-8 text-blue-500" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Save to Google Maps
+                    </h3>
+                    <p className="text-gray-600">
+                      Easy checklist to save all {pins.length} places individually
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-2xl p-6 mb-6">
+                    <h4 className="font-semibold text-gray-900 mb-2">Quick Instructions:</h4>
+                    <p className="text-gray-700 text-sm">
+                      Tap each link below, then hit the "Save" button in Google Maps. 
+                      We'll keep track of your progress!
+                    </p>
+                  </div>
+
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {generateIndividualLinks().map((place, index) => (
+                      <div
+                        key={place.id}
+                        className={`p-4 border-2 rounded-xl transition-all ${
+                          savedPlaces.includes(place.id)
+                            ? 'border-green-200 bg-green-50'
+                            : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0 mr-4">
+                            <h5 className="font-medium text-gray-900 truncate">
+                              {place.name}
+                            </h5>
+                            <p className="text-sm text-gray-600 line-clamp-1">
+                              {place.description}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-gray-500">
+                              {index + 1}/{pins.length}
+                            </span>
+                            <a
+                              href={place.googleMapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => markPlaceAsSaved(place.id)}
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                savedPlaces.includes(place.id)
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+                              }`}
+                            >
+                              {savedPlaces.includes(place.id) ? (
+                                <div className="flex items-center">
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Saved
+                                </div>
+                              ) : (
+                                <div className="flex items-center">
+                                  <ExternalLink className="h-4 w-4 mr-1" />
+                                  Save
+                                </div>
+                              )}
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Progress</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {savedPlaces.length} of {pins.length} places saved
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                      <div
+                        className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(savedPlaces.length / pins.length) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={() => setDeliveryStep('options')}
+                      className="flex-1 btn-secondary py-3"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() => setShowDeliveryModal(false)}
+                      className="flex-1 btn-primary py-3"
+                    >
+                      {savedPlaces.length === pins.length ? 'All Done!' : 'Close'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {deliveryStep === 'both' && (
+                <div className="p-6 space-y-6">
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Star className="h-8 w-8 text-purple-500" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Best of Both Worlds
+                    </h3>
+                    <p className="text-gray-600">
+                      Get everything - My Maps file plus individual links
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await generateMyMapsKML()
+                          openMyMapsImportPage()
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Failed to export')
+                        }
+                      }}
+                      className="p-6 border-2 border-coral-200 bg-coral-50 hover:bg-coral-100 rounded-2xl text-left transition-colors"
+                    >
+                      <div className="flex items-center space-x-3 mb-3">
+                        <MapPin className="h-6 w-6 text-coral-500" />
+                        <h4 className="font-semibold text-gray-900">My Maps</h4>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Download file & open My Maps
+                      </p>
+                      <div className="flex items-center text-coral-600 text-sm font-medium">
+                        <Download className="h-4 w-4 mr-1" />
+                        Get My Maps File
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setDeliveryStep('manual')}
+                      className="p-6 border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-2xl text-left transition-colors"
+                    >
+                      <div className="flex items-center space-x-3 mb-3">
+                        <Smartphone className="h-6 w-6 text-blue-500" />
+                        <h4 className="font-semibold text-gray-900">Individual Links</h4>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Save places one by one
+                      </p>
+                      <div className="flex items-center text-blue-600 text-sm font-medium">
+                        <ExternalLink className="h-4 w-4 mr-1" />
+                        View Checklist
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={() => setDeliveryStep('options')}
+                      className="flex-1 btn-secondary py-3"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() => setShowDeliveryModal(false)}
+                      className="flex-1 btn-primary py-3"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 

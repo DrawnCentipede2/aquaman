@@ -1,6 +1,6 @@
 'use client'
 
-import { MapPin, Users, Shield, Globe, Heart, Search } from 'lucide-react'
+import { MapPin, Users, Shield, Globe, Heart, Search, Star } from 'lucide-react'
 
 export default function LandingPage() {
   // Mock testimonials data for the landing page
@@ -173,8 +173,8 @@ export default function LandingPage() {
                 </div>
                 
                 <div className="flex items-center mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <div key={i} className="w-4 h-4 text-yellow-400 mr-1">⭐</div>
+                  {Array.from({ length: testimonial.rating }, (_, i) => (
+                    <Star key={i} className="h-4 w-4 text-yellow-400 fill-current mr-1" />
                   ))}
                 </div>
                 

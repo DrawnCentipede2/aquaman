@@ -37,6 +37,7 @@ export interface PinPack {
   download_count?: number
   average_rating?: number
   rating_count?: number
+  updated_at?: string
 }
 
 export interface PinPackPin {

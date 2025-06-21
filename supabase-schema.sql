@@ -13,11 +13,30 @@ CREATE TABLE pins (
     category TEXT NOT NULL DEFAULT 'other',
     latitude DECIMAL(10, 8) NOT NULL DEFAULT 0,
     longitude DECIMAL(11, 8) NOT NULL DEFAULT 0,
+    
+    -- Enhanced place information from Google Places API
+    address TEXT,
+    city TEXT,
+    country TEXT,
+    zip_code TEXT,
+    business_type TEXT,
+    phone TEXT,
+    website TEXT,
+    rating DECIMAL(3, 2),
+    rating_count INTEGER,
+    business_status TEXT, -- 'OPERATIONAL', 'CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY'
+    current_opening_hours JSONB, -- Store opening hours as JSON
+    reviews JSONB, -- Store recent reviews as JSON array
+    place_id TEXT, -- Google Places API place ID for future reference
+    needs_manual_edit BOOLEAN DEFAULT FALSE,
+    
     created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
     creator_location TEXT,
     creator_ip TEXT,
     CONSTRAINT valid_latitude CHECK (latitude >= -90 AND latitude <= 90),
-    CONSTRAINT valid_longitude CHECK (longitude >= -180 AND longitude <= 180)
+    CONSTRAINT valid_longitude CHECK (longitude >= -180 AND longitude <= 180),
+    CONSTRAINT valid_rating CHECK (rating IS NULL OR (rating >= 0 AND rating <= 5))
 );
 
 -- Table to store pin packs (collections of pins)
@@ -67,9 +86,28 @@ CREATE TABLE pack_ratings (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Table to store edit requests for place information
+CREATE TABLE place_edit_requests (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pin_id UUID NOT NULL REFERENCES pins(id) ON DELETE CASCADE,
+    user_id TEXT, -- Simple user ID for MVP
+    field_name TEXT NOT NULL, -- 'title', 'address', 'phone', etc.
+    current_value TEXT,
+    requested_value TEXT NOT NULL,
+    status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_pins_category ON pins(category);
 CREATE INDEX idx_pins_created_at ON pins(created_at);
+CREATE INDEX idx_pins_city_country ON pins(city, country);
+CREATE INDEX idx_pins_rating ON pins(rating);
+CREATE INDEX idx_pins_business_status ON pins(business_status);
+CREATE INDEX idx_pins_place_id ON pins(place_id);
 CREATE INDEX idx_pin_packs_city_country ON pin_packs(city, country);
 CREATE INDEX idx_pin_packs_created_at ON pin_packs(created_at);
 CREATE INDEX idx_pin_packs_creator_id ON pin_packs(creator_id);
@@ -78,6 +116,9 @@ CREATE INDEX idx_pin_pack_pins_pin_id ON pin_pack_pins(pin_id);
 CREATE INDEX idx_pack_downloads_pack_id ON pack_downloads(pin_pack_id);
 CREATE INDEX idx_pack_downloads_date ON pack_downloads(downloaded_at);
 CREATE INDEX idx_pack_ratings_pack_id ON pack_ratings(pin_pack_id);
+CREATE INDEX idx_edit_requests_pin_id ON place_edit_requests(pin_id);
+CREATE INDEX idx_edit_requests_status ON place_edit_requests(status);
+CREATE INDEX idx_edit_requests_created_at ON place_edit_requests(created_at);
 
 -- Enable RLS on all tables (required by Supabase)
 ALTER TABLE pins ENABLE ROW LEVEL SECURITY;
@@ -85,6 +126,7 @@ ALTER TABLE pin_packs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pin_pack_pins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pack_downloads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pack_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE place_edit_requests ENABLE ROW LEVEL SECURITY;
 
 -- Create permissive policies for MVP (anyone can read/write)
 -- In production, you'd want more restrictive policies
@@ -123,6 +165,16 @@ CREATE POLICY "Anyone can view ratings" ON pack_ratings
 
 CREATE POLICY "Anyone can insert ratings" ON pack_ratings
     FOR INSERT WITH CHECK (true);
+
+-- Place edit requests policies
+CREATE POLICY "Anyone can view edit requests" ON place_edit_requests
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert edit requests" ON place_edit_requests
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can update edit requests" ON place_edit_requests
+    FOR UPDATE USING (true);
 
 -- Optional: Create a view for easier querying of complete pin packs
 CREATE VIEW pin_pack_details AS

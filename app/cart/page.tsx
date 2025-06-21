@@ -22,21 +22,8 @@ export default function CartPage() {
     localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
   }
 
-  const updateQuantity = (itemId: string, newQuantity: number) => {
-    if (newQuantity === 0) {
-      removeFromCart(itemId)
-      return
-    }
-    
-    const updatedCart = cartItems.map(item => 
-      item.id === itemId ? { ...item, quantity: newQuantity } : item
-    )
-    setCartItems(updatedCart)
-    localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
-  }
-
   const getTotal = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0)
+    return cartItems.reduce((total, item) => total + item.price, 0)
   }
 
   if (loading) {
@@ -95,12 +82,22 @@ export default function CartPage() {
             <div className="lg:col-span-2">
               <div className="space-y-4">
                 {cartItems.map((item) => (
-                  <div key={item.id} className="card-airbnb p-6">
+                  <div key={item.id} className="card-airbnb p-6 group hover:shadow-lg transition-all duration-200 cursor-pointer"
+                       onClick={() => window.location.href = `/pack/${item.id}`}>
                     <div className="flex items-center space-x-4">
-                      {/* Image placeholder */}
-                      <div className="w-24 h-24 bg-gradient-to-br from-coral-100 to-gray-100 rounded-lg flex-shrink-0 relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                        <div className="absolute bottom-1 right-1">
+                      {/* Image placeholder - Google Maps style background */}
+                      <div className="w-24 h-24 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg flex-shrink-0 relative overflow-hidden">
+                        {/* Inner container that scales - maintains boundaries */}
+                        <div className="absolute inset-0 group-hover:scale-105 transition-transform duration-300 ease-out">
+                          {/* Google Maps background */}
+                          <img 
+                            src="/google-maps-bg.svg"
+                            alt="Map background"
+                            className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent rounded-lg"></div>
+                        </div>
+                        <div className="absolute bottom-1 right-1 z-10">
                           <span className="bg-black/50 text-white px-1 py-0.5 rounded text-xs">
                             {item.pin_count} pins
                           </span>
@@ -127,26 +124,14 @@ export default function CartPage() {
                           ${item.price}
                         </div>
                         
-                        {/* Quantity controls */}
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                          >
-                            <Minus className="h-4 w-4 text-gray-600" />
-                          </button>
-                          <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-                          >
-                            <Plus className="h-4 w-4 text-gray-600" />
-                          </button>
-                        </div>
+
 
                         {/* Remove button */}
                         <button
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeFromCart(item.id)
+                          }}
                           className="text-gray-400 hover:text-red-500 transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -163,10 +148,10 @@ export default function CartPage() {
               <div className="card-airbnb p-6 sticky top-4">
                 <h3 className="text-xl font-bold text-gray-900 mb-6">Order Summary</h3>
                 
-                <div className="space-y-3 mb-6">
+                                  <div className="space-y-3 mb-6">
                   <div className="flex justify-between">
                     <span className="text-gray-600">
-                      Subtotal ({cartItems.reduce((total, item) => total + item.quantity, 0)} {cartItems.reduce((total, item) => total + item.quantity, 0) === 1 ? 'item' : 'items'})
+                      Subtotal ({cartItems.length} {cartItems.length === 1 ? 'pack' : 'packs'})
                     </span>
                     <span className="font-medium">${getTotal().toFixed(2)}</span>
                   </div>
@@ -182,7 +167,7 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <button className="w-full btn-primary py-4 text-base mb-4">
+                <button className="w-full btn-primary py-3 text-base mb-4 flex items-center justify-center">
                   <CreditCard className="h-5 w-5 mr-2" />
                   Proceed to Checkout
                 </button>

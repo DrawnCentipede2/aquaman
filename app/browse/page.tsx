@@ -199,118 +199,12 @@ export default function BrowsePage() {
     }
   }
 
-  // Function to toggle wishlist status
+  // Function to toggle wishlist (add or remove)
   const toggleWishlist = (pack: PinPack) => {
-    const isInWishlist = wishlistItems.includes(pack.id)
-    
-    if (isInWishlist) {
+    if (wishlistItems.includes(pack.id)) {
       removeFromWishlist(pack.id)
     } else {
       addToWishlist(pack)
-    }
-  }
-
-  // Function to open pin pack in Google Maps or generate QR code
-  const openPinPack = async (packId: string, format: 'maps' | 'qr' = 'maps') => {
-    try {
-      // Get pin pack info and pins
-      const [{ data: packData }, { data: packPins }] = await Promise.all([
-        supabase.from('pin_packs').select('*').eq('id', packId).single(),
-        supabase.from('pin_pack_pins').select(`
-          pins (
-            title,
-            description,
-            google_maps_url,
-            latitude,
-            longitude,
-            category
-          )
-        `).eq('pin_pack_id', packId)
-      ])
-
-      if (!packData || !packPins) throw new Error('Failed to get pack data')
-
-      // Track the download/view
-      try {
-        const locationResponse = await fetch('https://ipapi.co/json/')
-        const locationData = await locationResponse.json()
-        const userLocation = `${locationData.city}, ${locationData.country_name}`
-
-        await supabase.from('pack_downloads').insert({
-          pin_pack_id: packId,
-          download_type: format,
-          user_location: userLocation,
-          user_ip: locationData.ip
-        })
-
-        await supabase
-          .from('pin_packs')
-          .update({ download_count: (packData.download_count || 0) + 1 })
-          .eq('id', packId)
-      } catch (analyticsErr) {
-        console.log('Analytics tracking failed:', analyticsErr)
-      }
-
-      if (format === 'maps') {
-        openGoogleMapsDirectly(packData, packPins.map(item => (item as any).pins))
-      } else if (format === 'qr') {
-        generateQRCode(packData, packPins.map(item => (item as any).pins))
-      }
-    } catch (err) {
-      alert('Failed to open pin pack')
-      console.error('Download error:', err)
-    }
-  }
-
-  // Open Google Maps directly
-  const openGoogleMapsDirectly = (packData: any, pins: any[]) => {
-    const pinsWithCoords = pins.filter(pin => pin.latitude !== 0 || pin.longitude !== 0)
-    
-    if (pinsWithCoords.length === 0) {
-      const firstPin = pins[0]
-      if (firstPin?.google_maps_url) {
-        window.open(firstPin.google_maps_url, '_blank')
-      } else {
-        alert('No valid coordinates found for these pins.')
-      }
-      return
-    }
-    
-    if (pinsWithCoords.length === 1) {
-      const pin = pinsWithCoords[0]
-      const url = pin.google_maps_url || `https://www.google.com/maps?q=${pin.latitude},${pin.longitude}`
-      window.open(url, '_blank')
-    } else {
-      const waypoints = pinsWithCoords.map(pin => `${pin.latitude},${pin.longitude}`).join('/')
-      const url = `https://www.google.com/maps/dir/${waypoints}`
-      window.open(url, '_blank')
-    }
-  }
-
-  // Generate QR Code
-  const generateQRCode = (packData: any, pins: any[]) => {
-    const searchQuery = `${packData.title} ${packData.city}`
-    const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(mapsUrl)}`
-    
-    const qrWindow = window.open('', '_blank', 'width=400,height=500')
-    if (qrWindow) {
-      qrWindow.document.write(`
-        <html>
-          <head><title>QR Code - ${packData.title}</title></head>
-          <body style="text-align:center; font-family:Arial; padding:20px;">
-            <h2>${packData.title}</h2>
-            <p>Scan this QR code to search for these locations on Google Maps</p>
-            <img src="${qrCodeUrl}" alt="QR Code" style="border:1px solid #ccc; border-radius:8px;" />
-            <p style="margin-top:20px; font-size:12px; color:#666;">
-              Or visit: <br><a href="${mapsUrl}" target="_blank">${mapsUrl}</a>
-            </p>
-            <p style="margin-top:20px;">
-              <button onclick="window.print()" style="background:#ff5a5f; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer;">Print QR Code</button>
-            </p>
-          </body>
-        </html>
-      `)
     }
   }
 
@@ -687,12 +581,20 @@ export default function BrowsePage() {
               <div 
                 key={pack.id}
                 onClick={() => window.location.href = `/pack/${pack.id}`}
-                className="card-airbnb card-airbnb-hover group cursor-pointer"
-                style={{ animationDelay: `${index * 50}ms` }}
+                className="card-airbnb group cursor-pointer"
               >
-                {/* Image placeholder - Airbnb style */}
+                {/* Image placeholder - Google Maps style background */}
                 <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  {/* Inner container that scales - maintains boundaries */}
+                  <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
+                    {/* Google Maps background */}
+                    <img 
+                      src="/google-maps-bg.svg"
+                      alt="Map background"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  </div>
                   
                   {/* Heart icon - Add to wishlist */}
                   <button 
@@ -700,7 +602,7 @@ export default function BrowsePage() {
                       e.stopPropagation() // Prevent card click when clicking heart
                       toggleWishlist(pack)
                     }}
-                    className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white rounded-full flex items-center justify-center transition-colors group"
+                    className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm"
                   >
                     <Heart 
                       className={`h-4 w-4 transition-colors ${
@@ -711,12 +613,7 @@ export default function BrowsePage() {
                     />
                   </button>
                   
-                  {/* Price badge */}
-                  <div className="absolute top-3 left-3">
-                    <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-gray-900">
-                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
-                    </span>
-                  </div>
+
                   
                   {/* Pin count */}
                   <div className="absolute bottom-3 right-3">
@@ -738,23 +635,22 @@ export default function BrowsePage() {
                         {pack.city}, {pack.country}
                       </p>
                     </div>
-                    <div className="flex items-center text-sm text-gray-500 ml-2">
-                      <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
-                      <span className="text-xs">{pack.download_count || 0}</span>
-                    </div>
                   </div>
                   
                   <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
                     {pack.description}
                   </p>
                   
-                  <button
-                    onClick={() => window.location.href = `/pack/${pack.id}`}
-                    className="w-full btn-primary text-sm py-2.5 flex items-center justify-center group"
-                  >
-                    <Download className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
-                    View Details
-                  </button>
+                  {/* Bottom section with rating and price */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
+                      <span className="text-sm text-gray-600">{((pack.download_count || 0) % 50 + 350) / 100}</span>
+                    </div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}

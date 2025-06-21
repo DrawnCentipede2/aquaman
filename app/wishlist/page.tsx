@@ -93,26 +93,34 @@ export default function WishlistPage() {
               {wishlistItems.map((pack) => (
                 <div 
                   key={pack.id}
-                  className="card-airbnb card-airbnb-hover group"
+                  onClick={() => window.location.href = `/pack/${pack.id}`}
+                  className="card-airbnb group cursor-pointer"
                 >
-                  {/* Image placeholder */}
+                  {/* Image placeholder - Google Maps style background */}
                   <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                    {/* Inner container that scales - maintains boundaries */}
+                    <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
+                      {/* Google Maps background */}
+                      <img 
+                        src="/google-maps-bg.svg"
+                        alt="Map background"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                    </div>
                     
                     {/* Remove from wishlist button */}
                     <button 
-                      onClick={() => removeFromWishlist(pack.id)}
-                      className="absolute top-3 right-3 w-8 h-8 bg-white/80 hover:bg-white rounded-full flex items-center justify-center transition-colors group"
+                      onClick={(e) => {
+                        e.stopPropagation() // Prevent card click when clicking trash
+                        removeFromWishlist(pack.id)
+                      }}
+                      className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm"
                     >
                       <Trash2 className="h-4 w-4 text-gray-700 group-hover:text-red-500 transition-colors" />
                     </button>
                     
-                    {/* Price badge */}
-                    <div className="absolute top-3 left-3">
-                      <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-gray-900">
-                        {pack.price === 0 ? 'Free' : `$${pack.price}`}
-                      </span>
-                    </div>
+
                     
                     {/* Pin count */}
                     <div className="absolute bottom-3 right-3">
@@ -142,24 +150,21 @@ export default function WishlistPage() {
                           {pack.city}, {pack.country}
                         </p>
                       </div>
-                      <div className="flex items-center text-sm text-gray-500 ml-2">
-                        <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
-                        <span className="text-xs">{pack.download_count || 0}</span>
-                      </div>
                     </div>
                     
                     <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
                       {pack.description}
                     </p>
                     
-                    <div className="flex space-x-2">
-                      <button className="flex-1 btn-primary text-sm py-2.5 flex items-center justify-center group">
-                        <Download className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
-                        Download
-                      </button>
-                      <button className="btn-secondary text-sm py-2.5 px-4">
-                        View Details
-                      </button>
+                    {/* Bottom section with rating and price */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
+                        <span className="text-sm text-gray-600">{((pack.download_count || 0) % 50 + 350) / 100}</span>
+                      </div>
+                      <div className="text-lg font-bold text-gray-900">
+                        {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -227,13 +227,10 @@ export default function ManagePage() {
     }
   }
 
-  // Function to edit pin pack (placeholder - could expand to inline editing)
+  // Function to edit pin pack - opens edit page in new tab
   const editPinPack = (pack: PinPackWithAnalytics) => {
-    // For now, just allow editing title and description via prompt
-    const newTitle = prompt('Edit pack title:', pack.title)
-    if (newTitle && newTitle !== pack.title) {
-      updatePinPack(pack.id, { title: newTitle })
-    }
+    // Open the edit page in a new tab for comprehensive editing
+    window.open(`/edit/${pack.id}`, '_blank')
   }
 
   // Function to update pin pack
@@ -404,9 +401,20 @@ export default function ManagePage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {userPacks.map((pack) => (
-              <div key={pack.id} className="card-airbnb card-airbnb-hover group">
-                {/* Pack Image Placeholder */}
+              <div 
+                key={pack.id} 
+                className="card-airbnb card-airbnb-hover group cursor-pointer"
+                onClick={() => window.open(`/pack/${pack.id}`, '_blank')}
+              >
+                {/* Pack Image with Google Maps Background */}
                 <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative overflow-hidden">
+                  <div className="absolute inset-0 group-hover:scale-105 transition-transform duration-300">
+                    <img 
+                      src="/google-maps-bg.svg"
+                      alt="Map background"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                   
                   {/* Price Badge */}
@@ -467,21 +475,30 @@ export default function ManagePage() {
                   {/* Action Buttons */}
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => editPinPack(pack)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        editPinPack(pack)
+                      }}
                       className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center"
                     >
                       <Edit className="h-3 w-3 mr-1" />
                       Edit
                     </button>
                     <button
-                      onClick={() => window.open(`/browse`, '_blank')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        window.open(`/pack/${pack.id}`, '_blank')
+                      }}
                       className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center"
                     >
                       <Eye className="h-3 w-3 mr-1" />
                       View
                     </button>
                     <button
-                      onClick={() => deletePinPack(pack.id, pack.title)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deletePinPack(pack.id, pack.title)
+                      }}
                       className="px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 className="h-3 w-3" />
