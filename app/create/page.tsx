@@ -513,19 +513,7 @@ export default function CreatePackPage() {
     }
   }
 
-  // Function to add a new empty pin
-  const addPin = () => {
-    const newPin: Pin = {
-      title: '',
-      description: '',
-      google_maps_url: '',
-      category: 'restaurant',
-      latitude: 0,
-      longitude: 0,
-      fetching: false
-    }
-    setPins([...pins, newPin])
-  }
+  // Note: addPin function removed - users can only add places via Google Maps URL import
 
   // Function to remove a pin
   const removePin = (index: number) => {
@@ -921,14 +909,10 @@ export default function CreatePackPage() {
               <div className="text-center py-12">
                 <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No places yet</h3>
-                <p className="text-gray-600 mb-6">Add your first place to get started</p>
-                <button
-                  onClick={addPin}
-                  className="btn-primary flex items-center mx-auto"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add First Place
-                </button>
+                <p className="text-gray-600 mb-6">
+                  Paste a Google Maps place URL above to add your first place. 
+                  The system will automatically fetch all the place details for you!
+                </p>
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

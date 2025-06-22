@@ -309,12 +309,33 @@ export default function PackDetailPage() {
 
   // Handle payment
   const handlePayment = (pack: PinPack) => {
-    if (!cartItems.includes(pack.id)) {
-      addToCart(pack)
-    }
+    // For MVP, we'll simulate payment and add to purchased list for testing
+    // In production, you'd integrate with Stripe, PayPal, or other payment processors
     
-    console.log('Proceeding to payment for:', pack.title)
-    alert(`Payment feature coming soon! ${pack.title} has been added to your cart.`)
+    // Simulate successful payment
+    const confirmPayment = confirm(`Process payment for "${pack.title}" - $${pack.price}?\n\nThis is a test payment for demo purposes.`)
+    
+    if (confirmPayment) {
+      // Add pack to purchased list
+      const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+      if (!existingPurchases.includes(pack.id)) {
+        existingPurchases.push(pack.id)
+        localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
+        
+        // Remove from cart if it was there
+        const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
+        const updatedCart = existingCart.filter((item: any) => item.id !== pack.id)
+        localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
+        
+        // Show success message
+        alert(`🎉 Payment successful! "${pack.title}" has been added to your Pinventory. You can now access your places anytime from your collection.`)
+        
+        // Update local state
+        setCartItems(prev => prev.filter(id => id !== pack.id))
+      } else {
+        alert('You already own this pack! Check your Pinventory to access your places.')
+      }
+    }
   }
 
   // Navigate to another similar pack's detail page
@@ -327,6 +348,16 @@ export default function PackDetailPage() {
     if (!pack || pins.length === 0) return
 
     try {
+      // Add pack to purchased list for testing purposes (since it's free)
+      const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+      if (!existingPurchases.includes(pack.id)) {
+        existingPurchases.push(pack.id)
+        localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
+        
+        // Show success message
+        alert(`🎉 Free pack "${pack.title}" added to your Pinventory! You can now access it anytime from your collection.`)
+      }
+
       // Create a search query with all the places in the pack
       const placesQuery = pins
         .map(pin => `${pin.name || pin.title}, ${pack.city}`)
@@ -709,14 +740,7 @@ export default function PackDetailPage() {
                   </button>
                                   )}
                 
-                {/* Enhanced Export button */}
-                <button
-                  onClick={handleEnhancedExport}
-                  className="w-full btn-secondary flex items-center justify-center py-3 mt-4"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Get Your Places
-                </button>
+
               </div>
 
               {/* Pack metadata and statistics */}
