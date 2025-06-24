@@ -101,7 +101,7 @@ export default function PinventoryPage() {
       })
       
       // Merge both sources and remove duplicates
-      purchasedPackIds = [...new Set([...purchasedPackIds, ...validLocalIds])]
+      purchasedPackIds = Array.from(new Set([...purchasedPackIds, ...validLocalIds]))
       
       // Update localStorage if we found invalid UUIDs
       if (validLocalIds.length !== localStorageIds.length) {
