@@ -1,11 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight } from 'lucide-react'
+import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Check, AlertCircle } from 'lucide-react'
+import PayPalCheckout from '@/components/PayPalCheckout'
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [showPayPal, setShowPayPal] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle')
+  const [paymentMessage, setPaymentMessage] = useState('')
 
   useEffect(() => {
     // Load cart from localStorage
@@ -24,6 +28,86 @@ export default function CartPage() {
 
   const getTotal = () => {
     return cartItems.reduce((total, item) => total + item.price, 0)
+  }
+
+  // Handle successful PayPal payment
+  const handlePaymentSuccess = async (paymentData: any) => {
+    try {
+      setPaymentStatus('processing')
+      setPaymentMessage('Processing your payment...')
+
+      // First create the order in our database
+      const createOrderResponse = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cartItems: cartItems,
+          totalAmount: getTotal(),
+          processingFee: 0.99,
+          userLocation: 'Unknown', // You can get this from browser if needed
+          userIp: 'Unknown' // You can get this from server if needed
+        })
+      })
+
+      if (!createOrderResponse.ok) {
+        throw new Error('Failed to create order')
+      }
+
+      const { order } = await createOrderResponse.json()
+
+      // Then complete the order with PayPal details
+      const response = await fetch('/api/orders/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+          paypalOrderId: paymentData.orderID,
+          paypalPayerId: paymentData.payerID,
+          paypalPaymentId: paymentData.details?.id,
+          customerEmail: paymentData.details?.payer?.email_address,
+          customerName: paymentData.details?.payer?.name?.given_name + ' ' + 
+                      (paymentData.details?.payer?.name?.surname || ''),
+          paymentDetails: paymentData.details
+        })
+      })
+
+      if (response.ok) {
+        // Payment successful - clear cart and show success
+        setPaymentStatus('success')
+        setPaymentMessage('Payment successful! Your pin packs are now available.')
+        localStorage.removeItem('pinpacks_cart')
+        setCartItems([])
+        
+        // Redirect to a success page or show download links after a delay
+        setTimeout(() => {
+          window.location.href = '/dashboard'
+        }, 3000)
+      } else {
+        throw new Error('Failed to complete order')
+      }
+    } catch (error) {
+      console.error('Payment completion error:', error)
+      setPaymentStatus('error')
+      setPaymentMessage('Payment completed but there was an issue processing your order. Please contact support.')
+    }
+  }
+
+  // Handle PayPal payment errors
+  const handlePaymentError = (error: any) => {
+    console.error('PayPal payment error:', error)
+    setPaymentStatus('error')
+    setPaymentMessage('Payment failed. Please try again or contact support if the issue persists.')
+  }
+
+  // Start checkout process
+  const handleCheckout = () => {
+    setShowPayPal(true)
+    setPaymentStatus('idle')
+    setPaymentMessage('')
   }
 
   if (loading) {
@@ -167,10 +251,61 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <button className="w-full btn-primary py-3 text-base mb-4 flex items-center justify-center">
-                  <CreditCard className="h-5 w-5 mr-2" />
-                  Proceed to Checkout
-                </button>
+                {/* Payment Status Messages */}
+                {paymentMessage && (
+                  <div className={`p-4 rounded-lg mb-4 ${
+                    paymentStatus === 'success' 
+                      ? 'bg-green-50 border border-green-200' 
+                      : paymentStatus === 'error'
+                      ? 'bg-red-50 border border-red-200'
+                      : 'bg-blue-50 border border-blue-200'
+                  }`}>
+                    <div className="flex items-center">
+                      {paymentStatus === 'success' && <Check className="h-5 w-5 text-green-500 mr-2" />}
+                      {paymentStatus === 'error' && <AlertCircle className="h-5 w-5 text-red-500 mr-2" />}
+                      <p className={`text-sm ${
+                        paymentStatus === 'success' 
+                          ? 'text-green-800' 
+                          : paymentStatus === 'error'
+                          ? 'text-red-800'
+                          : 'text-blue-800'
+                      }`}>
+                        {paymentMessage}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Checkout Button or PayPal Component */}
+                {!showPayPal ? (
+                  <button 
+                    onClick={handleCheckout}
+                    className="w-full btn-primary py-3 text-base mb-4 flex items-center justify-center"
+                    disabled={paymentStatus === 'processing' || paymentStatus === 'success'}
+                  >
+                    <CreditCard className="h-5 w-5 mr-2" />
+                    Proceed to Checkout
+                  </button>
+                ) : (
+                  <div className="mb-4">
+                    <PayPalCheckout
+                      cartItems={cartItems}
+                      totalAmount={getTotal()}
+                      processingFee={0.99}
+                      onSuccess={handlePaymentSuccess}
+                      onError={handlePaymentError}
+                    />
+                    
+                    {/* Back to cart button */}
+                    <button
+                      onClick={() => setShowPayPal(false)}
+                      className="w-full mt-3 py-2 text-sm text-gray-600 hover:text-gray-800 underline"
+                      disabled={paymentStatus === 'processing'}
+                    >
+                      ← Back to cart
+                    </button>
+                  </div>
+                )}
 
                 <div className="text-center">
                   <a 

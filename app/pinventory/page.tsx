@@ -69,27 +69,44 @@ export default function PinventoryPage() {
     applyFilters()
   }, [purchasedPacks, searchTerm, selectedCountry, selectedCity, selectedCategory])
 
-  // Load purchased packs from localStorage and database
+  // Load purchased packs from database orders and localStorage (for backward compatibility)
   const loadPurchasedPacks = async () => {
     try {
       setLoading(true)
       
-      // For MVP, we'll use localStorage to track purchased packs
-      // In production, you'd want to use a proper purchases table in the database
-      let purchasedPackIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+      // Get purchased pack IDs from both sources
+      let purchasedPackIds: string[] = []
       
-      // Clean up invalid UUIDs (like "1" from previous tests)
-      // Valid UUIDs are 36 characters long with dashes in specific positions
-      const validUUIDs = purchasedPackIds.filter((id: string) => {
+      // 1. Get from database orders (new PayPal purchases)
+      const { data: orderItems, error: orderError } = await supabase
+        .from('order_items')
+        .select(`
+          pin_pack_id,
+          orders!inner(status)
+        `)
+        .eq('orders.status', 'completed')
+      
+      if (!orderError && orderItems) {
+        const databasePackIds = orderItems.map(item => item.pin_pack_id)
+        purchasedPackIds.push(...databasePackIds)
+      }
+      
+      // 2. Get from localStorage (old purchases and free packs)
+      const localStorageIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+      
+      // Clean up invalid UUIDs from localStorage
+      const validLocalIds = localStorageIds.filter((id: string) => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
         return typeof id === 'string' && uuidRegex.test(id)
       })
       
+      // Merge both sources and remove duplicates
+      purchasedPackIds = [...new Set([...purchasedPackIds, ...validLocalIds])]
+      
       // Update localStorage if we found invalid UUIDs
-      if (validUUIDs.length !== purchasedPackIds.length) {
-        localStorage.setItem('pinpacks_purchased', JSON.stringify(validUUIDs))
-        console.log(`Cleaned up ${purchasedPackIds.length - validUUIDs.length} invalid pack IDs from localStorage`)
-        purchasedPackIds = validUUIDs
+      if (validLocalIds.length !== localStorageIds.length) {
+        localStorage.setItem('pinpacks_purchased', JSON.stringify(validLocalIds))
+        console.log(`Cleaned up ${localStorageIds.length - validLocalIds.length} invalid pack IDs from localStorage`)
       }
       
       if (purchasedPackIds.length === 0) {
@@ -254,7 +271,7 @@ export default function PinventoryPage() {
 
   // Open My Maps import page
   const openMyMapsImportPage = () => {
-    window.open('https://www.google.com/maps/d/create', '_blank')
+    window.open('https://www.google.com/maps/d/', '_blank')
   }
 
   // Mark place as saved (for individual links flow)
