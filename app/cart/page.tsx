@@ -84,7 +84,7 @@ export default function CartPage() {
         
         // Redirect to a success page or show download links after a delay
         setTimeout(() => {
-          window.location.href = '/dashboard'
+          window.location.href = '/pinventory'
         }, 3000)
       } else {
         throw new Error('Failed to complete order')

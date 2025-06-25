@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Download, Star, Filter, Search, Calendar, Package, ExternalLink, X, CheckCircle, Smartphone, ChevronDown } from 'lucide-react'
+import { MapPin, Download, Star, Calendar, Package, ExternalLink, X, CheckCircle, Smartphone, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 
@@ -15,21 +15,12 @@ export default function PinventoryPage() {
   
   // Pack data state
   const [purchasedPacks, setPurchasedPacks] = useState<PinPack[]>([])
-  const [filteredPacks, setFilteredPacks] = useState<PinPack[]>([])
+  const [groupedPacks, setGroupedPacks] = useState<{[key: string]: PinPack[]}>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  // Filter state
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCountry, setSelectedCountry] = useState('')
-  const [selectedCity, setSelectedCity] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('')
-  const [showFilters, setShowFilters] = useState(false)
-  
-  // Available filter options (will be populated from data)
-  const [availableCountries, setAvailableCountries] = useState<string[]>([])
-  const [availableCities, setAvailableCities] = useState<string[]>([])
-  const [availableCategories] = useState<string[]>(['restaurants', 'cafes', 'attractions', 'shopping', 'nightlife', 'culture', 'nature', 'other'])
+  // Country expansion state
+  const [expandedCountries, setExpandedCountries] = useState<{[key: string]: boolean}>({})
   
   // Enhanced delivery modal state
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
@@ -64,10 +55,10 @@ export default function PinventoryPage() {
     }
   }, [isAuthenticated, router])
 
-  // Apply filters whenever filter criteria change
+  // Group packs by country when purchasedPacks changes
   useEffect(() => {
-    applyFilters()
-  }, [purchasedPacks, searchTerm, selectedCountry, selectedCity, selectedCategory])
+    groupPacksByCountry()
+  }, [purchasedPacks])
 
   // Load purchased packs from database orders and localStorage (for backward compatibility)
   const loadPurchasedPacks = async () => {
@@ -111,7 +102,7 @@ export default function PinventoryPage() {
       
       if (purchasedPackIds.length === 0) {
         setPurchasedPacks([])
-        setFilteredPacks([])
+        setGroupedPacks({})
         setLoading(false)
         return
       }
@@ -126,13 +117,6 @@ export default function PinventoryPage() {
 
       setPurchasedPacks(packsData || [])
       
-      // Extract unique countries and cities for filter options
-      const countries = Array.from(new Set(packsData?.map(pack => pack.country) || []))
-      const cities = Array.from(new Set(packsData?.map(pack => pack.city) || []))
-      
-      setAvailableCountries(countries)
-      setAvailableCities(cities)
-      
     } catch (err) {
       console.error('Error loading purchased packs:', err)
       setError('Failed to load your purchased packs. Please try again.')
@@ -141,46 +125,42 @@ export default function PinventoryPage() {
     }
   }
 
-  // Apply filters to the purchased packs
-  const applyFilters = () => {
-    let filtered = [...purchasedPacks]
-
-    // Search filter - searches in title, description, city, and country
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase()
-      filtered = filtered.filter(pack => 
-        pack.title.toLowerCase().includes(search) ||
-        pack.description?.toLowerCase().includes(search) ||
-        pack.city.toLowerCase().includes(search) ||
-        pack.country.toLowerCase().includes(search)
-      )
+  // Group packs by country
+  const groupPacksByCountry = () => {
+    const grouped: {[key: string]: PinPack[]} = {}
+    
+    purchasedPacks.forEach(pack => {
+      const country = pack.country
+      if (!grouped[country]) {
+        grouped[country] = []
+      }
+      grouped[country].push(pack)
+    })
+    
+    // Sort packs within each country by title
+    Object.keys(grouped).forEach(country => {
+      grouped[country].sort((a, b) => a.title.localeCompare(b.title))
+    })
+    
+    setGroupedPacks(grouped)
+    
+    // Auto-expand countries if there are only a few
+    const countries = Object.keys(grouped)
+    if (countries.length <= 3) {
+      const expanded: {[key: string]: boolean} = {}
+      countries.forEach(country => {
+        expanded[country] = true
+      })
+      setExpandedCountries(expanded)
     }
-
-    // Country filter
-    if (selectedCountry) {
-      filtered = filtered.filter(pack => pack.country === selectedCountry)
-    }
-
-    // City filter
-    if (selectedCity) {
-      filtered = filtered.filter(pack => pack.city === selectedCity)
-    }
-
-    // Category filter (this would need to be implemented in the pack data structure)
-    if (selectedCategory) {
-      // For now, this is a placeholder - you'd need to add category field to pin_packs table
-      // filtered = filtered.filter(pack => pack.category === selectedCategory)
-    }
-
-    setFilteredPacks(filtered)
   }
 
-  // Clear all filters
-  const clearFilters = () => {
-    setSearchTerm('')
-    setSelectedCountry('')
-    setSelectedCity('')
-    setSelectedCategory('')
+  // Toggle country expansion
+  const toggleCountry = (country: string) => {
+    setExpandedCountries(prev => ({
+      ...prev,
+      [country]: !prev[country]
+    }))
   }
 
   // Handle "Get Your Places" button click
@@ -364,219 +344,145 @@ export default function PinventoryPage() {
             </div>
             <div className="text-right">
               <div className="text-2xl font-bold text-coral-500">
-                {filteredPacks.length}
+                {Object.keys(groupedPacks).length}
               </div>
               <div className="text-sm text-gray-500">
-                {filteredPacks.length === 1 ? 'pack' : 'packs'} available
+                {Object.keys(groupedPacks).length === 1 ? 'country' : 'countries'} available
               </div>
             </div>
-          </div>
-
-          {/* Search and Filter Bar */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-            <div className="flex flex-col lg:flex-row gap-4">
-              {/* Search Input */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <input
-                  type="text"
-                  placeholder="Search your packs..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-coral-500 focus:border-coral-500 transition-colors"
-                />
-              </div>
-
-              {/* Filter Toggle Button */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`px-6 py-3 rounded-xl border transition-colors flex items-center ${
-                  showFilters 
-                    ? 'bg-coral-50 border-coral-200 text-coral-600' 
-                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <Filter className="h-5 w-5 mr-2" />
-                Filters
-                <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
-
-            {/* Filter Options */}
-            {showFilters && (
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Country Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-                    <select
-                      value={selectedCountry}
-                      onChange={(e) => setSelectedCountry(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
-                    >
-                      <option value="">All Countries</option>
-                      {availableCountries.map(country => (
-                        <option key={country} value={country}>{country}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* City Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                    <select
-                      value={selectedCity}
-                      onChange={(e) => setSelectedCity(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
-                    >
-                      <option value="">All Cities</option>
-                      {availableCities.map(city => (
-                        <option key={city} value={city}>{city}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Category Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Experience Type</label>
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
-                    >
-                      <option value="">All Types</option>
-                      {availableCategories.map(category => (
-                        <option key={category} value={category}>
-                          {category.charAt(0).toUpperCase() + category.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Clear Filters Button */}
-                {(searchTerm || selectedCountry || selectedCity || selectedCategory) && (
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      onClick={clearFilters}
-                      className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                    >
-                      Clear all filters
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Purchased Packs Grid */}
-        {filteredPacks.length === 0 ? (
+        {/* Country Grouped Packs */}
+        {Object.keys(groupedPacks).length === 0 ? (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-6">
               <Package className="h-8 w-8 text-gray-400" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              {purchasedPacks.length === 0 ? 'No packs purchased yet' : 'No packs match your filters'}
-            </h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No packs purchased yet</h3>
             <p className="text-gray-600 mb-8">
-              {purchasedPacks.length === 0 
-                ? 'Start exploring and purchase your first pin pack to see it here!'
-                : 'Try adjusting your search terms or filters to find what you\'re looking for.'
-              }
+              Start exploring and purchase your first pin pack to see it here!
             </p>
-            {purchasedPacks.length === 0 && (
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={() => router.push('/browse')}
-                  className="btn-primary"
-                >
-                  Browse Pin Packs
-                </button>
-                <button
-                  onClick={addTestPack}
-                  className="btn-secondary"
-                >
-                  Add Test Pack (Debug)
-                </button>
-              </div>
-            )}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => router.push('/browse')}
+                className="btn-primary"
+              >
+                Browse Pin Packs
+              </button>
+              <button
+                onClick={addTestPack}
+                className="btn-secondary"
+              >
+                Add Test Pack (Debug)
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPacks.map((pack) => (
-              <div key={pack.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                {/* Pack Image/Map */}
-                <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative">
-                  <div 
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e0e0e0' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #4facfe 100%)`,
-                      backgroundSize: '60px 60px, cover'
-                    }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-                    
-                    {/* Pin count badge */}
-                    <div className="absolute top-3 right-3">
-                      <span className="bg-white/90 backdrop-blur-sm text-gray-800 px-2 py-1 rounded-lg text-xs font-medium">
-                        {pack.pin_count} places
-                      </span>
+          <div className="space-y-8">
+            {Object.keys(groupedPacks).sort().map((country) => (
+              <div key={country} className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
+                {/* Country Header */}
+                <button
+                  onClick={() => toggleCountry(country)}
+                  className="w-full px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between text-left border-b border-gray-200"
+                >
+                  <div className="flex items-center">
+                    <div className="flex items-center mr-4">
+                      <MapPin className="h-5 w-5 text-coral-500 mr-2" />
+                      <h2 className="text-xl font-semibold text-gray-900">{country}</h2>
                     </div>
+                    <span className="bg-coral-100 text-coral-700 px-3 py-1 rounded-full text-sm font-medium">
+                      {groupedPacks[country].length} {groupedPacks[country].length === 1 ? 'pack' : 'packs'}
+                    </span>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${
+                    expandedCountries[country] ? 'rotate-180' : ''
+                  }`} />
+                </button>
 
-                    {/* Location badge */}
-                    <div className="absolute bottom-3 left-3 text-white">
-                      <div className="flex items-center text-sm">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {pack.city}, {pack.country}
-                      </div>
+                {/* Country Packs */}
+                {expandedCountries[country] && (
+                  <div className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {groupedPacks[country].map((pack) => (
+                        <div key={pack.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                          {/* Pack Image/Map */}
+                          <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative">
+                            <div 
+                              className="absolute inset-0 bg-cover bg-center"
+                              style={{
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e0e0e0' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #4facfe 100%)`,
+                                backgroundSize: '60px 60px, cover'
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+                              
+                              {/* Pin count badge */}
+                              <div className="absolute top-3 right-3">
+                                <span className="bg-white/90 backdrop-blur-sm text-gray-800 px-2 py-1 rounded-lg text-xs font-medium">
+                                  {pack.pin_count} places
+                                </span>
+                              </div>
+
+                              {/* Location badge */}
+                              <div className="absolute bottom-3 left-3 text-white">
+                                <div className="flex items-center text-sm">
+                                  <MapPin className="h-4 w-4 mr-1" />
+                                  {pack.city}, {pack.country}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Pack Details */}
+                          <div className="p-6">
+                            <div className="mb-4">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
+                                {pack.title}
+                              </h3>
+                              <p className="text-gray-600 text-sm line-clamp-2">
+                                {pack.description}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                              <div className="flex items-center">
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Purchased {new Date(pack.created_at).toLocaleDateString()}
+                              </div>
+                              <div className="flex items-center">
+                                <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
+                                <span>{pack.average_rating || 4.8}</span>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="space-y-3">
+                              {/* Get Your Places Button - Main CTA */}
+                              <button
+                                onClick={() => handleGetPlaces(pack)}
+                                className="w-full btn-primary flex items-center justify-center py-3"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Get Your Places
+                              </button>
+
+                              {/* View Pack Details Button */}
+                              <button
+                                onClick={() => router.push(`/pack/${pack.id}`)}
+                                className="w-full btn-secondary flex items-center justify-center py-2"
+                              >
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                View Details
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
-
-                {/* Pack Details */}
-                <div className="p-6">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
-                      {pack.title}
-                    </h3>
-                    <p className="text-gray-600 text-sm line-clamp-2">
-                      {pack.description}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      Purchased {new Date(pack.created_at).toLocaleDateString()}
-                    </div>
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
-                      <span>{pack.average_rating || 4.8}</span>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="space-y-3">
-                    {/* Get Your Places Button - Main CTA */}
-                    <button
-                      onClick={() => handleGetPlaces(pack)}
-                      className="w-full btn-primary flex items-center justify-center py-3"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Get Your Places
-                    </button>
-
-                    {/* View Pack Details Button */}
-                    <button
-                      onClick={() => router.push(`/pack/${pack.id}`)}
-                      className="w-full btn-secondary flex items-center justify-center py-2"
-                    >
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      View Details
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
             ))}
           </div>

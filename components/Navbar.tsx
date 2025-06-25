@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useState } from 'react'
 import { MapPin, Home, Compass, User, Settings, LogOut } from 'lucide-react'
@@ -71,20 +70,18 @@ export default function Navbar({ userRole: initialRole }: NavbarProps) {
               <span className="text-sm text-gray-600">Buyer</span>
               <Switch
                 checked={userRole === 'seller'}
-                onCheckedChange={(checked) => setUserRole(checked ? 'seller' : 'buyer')}
+                onCheckedChange={(checked: boolean) => setUserRole(checked ? 'seller' : 'buyer')}
               />
               <span className="text-sm text-gray-600">Seller</span>
             </div>
 
             {/* Settings and Logout */}
-            <Link href="/settings">
-              <Button variant="ghost" size="icon">
-                <Settings className="h-5 w-5" />
-              </Button>
+            <Link href="/settings" className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
+              <Settings className="h-5 w-5" />
             </Link>
-            <Button variant="ghost" size="icon">
+            <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
               <LogOut className="h-5 w-5" />
-            </Button>
+            </button>
           </div>
         </div>
       </div>

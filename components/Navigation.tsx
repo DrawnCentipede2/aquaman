@@ -201,17 +201,10 @@ export default function Navigation() {
                 <ShoppingCart className="h-4 w-4 inline mr-1" />
                 Cart
               </a>
-              <a href="/pinventory" className={getLinkClasses('/pinventory')}>
-                <Package className="h-4 w-4 inline mr-1" />
-                Pinventory
-              </a>
-              <a href="/create" className={getLinkClasses('/create')}>
-                <Plus className="h-4 w-4 inline mr-1" />
-                Create Pack
-              </a>
-              <a href="/manage" className={getLinkClasses('/manage')}>
-                <Package className="h-4 w-4 inline mr-1" />
-                Manage Packs
+
+              <a href="/sell" className={getLinkClasses('/sell')}>
+                <DollarSign className="h-4 w-4 inline mr-1" />
+                Sell like a local
               </a>
             </>
           ) : (
@@ -327,6 +320,16 @@ export default function Navigation() {
                       </button>
                       
                       <div className="border-t border-gray-100 my-2"></div>
+                      
+                      {/* Pinventory */}
+                      <a
+                        href="/pinventory"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Package className="h-4 w-4 mr-3 text-gray-500" />
+                        Pinventory
+                      </a>
                       
                       {/* Payment Methods */}
                       <button

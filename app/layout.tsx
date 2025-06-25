@@ -37,9 +37,17 @@ export default function RootLayout({
                       PinPacks
                     </span>
                   </a>
-                  <span className="ml-3 px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full hidden sm:inline-block">
+                  <span 
+                    id="tagline" 
+                    className="ml-3 px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded-full hidden sm:inline-block transition-opacity duration-300"
+                  >
                     by locals, for travelers
                   </span>
+                </div>
+
+                {/* Center Search Bar - Only show on browse page */}
+                <div className="flex-1 max-w-2xl mx-8 hidden md:block" id="header-search-container">
+                  {/* This will be populated by the browse page */}
                 </div>
                 
                 {/* Navigation */}

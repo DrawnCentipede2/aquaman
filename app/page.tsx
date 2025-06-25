@@ -212,7 +212,7 @@ export default function LandingPage() {
               className="btn-outline border-white text-white hover:bg-white hover:text-coral-500 inline-flex items-center text-lg px-8 py-4"
             >
               <Heart className="h-5 w-5 mr-2" />
-              Share your city
+              Create Pack
             </a>
           </div>
         </div>
