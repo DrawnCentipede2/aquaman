@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
@@ -12,11 +12,20 @@ export default function BrowsePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeSearchTerm, setActiveSearchTerm] = useState('') // Only updated when user explicitly searches
   const [hasSearched, setHasSearched] = useState(false)
   
   // Autocomplete state
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1) // For keyboard navigation
+  const selectedIndexRef = useRef(-1) // Keep track of current selection synchronously
+  
+  // Debug selectedSuggestionIndex changes
+  useEffect(() => {
+    selectedIndexRef.current = selectedSuggestionIndex
+    console.log('🔍 selectedSuggestionIndex changed to:', selectedSuggestionIndex)
+  }, [selectedSuggestionIndex])
   
   // Enhanced filter states
   const [starRatingFilter, setStarRatingFilter] = useState('all')
@@ -36,13 +45,14 @@ export default function BrowsePage() {
 
   // Handle search button click
   const handleSearch = () => {
+    setActiveSearchTerm(searchTerm) // Set the active search term for filtering
     setHasSearched(true)
     setShowSuggestions(false)
   }
 
   // Generate autocomplete suggestions
   const generateSuggestions = (query: string) => {
-    if (!query.trim() || query.length < 2) {
+    if (!query.trim() || query.length < 1) {
       setSuggestions([])
       setShowSuggestions(false)
       return
@@ -82,6 +92,7 @@ export default function BrowsePage() {
   // Handle suggestion click
   const handleSuggestionClick = (suggestion: string) => {
     setSearchTerm(suggestion)
+    setActiveSearchTerm(suggestion) // Set the active search term for filtering
     setShowSuggestions(false)
     setHasSearched(true)
   }
@@ -95,6 +106,7 @@ export default function BrowsePage() {
     const searchParam = urlParams.get('search')
     if (searchParam) {
       setSearchTerm(searchParam)
+      setActiveSearchTerm(searchParam) // Set the active search term for filtering
       setHasSearched(true)
     }
   }, [])
@@ -108,7 +120,7 @@ export default function BrowsePage() {
     }
     
     const headerContainer = document.getElementById('header-search-container')
-    if (headerContainer) {
+    if (headerContainer && !document.getElementById('header-search-input')) {
       headerContainer.innerHTML = `
         <div class="flex items-center gap-4">
           <div class="w-full max-w-md relative" id="search-input-container">
@@ -121,9 +133,10 @@ export default function BrowsePage() {
                 placeholder="Search destinations, cities..."
                 id="header-search-input"
                 class="flex-1 border-none outline-none text-gray-700 text-sm placeholder-gray-400 bg-transparent py-3 pr-3"
+                autocomplete="off"
               />
             </div>
-            <div id="suggestions-dropdown" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 max-h-64 overflow-y-auto hidden"></div>
+            <div id="suggestions-dropdown" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 hidden"></div>
           </div>
           <button 
             id="header-search-button"
@@ -140,18 +153,18 @@ export default function BrowsePage() {
       const suggestionsDropdown = document.getElementById('suggestions-dropdown')
       
       if (searchInput && searchButton && suggestionsDropdown) {
-        // Set current search term
-        searchInput.value = searchTerm
-        
         // Input change handler
         const handleInputChange = (e: Event) => {
           const value = (e.target as HTMLInputElement).value
           setSearchTerm(value)
-          generateHeaderSuggestions(value, suggestionsDropdown)
+          selectedIndexRef.current = -1 // Reset selection when typing
+          setSelectedSuggestionIndex(-1)
+          generateHeaderSuggestions(value, suggestionsDropdown, -1)
         }
         
         // Search button click handler
         const handleSearchClick = () => {
+          setActiveSearchTerm(searchInput.value) // Set the active search term for filtering
           setHasSearched(true)
           setShowSuggestions(false)
           suggestionsDropdown.classList.add('hidden')
@@ -159,19 +172,70 @@ export default function BrowsePage() {
         
         // Enter key handler
         const handleKeyDown = (e: KeyboardEvent) => {
-          if (e.key === 'Enter') {
-            handleSearchClick()
+          const isDropdownVisible = !suggestionsDropdown.classList.contains('hidden')
+          const suggestions = suggestionsDropdown.querySelectorAll('button')
+          const suggestionsCount = suggestions.length
+
+          // Debug key navigation
+          if (['ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) {
+            console.log('🔍 Key navigation:', { key: e.key, selectedIndex: selectedIndexRef.current, suggestionsCount })
           }
-          if (e.key === 'Escape') {
-            setShowSuggestions(false)
-            suggestionsDropdown.classList.add('hidden')
-          }
+
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            if (isDropdownVisible && suggestionsCount > 0) {
+              const currentIndex = selectedIndexRef.current === -1 ? -1 : selectedIndexRef.current
+              const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
+              console.log('🔍 ArrowDown:', { prev: currentIndex, new: newIndex })
+              selectedIndexRef.current = newIndex
+              setSelectedSuggestionIndex(newIndex)
+              generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
+            }
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            if (isDropdownVisible && suggestionsCount > 0) {
+              const currentIndex = selectedIndexRef.current === -1 ? suggestionsCount : selectedIndexRef.current
+              const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
+              console.log('🔍 ArrowUp:', { prev: currentIndex, new: newIndex })
+              selectedIndexRef.current = newIndex
+              setSelectedSuggestionIndex(newIndex)
+              generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
+            }
+                                  } else if (e.key === 'Enter') {
+              e.preventDefault()
+              if (isDropdownVisible && suggestionsCount > 0 && selectedIndexRef.current >= 0) {
+                const selectedButton = suggestions[selectedIndexRef.current] as HTMLButtonElement
+                console.log('🔍 Enter: selecting suggestion', selectedIndexRef.current)
+                if (selectedButton) {
+                  selectedButton.click()
+                }
+              } else {
+                console.log('🔍 Enter: triggering search')
+                handleSearchClick()
+              }
+            } else if (e.key === 'Escape') {
+              setShowSuggestions(false)
+              selectedIndexRef.current = -1
+              setSelectedSuggestionIndex(-1)
+              suggestionsDropdown.classList.add('hidden')
+            } else {
+              // Reset selection when typing
+              selectedIndexRef.current = -1
+              setSelectedSuggestionIndex(-1)
+            }
         }
         
         // Focus handler
         const handleFocus = () => {
-          if (searchInput.value.length >= 2) {
-            generateHeaderSuggestions(searchInput.value, suggestionsDropdown)
+          if (searchInput.value.length >= 1) {
+            // Don't reset selection if dropdown is already visible
+            if (suggestionsDropdown.classList.contains('hidden')) {
+              selectedIndexRef.current = -1
+              setSelectedSuggestionIndex(-1)
+              generateHeaderSuggestions(searchInput.value, suggestionsDropdown, -1)
+            } else {
+              generateHeaderSuggestions(searchInput.value, suggestionsDropdown)
+            }
           }
         }
         
@@ -179,8 +243,16 @@ export default function BrowsePage() {
         const handleBlur = () => {
           setTimeout(() => {
             setShowSuggestions(false)
+            selectedIndexRef.current = -1 // Reset selection when hiding dropdown
+            setSelectedSuggestionIndex(-1)
             suggestionsDropdown.classList.add('hidden')
           }, 200)
+        }
+        
+        // Reset suggestion index handler
+        const handleResetSuggestionIndex = () => {
+          selectedIndexRef.current = -1
+          setSelectedSuggestionIndex(-1)
         }
         
         // Add event listeners
@@ -189,15 +261,7 @@ export default function BrowsePage() {
         searchInput.addEventListener('focus', handleFocus)
         searchInput.addEventListener('blur', handleBlur)
         searchButton.addEventListener('click', handleSearchClick)
-        
-        // Cleanup function
-        return () => {
-          searchInput.removeEventListener('input', handleInputChange)
-          searchInput.removeEventListener('keydown', handleKeyDown)
-          searchInput.removeEventListener('focus', handleFocus)
-          searchInput.removeEventListener('blur', handleBlur)
-          searchButton.removeEventListener('click', handleSearchClick)
-        }
+        window.addEventListener('resetSuggestionIndex', handleResetSuggestionIndex)
       }
     }
     
@@ -214,47 +278,196 @@ export default function BrowsePage() {
         tagline.style.display = ''
       }
     }
+  }, []) // Removed searchTerm dependency to prevent re-creating the input
+
+  // Separate useEffect to update the input value without recreating the element
+  useEffect(() => {
+    const searchInput = document.getElementById('header-search-input') as HTMLInputElement
+    if (searchInput && searchInput.value !== searchTerm) {
+      searchInput.value = searchTerm
+    }
   }, [searchTerm])
 
-  // Helper function to generate suggestions in the header
-  const generateHeaderSuggestions = (query: string, dropdownElement: HTMLElement) => {
-    if (!query.trim() || query.length < 2) {
+  // Enhanced suggestion system with popular destinations and activities
+  const generateHeaderSuggestions = (query: string, dropdownElement: HTMLElement, forceSelectedIndex?: number) => {
+    const currentSelectedIndex = forceSelectedIndex !== undefined ? forceSelectedIndex : selectedSuggestionIndex
+    if (!query.trim() || query.length < 1) {
       dropdownElement.classList.add('hidden')
       return
     }
 
     const searchQuery = query.toLowerCase()
-    const allSuggestions: string[] = []
+    type SuggestionType = {text: string, type: 'destination' | 'activity' | 'pack' | 'city' | 'country', context: string}
+    const allSuggestions: SuggestionType[] = []
     
-    // Get suggestions from pack titles, cities, and countries
-    pinPacks.forEach(pack => {
-      if (pack.title.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push(pack.title)
-      }
-      if (pack.city.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push(pack.city + ', ' + pack.country)
-      }
-      if (pack.country.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push(pack.country)
+    // Popular destinations worldwide (simulating regional relevance)
+    const popularDestinations = [
+      // Europe
+      'Amsterdam, Netherlands', 'Athens, Greece', 'Barcelona, Spain', 'Berlin, Germany', 'Budapest, Hungary',
+      'Copenhagen, Denmark', 'Dublin, Ireland', 'Edinburgh, Scotland', 'Florence, Italy', 'Geneva, Switzerland',
+      'Lisbon, Portugal', 'London, England', 'Madrid, Spain', 'Munich, Germany', 'Paris, France',
+      'Prague, Czech Republic', 'Rome, Italy', 'Stockholm, Sweden', 'Vienna, Austria', 'Zurich, Switzerland',
+      
+      // Asia
+      'Bangkok, Thailand', 'Beijing, China', 'Delhi, India', 'Hong Kong', 'Jakarta, Indonesia',
+      'Kuala Lumpur, Malaysia', 'Mumbai, India', 'Seoul, South Korea', 'Shanghai, China', 'Singapore',
+      'Tokyo, Japan', 'Osaka, Japan', 'Manila, Philippines', 'Ho Chi Minh City, Vietnam', 'Taipei, Taiwan',
+      
+      // Americas
+      'Buenos Aires, Argentina', 'Chicago, USA', 'Los Angeles, USA', 'Mexico City, Mexico', 'Montreal, Canada',
+      'New York, USA', 'San Francisco, USA', 'São Paulo, Brazil', 'Toronto, Canada', 'Vancouver, Canada',
+      'Miami, USA', 'Las Vegas, USA', 'Rio de Janeiro, Brazil', 'Lima, Peru', 'Bogotá, Colombia',
+      
+      // Africa & Middle East
+      'Cairo, Egypt', 'Cape Town, South Africa', 'Dubai, UAE', 'Istanbul, Turkey', 'Johannesburg, South Africa',
+      'Marrakech, Morocco', 'Tel Aviv, Israel', 'Casablanca, Morocco', 'Nairobi, Kenya', 'Lagos, Nigeria',
+      
+      // Oceania
+      'Auckland, New Zealand', 'Melbourne, Australia', 'Sydney, Australia', 'Wellington, New Zealand'
+    ]
+
+    // Popular activities and experiences
+    const popularActivities = [
+      'Art galleries and museums', 'Beach and coastal areas', 'Cafes and coffee shops', 'Cultural experiences',
+      'Food markets and street food', 'Historical landmarks', 'Local neighborhoods', 'Music and nightlife',
+      'Nature and parks', 'Photography spots', 'Rooftop bars and views', 'Shopping districts',
+      'Adventure activities', 'Architectural tours', 'Brewery and wine tours', 'Cooking classes',
+      'Day trips and excursions', 'Family-friendly activities', 'Festivals and events', 'Gardens and botanical areas',
+      'Hidden gems and local secrets', 'Hiking and outdoor activities', 'Markets and bazaars', 'Spa and wellness',
+      'Sports and recreation', 'Street art and murals', 'Sunset and sunrise spots', 'Traditional crafts',
+      'Underground and alternative scenes', 'Vintage and antique shopping', 'Walking tours', 'Waterfront activities'
+    ]
+
+    // Countries for broader search
+    const countries = [
+      'Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 'Chile',
+      'China', 'Colombia', 'Croatia', 'Czech Republic', 'Denmark', 'Egypt', 'England', 'Estonia', 'Finland',
+      'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Ireland', 'Israel', 'Italy',
+      'Japan', 'Kenya', 'Latvia', 'Lithuania', 'Malaysia', 'Mexico', 'Morocco', 'Netherlands', 'New Zealand',
+      'Norway', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Romania', 'Scotland', 'Singapore', 'Slovakia',
+      'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Taiwan', 'Thailand',
+      'Turkey', 'Ukraine', 'United States', 'Vietnam', 'Wales'
+    ]
+
+    // Add matching destinations (split into cities)
+    popularDestinations.forEach(destination => {
+      if (destination.toLowerCase().includes(searchQuery)) {
+        const [city, country] = destination.split(', ')
+        // Add the city with country context
+        allSuggestions.push({ text: city, type: 'city', context: country })
       }
     })
 
-    const uniqueSuggestions = Array.from(new Set(allSuggestions)).slice(0, 6)
+    // Add matching activities
+    popularActivities.forEach(activity => {
+      if (activity.toLowerCase().includes(searchQuery)) {
+        allSuggestions.push({ text: activity, type: 'activity', context: '' })
+      }
+    })
+
+    // Add matching countries
+    countries.forEach(country => {
+      if (country.toLowerCase().includes(searchQuery)) {
+        allSuggestions.push({ text: country, type: 'country', context: '' })
+      }
+    })
+
+    // Add suggestions from existing pin pack data
+    pinPacks.forEach(pack => {
+      // Add pack titles
+      if (pack.title.toLowerCase().includes(searchQuery)) {
+        allSuggestions.push({ text: pack.title, type: 'pack', context: '' })
+      }
+      // Add cities from packs
+      if (pack.city.toLowerCase().includes(searchQuery)) {
+        allSuggestions.push({ text: pack.city, type: 'city', context: pack.country })
+      }
+      // Add countries from packs  
+      if (pack.country.toLowerCase().includes(searchQuery)) {
+        allSuggestions.push({ text: pack.country, type: 'country', context: '' })
+      }
+    })
+
+    // Remove duplicates and sort by relevance
+    const uniqueSuggestions = Array.from(
+      new Map(allSuggestions.map(item => [item.text, item])).values()
+    )
+
+    // Sort suggestions by relevance (exact matches first, then starts with, then contains)
+    const sortedSuggestions = uniqueSuggestions.sort((a, b) => {
+      const aText = a.text.toLowerCase()
+      const bText = b.text.toLowerCase()
+      
+      // Exact match
+      if (aText === searchQuery) return -1
+      if (bText === searchQuery) return 1
+      
+      // Starts with
+      if (aText.startsWith(searchQuery) && !bText.startsWith(searchQuery)) return -1
+      if (bText.startsWith(searchQuery) && !aText.startsWith(searchQuery)) return 1
+      
+      // Prioritize cities and countries over activities and packs
+      const priorityOrder: Record<string, number> = { 'city': 1, 'country': 2, 'pack': 3, 'activity': 4, 'destination': 5 }
+      const aPriority = priorityOrder[a.type] || 5
+      const bPriority = priorityOrder[b.type] || 5
+      
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority
+      }
+      
+      return 0
+    }).slice(0, 5) // Limit to 5 suggestions
     
-    if (uniqueSuggestions.length > 0) {
-      dropdownElement.innerHTML = uniqueSuggestions.map(suggestion => `
-        <button
-          class="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors first:rounded-t-xl last:rounded-b-xl"
-          onclick="document.getElementById('header-search-input').value='${suggestion}'; this.parentElement.classList.add('hidden'); window.dispatchEvent(new CustomEvent('headerSuggestionClick', {detail: '${suggestion}'}));"
-        >
-          <div class="flex items-center">
-            <svg class="h-3 w-3 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
-            <span class="text-sm text-gray-700">${suggestion}</span>
-          </div>
-        </button>
-      `).join('')
+    if (sortedSuggestions.length > 0) {
+      dropdownElement.innerHTML = sortedSuggestions.map((suggestion, index) => {
+        // Check if this suggestion is currently selected via keyboard
+        const isSelected = currentSelectedIndex === index
+        // Debug: Log suggestion rendering
+        if (index === 0) console.log('🔍 Rendering suggestions with selectedIndex:', currentSelectedIndex)
+        
+        const icon = suggestion.type === 'destination' || suggestion.type === 'city' ? 
+          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>` :
+          suggestion.type === 'activity' ?
+          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>` :
+          suggestion.type === 'country' ?
+          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>` :
+          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>`
+
+        const typeLabel = suggestion.type === 'city' && suggestion.context ? `City in ${suggestion.context}` :
+                         suggestion.type === 'country' ? 'Country' :
+                         suggestion.type === 'activity' ? 'Activity' :
+                         suggestion.type === 'pack' ? 'Pin Pack' : 'Destination'
+
+        // Add keyboard selection styling
+        const baseClasses = "w-full text-left px-4 py-3 transition-all duration-200 first:rounded-t-xl last:rounded-b-xl group"
+        const selectionClasses = isSelected 
+          ? "bg-gray-100 shadow-sm" 
+          : "hover:bg-gray-50 hover:shadow-sm"
+
+        return `
+          <button
+            class="${baseClasses} ${selectionClasses}"
+            onclick="document.getElementById('header-search-input').value='${suggestion.text.replace(/'/g, "\\'")}'; this.parentElement.classList.add('hidden'); window.dispatchEvent(new CustomEvent('headerSuggestionClick', {detail: '${suggestion.text.replace(/'/g, "\\'")}'})); window.dispatchEvent(new CustomEvent('resetSuggestionIndex'));"
+          >
+            <div class="flex items-center">
+              ${icon}
+              <div class="flex flex-col">
+                <span class="text-sm text-gray-700 transition-colors">${suggestion.text}</span>
+                <span class="text-xs text-gray-400 transition-colors">${typeLabel}</span>
+              </div>
+            </div>
+          </button>
+        `
+      }).join('')
       dropdownElement.classList.remove('hidden')
     } else {
       dropdownElement.classList.add('hidden')
@@ -265,6 +478,8 @@ export default function BrowsePage() {
   useEffect(() => {
     const handleHeaderSuggestionClick = (e: CustomEvent) => {
       setSearchTerm(e.detail)
+      setActiveSearchTerm(e.detail) // Set the active search term for filtering
+      setSelectedSuggestionIndex(-1) // Reset selection after choosing
       setHasSearched(true)
     }
     
@@ -308,18 +523,31 @@ export default function BrowsePage() {
     }
   }, [])
 
-  // Enhanced filter and sorting logic when any filter changes
+  // Enhanced filter and sorting logic - only runs when user has searched or other filters change
   useEffect(() => {
     let filtered = pinPacks
 
-    // Search term filter
-    if (searchTerm) {
-      filtered = filtered.filter(pack => 
-        pack.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pack.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pack.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pack.country.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    // Only apply search term filter if user has explicitly searched
+    if (activeSearchTerm) {
+      const searchLower = activeSearchTerm.toLowerCase()
+      filtered = filtered.filter(pack => {
+        // Check if it's a combined "City, Country" search
+        if (searchLower.includes(',')) {
+          const [cityPart, countryPart] = searchLower.split(',').map(s => s.trim())
+          return (
+            (pack.city.toLowerCase().includes(cityPart) || cityPart.includes(pack.city.toLowerCase())) &&
+            (pack.country.toLowerCase().includes(countryPart) || countryPart.includes(pack.country.toLowerCase()))
+          )
+        }
+        
+        // Regular search across all fields
+        return (
+          pack.title.toLowerCase().includes(searchLower) ||
+          pack.description.toLowerCase().includes(searchLower) ||
+          pack.city.toLowerCase().includes(searchLower) ||
+          pack.country.toLowerCase().includes(searchLower)
+        )
+      })
     }
 
     // Star rating filter (based on calculated rating)
@@ -385,7 +613,7 @@ export default function BrowsePage() {
     }
 
     setFilteredPacks(filtered)
-  }, [pinPacks, searchTerm, starRatingFilter, pinCountFilter, categoryFilter, sortBy])
+  }, [pinPacks, activeSearchTerm, starRatingFilter, pinCountFilter, categoryFilter, sortBy])
 
   // Function to fetch pin packs from Supabase database
   const loadPinPacks = async () => {
@@ -468,6 +696,7 @@ export default function BrowsePage() {
   // Clear all filters
   const clearFilters = () => {
     setSearchTerm('')
+    setActiveSearchTerm('') // Also clear the active search term
     setHasSearched(false)
     setStarRatingFilter('all')
     setPinCountFilter('all')
@@ -496,15 +725,16 @@ export default function BrowsePage() {
           <div className="flex items-center justify-between">
             {/* Results summary */}
             <div className="flex-1">
-              {(hasSearched || searchTerm) ? (
+              {hasSearched && activeSearchTerm ? (
                 <p className="text-sm text-gray-600">
-                  {loading ? 'Searching...' : 
-                   searchTerm ? `${filteredPacks.length} results for "${searchTerm}"` :
-                   `${filteredPacks.length} places available`}
+                  {loading ? 'Searching...' : `${filteredPacks.length} results for "${activeSearchTerm}"`}
                 </p>
               ) : (
                 <p className="text-sm text-gray-600">
                   {loading ? 'Loading...' : `${filteredPacks.length} places available`}
+                  {searchTerm && !hasSearched && (
+                    <span className="ml-2 text-coral-600 font-medium">• Type and press search to filter results</span>
+                  )}
                 </p>
               )}
             </div>

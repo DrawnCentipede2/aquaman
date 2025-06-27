@@ -565,10 +565,16 @@ export default function SellPage() {
           </AnimatedSection>
 
           {/* FAQ Accordion */}
-          <div className="space-y-4">
-            {faqs.map((faq, index) => (
-              <AnimatedSection key={index} delay={200 + index * 100}>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 transform transition-all duration-300 hover:shadow-md">
+          <AnimatedSection delay={200}>
+            <div className="space-y-4">
+              {faqs.map((faq, index) => (
+                <div 
+                  key={index} 
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 transform transition-all duration-300 hover:shadow-md animate-fade-in-up"
+                  style={{
+                    animationDelay: `${index * 100}ms`
+                  }}
+                >
                   <button
                     onClick={() => setOpenFAQ(openFAQ === index ? null : index)}
                     className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 transition-all duration-200 rounded-xl"
@@ -588,9 +594,9 @@ export default function SellPage() {
                     </div>
                   )}
                 </div>
-              </AnimatedSection>
-            ))}
-          </div>
+              ))}
+            </div>
+          </AnimatedSection>
         </div>
       </AnimatedSection>
 
