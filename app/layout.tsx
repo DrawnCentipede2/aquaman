@@ -95,7 +95,7 @@ export default function RootLayout({
                     Support
                   </h3>
                   <ul className="space-y-3">
-                    <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Help center</a></li>
+                    <li><a href="/help" className="text-gray-600 hover:text-gray-900 transition-colors">Help center</a></li>
                     <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Contact us</a></li>
                     <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Safety</a></li>
                   </ul>

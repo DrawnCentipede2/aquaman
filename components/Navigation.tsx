@@ -1,14 +1,42 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { User, Plus, Heart, ShoppingCart, Package, Settings, ChevronDown, Globe, DollarSign, Bell, HelpCircle, LogOut, X, Check, CreditCard, Shield, Lock } from 'lucide-react'
 
+// Function to check authentication status immediately
+const getInitialAuthState = () => {
+  if (typeof window === 'undefined') return { isAuthenticated: false, userProfile: null }
+  
+  try {
+    const userProfileData = localStorage.getItem('pinpacks_user_profile')
+    if (userProfileData) {
+      const parsedProfile = JSON.parse(userProfileData)
+      return { isAuthenticated: true, userProfile: parsedProfile }
+    }
+  } catch (error) {
+    console.warn('Error parsing initial auth state:', error)
+    // Clean up corrupted data
+    localStorage.removeItem('pinpacks_user_profile')
+  }
+  
+  return { isAuthenticated: false, userProfile: null }
+}
+
 export default function Navigation() {
   const pathname = usePathname()
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // null = checking, false = not auth, true = auth
+  
+  // Track if component has mounted to prevent hydration mismatch
+  const [isMounted, setIsMounted] = useState(false)
+  
+  // Initialize with false to match server-side rendering
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  
+  // Login popup state
+  const [showLoginPopup, setShowLoginPopup] = useState(false)
   
   // Modal states for settings popups
   const [showCurrencyModal, setShowCurrencyModal] = useState(false)
@@ -44,34 +72,51 @@ export default function Navigation() {
     { code: 'zh', name: '中文', regions: ['China', 'Taiwan', 'Hong Kong'] }
   ]
 
-  // Check authentication status immediately on mount
+  // Check authentication and load preferences on mount
   useEffect(() => {
-    const checkAuth = () => {
-      const userProfileData = localStorage.getItem('pinpacks_user_profile')
-      if (userProfileData) {
-        setUserProfile(JSON.parse(userProfileData))
-        setIsAuthenticated(true)
+    // Mark component as mounted
+    setIsMounted(true)
+    
+    // Check authentication state after mounting
+    const initialAuthState = getInitialAuthState()
+    setIsAuthenticated(initialAuthState.isAuthenticated)
+    setUserProfile(initialAuthState.userProfile)
+    
+    // Load saved preferences if user is authenticated
+    if (initialAuthState.isAuthenticated) {
+      const savedCurrency = localStorage.getItem('pinpacks_currency') || 'USD'
+      const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
+      const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
+      setSelectedCurrency(savedCurrency)
+      setSelectedLanguage(savedLanguage)
+      setSelectedRegion(savedRegion)
+    }
+    
+    // Listen for storage changes (when user signs in/out in another tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'pinpacks_user_profile') {
+        console.log('User profile storage changed, updating auth state')
+        const newAuthState = getInitialAuthState()
+        setIsAuthenticated(newAuthState.isAuthenticated)
+        setUserProfile(newAuthState.userProfile)
         
-        // Load saved preferences
-        const savedCurrency = localStorage.getItem('pinpacks_currency') || 'USD'
-        const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
-        const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
-        setSelectedCurrency(savedCurrency)
-        setSelectedLanguage(savedLanguage)
-        setSelectedRegion(savedRegion)
-      } else {
-        setUserProfile(null)
-        setIsAuthenticated(false)
+        // Load preferences if newly authenticated
+        if (newAuthState.isAuthenticated) {
+          const savedCurrency = localStorage.getItem('pinpacks_currency') || 'USD'
+          const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
+          const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
+          setSelectedCurrency(savedCurrency)
+          setSelectedLanguage(savedLanguage)
+          setSelectedRegion(savedRegion)
+        }
       }
     }
     
-    // Check immediately without delay
-    checkAuth()
+    window.addEventListener('storage', handleStorageChange)
     
-    // Listen for storage changes (when user signs in/out)
-    window.addEventListener('storage', checkAuth)
-    
-    return () => window.removeEventListener('storage', checkAuth)
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+    }
   }, [])
 
   // Close dropdown when clicking outside
@@ -94,6 +139,7 @@ export default function Navigation() {
       const languageModal = document.getElementById('language-modal')
       const paymentModal = document.getElementById('payment-modal')
       const privacyModal = document.getElementById('privacy-modal')
+      const loginPopup = document.getElementById('login-popup')
       
       if (currencyModal && !currencyModal.contains(event.target as Node)) {
         setShowCurrencyModal(false)
@@ -106,6 +152,9 @@ export default function Navigation() {
       }
       if (privacyModal && !privacyModal.contains(event.target as Node)) {
         setShowPrivacyModal(false)
+      }
+      if (loginPopup && !loginPopup.contains(event.target as Node)) {
+        setShowLoginPopup(false)
       }
     }
 
@@ -148,6 +197,16 @@ export default function Navigation() {
     window.location.href = '/'
   }
 
+  // Handle protected actions (show login popup if not authenticated)
+  const handleProtectedAction = (e: React.MouseEvent, href: string) => {
+    e.preventDefault()
+    if (isAuthenticated) {
+      window.location.href = href
+    } else {
+      setShowLoginPopup(true)
+    }
+  }
+
   // Handle currency selection
   const handleCurrencySelect = (currency: any) => {
     setSelectedCurrency(currency.code)
@@ -168,18 +227,110 @@ export default function Navigation() {
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language, region } }))
   }
 
-  // Don't render anything until we've checked authentication status
-  if (isAuthenticated === null) {
+  // Show loading state during hydration to prevent mismatch
+  if (!isMounted) {
     return (
       <nav className="flex items-center space-x-1">
-        {/* Show a minimal loading state */}
+        {/* Loading state - exact same navigation structure with normal colors */}
         <div className="hidden md:flex items-center space-x-1">
-          <div className="px-4 py-2 text-sm font-medium text-gray-400 rounded-full">
-            Loading...
-          </div>
+          <a href="/browse" className={getLinkClasses('/browse')}>
+            Browse
+          </a>
+          
+          <a 
+            href="/wishlist" 
+            className={getLinkClasses('/wishlist')}
+            onClick={(e) => {
+              e.preventDefault()
+              // During loading, just prevent default - no popup yet
+            }}
+          >
+            <Heart className="h-4 w-4 inline mr-1" />
+            Wishlist
+          </a>
+          
+          <a 
+            href="/cart" 
+            className={getLinkClasses('/cart')}
+            onClick={(e) => {
+              e.preventDefault()
+              // During loading, just prevent default - no popup yet
+            }}
+          >
+            <ShoppingCart className="h-4 w-4 inline mr-1" />
+            Cart
+          </a>
+
+          <a href="/sell" className={getLinkClasses('/sell')}>
+            <DollarSign className="h-4 w-4 inline mr-1" />
+            Sell like a local
+          </a>
         </div>
-        <div className="flex items-center space-x-3 ml-6 pl-6 border-l border-gray-200">
-          <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+        
+        {/* Right side actions - Identical Profile button during loading */}
+        <div 
+          className="flex items-center space-x-3 ml-6 pl-6 border-l border-gray-200" 
+          style={{ 
+            opacity: 1, 
+            visibility: 'visible',
+            display: 'flex'
+          } as React.CSSProperties}
+        >
+          {/* Identical Profile button - prevents any visual change */}
+          <div className="relative">
+            <button
+              onClick={() => {}} // No functionality during loading
+              style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                borderRadius: '9999px',
+                opacity: 1,
+                color: '#374151',
+                backgroundColor: 'transparent',
+                cursor: 'pointer',
+                border: 'none',
+                outline: 'none'
+              } as React.CSSProperties}
+            >
+              <div 
+                style={{ 
+                  width: '2rem',
+                  height: '2rem',
+                  borderRadius: '50%',
+                  backgroundColor: '#ef4444', // Same red color
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold'
+                }}
+              >
+                                 <User style={{ width: '1rem', height: '1rem' }} />
+               </div>
+               <div 
+                 className="hidden sm:block"
+                 style={{
+                   fontSize: '0.875rem',
+                   fontWeight: '500',
+                   color: '#111827'
+                 } as React.CSSProperties}
+               >
+                 Profile
+               </div>
+               <ChevronDown 
+                 style={{ 
+                   width: '1rem', 
+                   height: '1rem',
+                   color: '#6b7280'
+                 }}
+              />
+            </button>
+          </div>
         </div>
       </nav>
     )
@@ -188,85 +339,147 @@ export default function Navigation() {
   return (
     <>
       <nav className="flex items-center space-x-1">
-        {/* Main navigation links - different for authenticated vs non-authenticated */}
+        {/* Main navigation links - consistent for all users */}
         <div className="hidden md:flex items-center space-x-1">
-          {isAuthenticated ? (
-            <>
-              {/* Authenticated Navigation */}
-              <a href="/wishlist" className={getLinkClasses('/wishlist')}>
-                <Heart className="h-4 w-4 inline mr-1" />
-                Wishlist
-              </a>
-              <a href="/cart" className={getLinkClasses('/cart')}>
-                <ShoppingCart className="h-4 w-4 inline mr-1" />
-                Cart
-              </a>
+          {/* Always visible navigation - no conditional rendering */}
+          <a href="/browse" className={getLinkClasses('/browse')}>
+            Browse
+          </a>
+          
+          <a 
+            href="/wishlist" 
+            className={getLinkClasses('/wishlist')}
+            onClick={(e) => handleProtectedAction(e, '/wishlist')}
+          >
+            <Heart className="h-4 w-4 inline mr-1" />
+            Wishlist
+          </a>
+          
+          <a 
+            href="/cart" 
+            className={getLinkClasses('/cart')}
+            onClick={(e) => handleProtectedAction(e, '/cart')}
+          >
+            <ShoppingCart className="h-4 w-4 inline mr-1" />
+            Cart
+          </a>
 
-              <a href="/sell" className={getLinkClasses('/sell')}>
-                <DollarSign className="h-4 w-4 inline mr-1" />
-                Sell like a local
-              </a>
-            </>
-          ) : (
-            <>
-              {/* Non-authenticated Navigation - just browse options */}
-              <a href="/" className={getLinkClasses('/')}>
-                Home
-              </a>
-              <a href="/browse" className={getLinkClasses('/browse')}>
-                Browse
-              </a>
-            </>
-          )}
+          <a href="/sell" className={getLinkClasses('/sell')}>
+            <DollarSign className="h-4 w-4 inline mr-1" />
+            Sell like a local
+          </a>
         </div>
 
-        {/* Right side actions - Different based on authentication */}
-        <div className="flex items-center space-x-3 ml-6 pl-6 border-l border-gray-200">
-          {!isAuthenticated ? (
-            <>
-              {/* Not authenticated - Show Sign In and Create Pack (different pages) */}
-              <a 
-                href="/auth" 
-                className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all duration-200"
+        {/* Right side actions - Consistent Profile button for all users */}
+        <div 
+          className="flex items-center space-x-3 ml-6 pl-6 border-l border-gray-200" 
+          style={{ 
+            opacity: 1, 
+            visibility: 'visible',
+            display: 'flex'
+          } as React.CSSProperties}
+        >
+          {/* Single Profile button - completely static, no loading states */}
+          <div className="relative" id="profile-dropdown">
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                borderRadius: '9999px',
+                transition: 'background-color 0.2s',
+                opacity: 1,
+                color: '#374151',
+                backgroundColor: 'transparent',
+                cursor: 'pointer',
+                border: 'none',
+                outline: 'none'
+              } as React.CSSProperties}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <div 
+                style={{ 
+                  width: '2rem',
+                  height: '2rem',
+                  borderRadius: '50%',
+                  backgroundColor: '#ef4444', // Red color instead of orange
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold'
+                }}
               >
-                <User className="h-4 w-4" />
-                <span className="hidden sm:inline">Sign In</span>
-              </a>
-
-              <a 
-                href="/signup"
-                className="inline-flex items-center space-x-2 btn-primary text-sm font-semibold shadow-lg"
+                <User style={{ width: '1rem', height: '1rem' }} />
+              </div>
+              <div 
+                className="hidden sm:block"
+                style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  color: '#111827'
+                } as React.CSSProperties}
               >
-                <Plus className="h-4 w-4" />
-                <span>Join Now</span>
-              </a>
-            </>
-          ) : (
-            <>
-              {/* Authenticated - Show Profile Dropdown */}
-              <div className="relative" id="profile-dropdown">
-                <button
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all duration-200"
-                >
-                  <div className="w-8 h-8 bg-coral-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                    {userProfile?.name?.charAt(0).toUpperCase() || userProfile?.email?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                  <div className="hidden sm:block">
-                    <div className="text-sm font-medium text-gray-900">
-                      {userProfile?.name || userProfile?.email?.split('@')[0] || 'Profile'}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Account Settings
-                    </div>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
+                Profile
+              </div>
+              <ChevronDown 
+                style={{ 
+                  width: '1rem', 
+                  height: '1rem',
+                  color: '#6b7280',
+                  transition: 'transform 0.2s',
+                  transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                }}
+              />
+            </button>
 
-                {/* Dropdown Menu */}
-                {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
-                    {/* Profile Section */}
+            {/* Dropdown Menu - Different content based on authentication */}
+            {isDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
+                {!isAuthenticated ? (
+                  <>
+                    {/* Not authenticated - Show login options */}
+                    <div className="px-4 py-3 border-b border-gray-100 text-center">
+                      <div className="w-12 h-12 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <User className="h-6 w-6 text-coral-600" />
+                      </div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                        Join PinPacks
+                      </h3>
+                      <p className="text-xs text-gray-600">
+                        Sign in to access your account
+                      </p>
+                    </div>
+                    
+                    <div className="py-2 space-y-1">
+                      <a
+                        href="/auth"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <User className="h-4 w-4 mr-3 text-gray-500" />
+                        Sign In
+                      </a>
+                      
+                      <a
+                        href="/signup"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center w-full px-4 py-3 text-sm font-medium text-coral-600 hover:bg-coral-50 transition-colors"
+                      >
+                        <Plus className="h-4 w-4 mr-3 text-coral-500" />
+                        Create Account
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Authenticated - Show profile section */}
                     <div className="px-4 py-3 border-b border-gray-100">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-coral-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
@@ -367,15 +580,14 @@ export default function Navigation() {
                       </button>
                       
                       {/* Support */}
-                      <button
-                        onClick={() => {
-                          alert('Support Options:\n\n• Email: support@pinpacks.com\n• Live Chat: Available 9am-5pm EST\n• Help Center: pinpacks.com/help\n\nWe\'re here to help!')
-                        }}
+                      <Link 
+                        href="/help"
+                        onClick={() => setIsDropdownOpen(false)}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         <HelpCircle className="h-4 w-4 mr-3 text-gray-500" />
                         Support
-                      </button>
+                      </Link>
                     </div>
 
                     {/* Sign Out */}
@@ -388,11 +600,11 @@ export default function Navigation() {
                         Sign Out
                       </button>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Mobile menu button - only show on mobile */}
@@ -683,6 +895,61 @@ export default function Navigation() {
                   and{' '}
                   <button className="text-coral-500 hover:underline">Terms of Service</button>{' '}
                   for more details.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login Required Popup */}
+      {showLoginPopup && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" id="login-popup">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Sign in required</h2>
+              <button
+                onClick={() => setShowLoginPopup(false)}
+                className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+              >
+                <X className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User className="h-8 w-8 text-coral-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Join PinPacks to continue
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Sign in to access your wishlist, cart, and start collecting amazing local experiences.
+                </p>
+                
+                <div className="space-y-3">
+                  <a
+                    href="/auth"
+                    className="w-full flex items-center justify-center px-4 py-3 bg-coral-600 text-white rounded-xl hover:bg-coral-700 transition-colors font-semibold"
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    Sign In
+                  </a>
+                  
+                  <a
+                    href="/signup"
+                    className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Account
+                  </a>
+                </div>
+                
+                <p className="text-xs text-gray-500 mt-4">
+                  You can browse packs without signing in, but you'll need an account to save favorites and make purchases.
                 </p>
               </div>
             </div>

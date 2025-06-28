@@ -3,6 +3,50 @@
 import { useState, useEffect, useRef } from 'react'
 import { DollarSign, Users, Globe, Star, TrendingUp, CheckCircle, Heart, MapPin, Package, ArrowRight, Play, ChevronDown, ChevronUp, BarChart3, Target, Shield, Clock, Coffee, Camera, Utensils, Car } from 'lucide-react'
 
+// Hook for counter animation - counts from 0 to target value
+const useCounterAnimation = (targetValue: number, duration: number = 2000, shouldStart: boolean = false) => {
+  const [currentValue, setCurrentValue] = useState(0)
+  const [isAnimating, setIsAnimating] = useState(false)
+
+  useEffect(() => {
+    if (!shouldStart || isAnimating) return
+
+    setIsAnimating(true)
+    let startTime: number | null = null
+    let animationId: number
+
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp
+      const progress = Math.min((timestamp - startTime) / duration, 1)
+      
+      // Use easeOut animation for smooth effect
+      const easeOut = 1 - Math.pow(1 - progress, 3)
+      const current = Math.floor(easeOut * targetValue)
+      
+      setCurrentValue(current)
+      
+      if (progress < 1) {
+        animationId = requestAnimationFrame(animate)
+      } else {
+        setCurrentValue(targetValue)
+        setIsAnimating(false)
+      }
+    }
+
+    animationId = requestAnimationFrame(animate)
+
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId)
+      }
+    }
+  }, [targetValue, duration, shouldStart, isAnimating])
+
+  // If animation hasn't started yet, show the target value instead of 0
+  // This prevents showing zeros while waiting for intersection observer
+  return shouldStart ? currentValue : targetValue
+}
+
 // Custom hook for scroll animations
 const useScrollAnimation = (threshold = 0.1, rootMargin = '0px 0px -50px 0px') => {
   const elementRef = useRef<HTMLDivElement>(null)
@@ -63,12 +107,93 @@ const AnimatedSection = ({
   )
 }
 
+// Animated stat component with counter animation
+const AnimatedStat = ({ 
+  value, 
+  label, 
+  shouldStart = false,
+  delay = 0 
+}: { 
+  value: string
+  label: string
+  shouldStart?: boolean
+  delay?: number
+}) => {
+  // Parse numeric value from string (e.g., "25,000+" -> 25000)
+  const parseValue = (val: string): number => {
+    // Handle decimal values (like ratings)
+    if (val.includes('.') && !val.includes('M') && !val.includes('K')) {
+      return parseFloat(val) * 10 // Multiply by 10 for smoother animation
+    }
+    
+    // Remove symbols and convert to number
+    const cleanValue = val.replace(/[+$,MK]/g, '')
+    const numValue = parseFloat(cleanValue)
+    
+    // Handle multipliers
+    if (val.includes('M')) {
+      return numValue * 1000000
+    } else if (val.includes('K')) {
+      return numValue * 1000
+    }
+    return numValue
+  }
+
+  // Format number back to display format
+  const formatValue = (num: number, originalFormat: string): string => {
+    if (originalFormat.includes('M')) {
+      return `$${(num / 1000000).toFixed(1)}M+`
+    } else if (originalFormat.includes('.') && !originalFormat.includes('M') && !originalFormat.includes('K')) {
+      return (num / 10).toFixed(1) // For ratings like 4.8
+    } else if (originalFormat.includes('K') || (num >= 1000 && originalFormat.includes('+'))) {
+      return `${Math.floor(num / 1000).toLocaleString()},${String(num % 1000).padStart(3, '0')}+`
+    } else if (originalFormat.includes('$')) {
+      return `$${num.toLocaleString()}+`
+    }
+    return num.toLocaleString() + (originalFormat.includes('+') ? '+' : '')
+  }
+
+  const targetValue = parseValue(value)
+  const animatedValue = useCounterAnimation(
+    targetValue, 
+    2000 + delay, // Stagger animation timing
+    shouldStart
+  )
+
+  return (
+    <div>
+      <div className="text-3xl md:text-4xl font-bold">
+        {formatValue(animatedValue, value)}
+      </div>
+      <div className="text-sm opacity-80">{label}</div>
+    </div>
+  )
+}
+
+// Function to get initial user location to prevent hydration mismatch
+const getInitialLocation = () => {
+  if (typeof window === 'undefined') return 'your city'
+  
+  try {
+    const userProfile = localStorage.getItem('pinpacks_user_profile')
+    if (userProfile) {
+      const profile = JSON.parse(userProfile)
+      return profile.location || 'your city'
+    }
+  } catch (error) {
+    console.warn('Error parsing user profile for location:', error)
+  }
+  
+  return 'your city'
+}
+
 export default function SellPage() {
-  const [userLocation, setUserLocation] = useState('your city')
+  const [userLocation, setUserLocation] = useState(getInitialLocation())
   const [openFAQ, setOpenFAQ] = useState<number | null>(null)
   const [currentTestimonial, setCurrentTestimonial] = useState(0)
+  const [shouldAnimateStats, setShouldAnimateStats] = useState(false)
 
-  // Remove sticky navigation behavior for sell page
+  // Remove sticky navigation behavior for sell page (normal scrolling)
   useEffect(() => {
     const header = document.querySelector('header')
     if (header) {
@@ -87,19 +212,17 @@ export default function SellPage() {
     return cleanup
   }, [])
 
-  // Get user's location for personalized earnings
+  // Listen for location changes (when user updates profile in another tab)
   useEffect(() => {
-    const userProfile = localStorage.getItem('pinpacks_user_profile')
-    if (userProfile) {
-      try {
-        const profile = JSON.parse(userProfile)
-        if (profile.location) {
-          setUserLocation(profile.location)
-        }
-      } catch (error) {
-        console.error('Error parsing user profile:', error)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'pinpacks_user_profile') {
+        const newLocation = getInitialLocation()
+        setUserLocation(newLocation)
       }
     }
+    
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   // Testimonials data - Real seller feedback examples
@@ -173,8 +296,32 @@ export default function SellPage() {
     averageRating: "4.8"
   }
 
+  // Intersection observer for stats animation - improved triggering
+  const statsRef = useRef<HTMLDivElement>(null)
+  
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !shouldAnimateStats) {
+          console.log('Stats section is visible, starting animation!')
+          setShouldAnimateStats(true)
+        }
+      },
+      {
+        threshold: 0.1, // Trigger when only 10% of stats section is visible  
+        rootMargin: '0px 0px -50px 0px' // Start animation earlier
+      }
+    )
+
+    if (statsRef.current) {
+      observer.observe(statsRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [shouldAnimateStats])
+
   return (
-    <div className="min-h-screen bg-gray-25">
+    <div className="min-h-screen bg-gray-25 sell-page">
       {/* Hero Section - Immediate load, no animation needed */}
       <div className="bg-gradient-to-br from-coral-500 via-coral-400 to-orange-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -196,24 +343,35 @@ export default function SellPage() {
               </button>
             </div>
 
-            {/* Quick stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-              <div>
-                <div className="text-3xl md:text-4xl font-bold">{stats.packsCreated}</div>
-                <div className="text-sm opacity-80">Packs Created</div>
-              </div>
-              <div>
-                <div className="text-3xl md:text-4xl font-bold">{stats.travelersHelped}</div>
-                <div className="text-sm opacity-80">Travelers Helped</div>
-              </div>
-              <div>
-                <div className="text-3xl md:text-4xl font-bold">{stats.totalEarnings}</div>
-                <div className="text-sm opacity-80">Paid to Locals</div>
-              </div>
-              <div>
-                <div className="text-3xl md:text-4xl font-bold">{stats.averageRating}</div>
-                <div className="text-sm opacity-80">Average Rating</div>
-              </div>
+            {/* Quick stats with counter animation */}
+            <div 
+              ref={statsRef}
+              className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto"
+            >
+              <AnimatedStat 
+                value={stats.packsCreated} 
+                label="Packs Created" 
+                shouldStart={shouldAnimateStats}
+                delay={0}
+              />
+              <AnimatedStat 
+                value={stats.travelersHelped} 
+                label="Travelers Helped" 
+                shouldStart={shouldAnimateStats}
+                delay={200}
+              />
+              <AnimatedStat 
+                value={stats.totalEarnings} 
+                label="Paid to Locals" 
+                shouldStart={shouldAnimateStats}
+                delay={400}
+              />
+              <AnimatedStat 
+                value={stats.averageRating} 
+                label="Average Rating" 
+                shouldStart={shouldAnimateStats}
+                delay={600}
+              />
             </div>
           </div>
         </div>
