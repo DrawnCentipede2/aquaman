@@ -1,0 +1,438 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useParams } from 'next/navigation'
+import { MapPin, Star, Users, Heart, Calendar, Globe, MessageCircle, Shield, ArrowLeft, User } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import type { PinPack } from '@/lib/supabase'
+
+export default function CreatorProfilePage() {
+  const params = useParams()
+  const creatorId = params.id as string
+  
+  const [creatorPacks, setCreatorPacks] = useState<PinPack[]>([])
+  const [loading, setLoading] = useState(true)
+  const [wishlistItems, setWishlistItems] = useState<string[]>([])
+
+  // Static stats to avoid hydration errors
+  const [creatorStats, setCreatorStats] = useState({
+    reviews: 243,
+    rating: 4.9,
+    yearsCreating: 5
+  })
+  
+  // Mock creator data - in production this would come from a creators table
+  const creator = {
+    id: creatorId,
+    name: creatorId === 'local-expert' ? 'Local Expert' : 'Maria Rodriguez',
+    location: 'Barcelona, Spain',
+    profilePicture: null,
+    bio: `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for over 8 years, I know all the hidden gems that locals love. I specialize in creating curated experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.
+
+I work as a local tourism guide and have helped hundreds of travelers experience the true essence of our city. When I'm not creating pin packs, you can find me exploring new neighborhoods, trying local restaurants, or chatting with longtime residents to discover even more hidden treasures.
+
+My packs are carefully crafted based on years of exploration and conversations with locals. Each location is personally vetted and represents something special about our local culture.`,
+    work: 'Local tourism guide & cultural enthusiast',
+    languages: ['English', 'Spanish', 'Catalan', 'French'],
+    verified: true,
+    joinDate: '2019-03-15',
+    reviews: creatorStats.reviews,
+    rating: creatorStats.rating,
+    yearsCreating: creatorStats.yearsCreating,
+    totalPacks: 0,
+    totalDownloads: 0
+  }
+
+  useEffect(() => {
+    loadCreatorPacks()
+    loadWishlist()
+  }, [creatorId])
+
+  const loadWishlist = () => {
+    const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+    if (savedWishlist) {
+      try {
+        const wishlist = JSON.parse(savedWishlist)
+        const wishlistIds = wishlist.map((item: any) => item.id)
+        setWishlistItems(wishlistIds)
+      } catch (error) {
+        console.error('Error loading wishlist:', error)
+      }
+    }
+  }
+
+  const loadCreatorPacks = async () => {
+    try {
+      setLoading(true)
+      
+      // Load all packs (in production, filter by creator_id)
+      const { data: packsData, error } = await supabase
+        .from('pin_packs')
+        .select('*')
+        .limit(10)
+
+      if (error) throw error
+      
+      setCreatorPacks(packsData || [])
+      
+    } catch (error) {
+      console.error('Error loading creator packs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggleWishlist = (pack: PinPack) => {
+    const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+    let currentWishlist = savedWishlist ? JSON.parse(savedWishlist) : []
+    
+    const isInWishlist = currentWishlist.some((item: any) => item.id === pack.id)
+    
+    if (isInWishlist) {
+      currentWishlist = currentWishlist.filter((item: any) => item.id !== pack.id)
+      setWishlistItems(prev => prev.filter(id => id !== pack.id))
+    } else {
+      currentWishlist.push(pack)
+      setWishlistItems(prev => [...prev, pack.id])
+    }
+    
+    localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
+  }
+
+  // Calculate stats
+  const totalDownloads = creatorPacks.reduce((sum, pack) => sum + (pack.download_count || 0), 0)
+
+  return (
+    <div className="min-h-screen bg-gray-25">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2" />
+            Back
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Creator Profile Header */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm mb-8">
+          <div className="flex flex-col md:flex-row md:items-start space-y-6 md:space-y-0 md:space-x-8">
+            {/* Profile Picture */}
+            <div className="relative flex-shrink-0">
+              <div className="w-32 h-32 bg-gradient-to-br from-coral-500 to-primary-500 rounded-full flex items-center justify-center text-white text-4xl font-bold">
+                {creator.name.charAt(0).toUpperCase()}
+              </div>
+              {/* Verification badge */}
+              <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-coral-500 rounded-full flex items-center justify-center border-4 border-white">
+                <Shield className="h-4 w-4 text-white" />
+              </div>
+            </div>
+
+            {/* Creator Info */}
+            <div className="flex-1">
+              <div className="flex items-center space-x-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">{creator.name}</h1>
+                <span className="bg-coral-100 text-coral-700 text-sm font-medium px-3 py-1 rounded-full">
+                  Superhost
+                </span>
+              </div>
+
+              <div className="flex items-center text-gray-600 mb-4">
+                <MapPin className="h-5 w-5 mr-2" />
+                <span className="text-lg">{creator.location}</span>
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{creator.reviews}</div>
+                  <div className="text-gray-500 text-sm">Reviews</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900 flex items-center justify-center">
+                    {creator.rating.toFixed(1)}
+                    <Star className="h-5 w-5 text-yellow-400 fill-current ml-1" />
+                  </div>
+                  <div className="text-gray-500 text-sm">Rating</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{creatorPacks.length}</div>
+                  <div className="text-gray-500 text-sm">Pin Packs</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{totalDownloads}</div>
+                  <div className="text-gray-500 text-sm">Downloads</div>
+                </div>
+              </div>
+
+              {/* Creator Details */}
+              <div className="space-y-3">
+                <div className="flex items-center text-gray-600">
+                  <MessageCircle className="h-4 w-4 mr-3" />
+                  <span>{creator.work}</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <Globe className="h-4 w-4 mr-3" />
+                  <span>Speaks {creator.languages.join(', ')}</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <Calendar className="h-4 w-4 mr-3" />
+                  <span>Creating since {new Date(creator.joinDate).getFullYear()}</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <Shield className="h-4 w-4 mr-3" />
+                  <span className="underline">Identity verified</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bio Section */}
+          <div className="mt-8 pt-8 border-t border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">About {creator.name}</h2>
+            <div className="prose prose-gray max-w-none">
+              {creator.bio.split('\n\n').map((paragraph, index) => (
+                <p key={index} className="text-gray-600 leading-relaxed mb-4">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Creator Reviews Section */}
+        <div className="bg-white rounded-2xl p-8 shadow-sm mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Reviews for {creator.name}
+            </h2>
+            <div className="flex items-center space-x-2">
+              <Star className="h-5 w-5 text-yellow-400 fill-current" />
+              <span className="text-lg font-semibold">{creator.rating.toFixed(1)}</span>
+              <span className="text-gray-500">({creator.reviews} reviews)</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Review 1 */}
+            <div className="border border-gray-200 rounded-xl p-6">
+              <div className="flex items-start space-x-4 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                  SC
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900">Sarah Chen</h4>
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-3">March 2024</p>
+                  <p className="text-gray-700 leading-relaxed">
+                    "{creator.name} created the most amazing pin pack for our Berlin trip! Every recommendation was spot-on. 
+                    As a local expert, they really know the hidden gems that tourists never find. Highly recommend working with them!"
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Review 2 */}
+            <div className="border border-gray-200 rounded-xl p-6">
+              <div className="flex items-start space-x-4 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                  MR
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900">Miguel Rodriguez</h4>
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-3">February 2024</p>
+                  <p className="text-gray-700 leading-relaxed">
+                    "Incredible local knowledge! {creator.name} responds quickly to questions and their pack descriptions are so detailed. 
+                    You can tell they really care about giving travelers an authentic experience. Will definitely use their packs again!"
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Review 3 */}
+            <div className="border border-gray-200 rounded-xl p-6">
+              <div className="flex items-start space-x-4 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                  EW
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900">Emma Wilson</h4>
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: 4 }, (_, i) => (
+                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
+                      ))}
+                      <Star className="h-4 w-4 text-gray-300 fill-current" />
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-3">January 2024</p>
+                  <p className="text-gray-700 leading-relaxed">
+                    "Really helpful recommendations from a true local. Some places were closed when I visited but overall the pack was great. 
+                    {creator.name} clearly knows the city well and provides good context for each location."
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Review 4 */}
+            <div className="border border-gray-200 rounded-xl p-6">
+              <div className="flex items-start space-x-4 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                  JD
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900">James Davis</h4>
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-3">December 2023</p>
+                  <p className="text-gray-700 leading-relaxed">
+                    "Outstanding service! {creator.name} went above and beyond to help us plan our itinerary. 
+                    The pin pack saved us so much research time and led us to places we never would have found otherwise. True professional!"
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Show more reviews button */}
+          <div className="text-center mt-8">
+            <button className="btn-secondary px-6 py-3 hover:border-coral-300 hover:text-coral-600">
+              Show more reviews
+            </button>
+          </div>
+        </div>
+
+        {/* Creator's Packs */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              {creator.name}'s Pin Packs
+            </h2>
+            <div className="text-gray-500">
+              {creatorPacks.length} pack{creatorPacks.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
+              </div>
+              <p className="text-gray-600">Loading packs...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {creatorPacks.map((pack) => (
+                <div 
+                  key={pack.id}
+                  onClick={() => window.location.href = `/pack/${pack.id}`}
+                  className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200 overflow-hidden cursor-pointer group"
+                >
+                  {/* Pack Image */}
+                  <div className="relative h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
+                    <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
+                      <img 
+                        src="/google-maps-bg.svg"
+                        alt="Map background"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                    </div>
+                    
+                    {/* Wishlist button */}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleWishlist(pack)
+                      }}
+                      className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors shadow-sm z-10"
+                    >
+                      <Heart 
+                        className={`h-4 w-4 transition-colors ${
+                          wishlistItems.includes(pack.id) 
+                            ? 'text-coral-500 fill-current' 
+                            : 'text-gray-700 group-hover:text-coral-500'
+                        }`} 
+                      />
+                    </button>
+                    
+                    {/* Pin count */}
+                    <div className="absolute bottom-3 right-3">
+                      <span className="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
+                        {pack.pin_count} pins
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Pack Content */}
+                  <div className="p-6">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-coral-600 transition-colors">
+                          {pack.title}
+                        </h3>
+                        <p className="text-sm text-gray-500 flex items-center mt-1">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          {pack.city}, {pack.country}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
+                      {pack.description}
+                    </p>
+                    
+                    {/* Pack footer */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
+                        <span className="text-sm text-gray-600">{((pack.download_count || 0) % 50 + 350) / 100}</span>
+                      </div>
+                      <div className="text-lg font-bold text-gray-900">
+                        {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {creatorPacks.length === 0 && !loading && (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-6">
+                <User className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No packs yet</h3>
+              <p className="text-gray-600">
+                This creator hasn't published any pin packs yet. Check back soon!
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+} 

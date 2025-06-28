@@ -170,11 +170,11 @@ export default function Navigation() {
     return pathname.startsWith(path)
   }
 
-  // Get navigation link classes with Airbnb styling
+  // Get navigation link classes with animated coral underline
   const getLinkClasses = (path: string) => {
-    const baseClasses = "px-4 py-2 text-sm font-medium transition-all duration-200 rounded-full hover:bg-gray-100 relative"
+    const baseClasses = "px-4 py-2 text-sm font-medium transition-all duration-200 rounded-full relative nav-link"
     if (isActivePath(path)) {
-      return `${baseClasses} text-coral-500 bg-coral-50 hover:bg-coral-100`
+      return `${baseClasses} text-gray-900 nav-link-active`
     }
     return `${baseClasses} text-gray-700 hover:text-gray-900`
   }

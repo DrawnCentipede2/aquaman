@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders } from 'lucide-react'
+import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders, CheckCircle, ShoppingCart, CreditCard, Package } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+import PayPalCheckout from '@/components/PayPalCheckout'
 
 export default function BrowsePage() {
   // State for storing pin packs from database
@@ -39,6 +40,22 @@ export default function BrowsePage() {
   
   // Wishlist state - track which items are in wishlist
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
+  
+  // Cart success state for showing success banner
+  const [cartSuccess, setCartSuccess] = useState(false)
+  const [addedPack, setAddedPack] = useState<{
+    id: string
+    title: string
+    price: string
+    city: string
+    country: string
+    pin_count: string
+  } | null>(null)
+  const [countdownTime, setCountdownTime] = useState('24:00')
+  
+  // Payment success state
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  const [showPayPalModal, setShowPayPalModal] = useState(false)
   
   // Get unique values for filter options
   const categories = ['Solo Travel', 'Couple', 'Family', 'Friends Group', 'Business Travel', 'Adventure', 'Relaxation', 'Cultural', 'Food & Drink', 'Nightlife']
@@ -109,7 +126,71 @@ export default function BrowsePage() {
       setActiveSearchTerm(searchParam) // Set the active search term for filtering
       setHasSearched(true)
     }
+    
+    // Check for cart success parameters
+    const cartSuccessParam = urlParams.get('cart_success')
+    if (cartSuccessParam === 'true') {
+      const packId = urlParams.get('added_pack_id')
+      const packTitle = urlParams.get('added_pack_title')
+      const packPrice = urlParams.get('added_pack_price')
+      const packCity = urlParams.get('added_pack_city')
+      const packCountry = urlParams.get('added_pack_country')
+      const packPinCount = urlParams.get('added_pack_pin_count')
+      
+      if (packId && packTitle) {
+        setCartSuccess(true)
+        setAddedPack({
+          id: packId,
+          title: packTitle,
+          price: packPrice || '0',
+          city: packCity || '',
+          country: packCountry || '',
+          pin_count: packPinCount || '0'
+        })
+        
+        // Clean up URL by removing cart success parameters
+        const cleanUrl = new URL(window.location.href)
+        cleanUrl.searchParams.delete('cart_success')
+        cleanUrl.searchParams.delete('added_pack_id')
+        cleanUrl.searchParams.delete('added_pack_title')
+        cleanUrl.searchParams.delete('added_pack_price')
+        cleanUrl.searchParams.delete('added_pack_city')
+        cleanUrl.searchParams.delete('added_pack_country')
+        cleanUrl.searchParams.delete('added_pack_pin_count')
+        
+        // Update URL without reloading the page
+        window.history.replaceState({}, '', cleanUrl.toString())
+      }
+    }
   }, [])
+
+  // Countdown timer for cart success banner
+  useEffect(() => {
+    if (!cartSuccess) return
+    
+    const startTime = Date.now()
+    const duration = 24 * 60 * 1000 // 24 minutes in milliseconds
+    
+    const updateCountdown = () => {
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, duration - elapsed)
+      
+      if (remaining === 0) {
+        setCartSuccess(false)
+        setAddedPack(null)
+        return
+      }
+      
+      const minutes = Math.floor(remaining / (60 * 1000))
+      const seconds = Math.floor((remaining % (60 * 1000)) / 1000)
+      setCountdownTime(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+    }
+    
+    updateCountdown() // Initial update
+    const interval = setInterval(updateCountdown, 1000)
+    
+    return () => clearInterval(interval)
+  }, [cartSuccess])
 
   // Mount search bar in header when component mounts and hide tagline
   useEffect(() => {
@@ -716,6 +797,48 @@ export default function BrowsePage() {
     return count
   }
 
+  // PayPal success handler
+  const handlePayPalSuccess = async (orderData: any) => {
+    try {
+      console.log('PayPal payment successful:', orderData)
+      
+      if (addedPack) {
+        // Add to purchased list
+        const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+        if (!existingPurchases.includes(addedPack.id)) {
+          existingPurchases.push(addedPack.id)
+          localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
+        }
+        
+        // Remove from cart since it's now purchased
+        const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
+        const updatedCart = existingCart.filter((item: any) => item.id !== addedPack.id)
+        localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
+        
+        // Close PayPal modal and cart success banner
+        setShowPayPalModal(false)
+        setCartSuccess(false)
+        
+        // Show payment success
+        setPaymentSuccess(true)
+        
+        // Auto-hide payment success after 8 seconds
+        setTimeout(() => {
+          setPaymentSuccess(false)
+        }, 8000)
+      }
+    } catch (error) {
+      console.error('Error handling PayPal success:', error)
+    }
+  }
+
+  // PayPal error handler
+  const handlePayPalError = (error: any) => {
+    console.error('PayPal payment error:', error)
+    setShowPayPalModal(false)
+    alert('Payment failed. Please try again.')
+  }
+
   return (
     <div className="min-h-screen bg-gray-25">
 
@@ -1009,6 +1132,96 @@ export default function BrowsePage() {
         </div>
       )}
 
+      {/* Cart Success Banner - GetYourGuide style */}
+      {cartSuccess && addedPack && (
+        <div className="bg-green-50 border-l-4 border-green-400 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              {/* Left side - Success message and pack details */}
+              <div className="flex items-center space-x-4">
+                {/* Success icon */}
+                <div className="flex-shrink-0">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                </div>
+                
+                {/* Pack thumbnail */}
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
+                    {/* Map-style background like pack cards but smaller */}
+                    <img 
+                      src="/google-maps-bg.svg"
+                      alt="Pack thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                    
+                    {/* Small pin count badge */}
+                    <div className="absolute bottom-1 right-1">
+                      <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">
+                        {addedPack.pin_count} pins
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Pack details */}
+                <div className="flex items-center space-x-6">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">
+                      Added to cart
+                    </p>
+                    <p className="text-sm text-gray-700 font-semibold">
+                      {addedPack.title}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {addedPack.city}, {addedPack.country}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Right side - Action buttons */}
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => window.location.href = '/cart'}
+                  className="bg-coral-500 hover:bg-coral-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center"
+                >
+                  <ShoppingCart className="h-4 w-4 mr-1" />
+                  Go to cart
+                </button>
+                
+                <button
+                  onClick={() => setShowPayPalModal(true)}
+                  className="bg-coral-500 hover:bg-coral-600 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center"
+                >
+                  <CreditCard className="h-4 w-4 mr-1" />
+                  Check out
+                </button>
+                
+                {/* Close button */}
+                <button
+                  onClick={() => {
+                    setCartSuccess(false)
+                    setAddedPack(null)
+                  }}
+                  className="text-green-600 hover:text-green-800 p-1"
+                  aria-label="Close notification"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            
+            {/* Mobile countdown timer */}
+            <div className="sm:hidden mt-2">
+              <p className="text-sm text-green-700">
+                We'll hold your spot for <span className="font-semibold">{countdownTime} minutes</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Loading State */}
@@ -1176,6 +1389,132 @@ export default function BrowsePage() {
           </div>
         )}
       </div>
+
+      {/* PayPal Modal for Single Pack Checkout */}
+      {showPayPalModal && addedPack && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Complete Purchase</h2>
+              <button
+                onClick={() => setShowPayPalModal(false)}
+                className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+              >
+                <X className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Pack Summary */}
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center space-x-4">
+                {/* Pack thumbnail */}
+                <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
+                  <img 
+                    src="/google-maps-bg.svg"
+                    alt="Pack thumbnail"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  <div className="absolute bottom-1 right-1">
+                    <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">
+                      {addedPack.pin_count} pins
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Pack details */}
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{addedPack.title}</h3>
+                  <p className="text-sm text-gray-600">{addedPack.city}, {addedPack.country}</p>
+                  <div className="mt-2">
+                    <span className="text-lg font-bold text-coral-600">
+                      {addedPack.price === '0' ? 'Free' : `$${addedPack.price}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* PayPal Checkout */}
+            <div className="p-6">
+              {addedPack.price !== '0' ? (
+                <PayPalCheckout
+                  cartItems={[{
+                    id: addedPack.id,
+                    title: addedPack.title,
+                    price: parseFloat(addedPack.price),
+                    city: addedPack.city,
+                    country: addedPack.country,
+                    pin_count: parseInt(addedPack.pin_count)
+                  }]}
+                  totalAmount={parseFloat(addedPack.price)}
+                  processingFee={0.50} // Small processing fee
+                  onSuccess={handlePayPalSuccess}
+                  onError={handlePayPalError}
+                />
+              ) : (
+                <div className="text-center">
+                  <p className="text-gray-600 mb-4">This pack is free! Click to add to your collection.</p>
+                  <button
+                    onClick={() => handlePayPalSuccess({ orderID: 'free', payerID: 'free' })}
+                    className="w-full btn-primary"
+                  >
+                    Get Free Pack
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Success Banner */}
+      {paymentSuccess && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-fade-in">
+            {/* Success Animation */}
+            <div className="text-center p-8">
+              <div className="relative mb-6">
+                {/* Animated checkmark */}
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="h-12 w-12 text-green-500 animate-pulse" />
+                </div>
+                
+                {/* Celebration confetti effect */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute top-2 left-8 w-2 h-2 bg-coral-400 rounded-full animate-bounce"></div>
+                  <div className="absolute top-4 right-12 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce animation-delay-100"></div>
+                  <div className="absolute top-8 left-16 w-1 h-1 bg-blue-400 rounded-full animate-bounce animation-delay-200"></div>
+                  <div className="absolute top-6 right-8 w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce animation-delay-300"></div>
+                </div>
+              </div>
+
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank you!</h2>
+              <p className="text-lg text-gray-600 mb-6">
+                Your pack is now available in your collection.
+              </p>
+
+              <div className="space-y-4">
+                <button
+                  onClick={() => window.location.href = '/pinventory'}
+                  className="w-full btn-primary flex items-center justify-center text-lg py-3"
+                >
+                  <Package className="h-5 w-5 mr-2" />
+                  See My Packs
+                </button>
+                
+                <button
+                  onClick={() => setPaymentSuccess(false)}
+                  className="w-full btn-secondary"
+                >
+                  Continue Browsing
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 

@@ -51,7 +51,7 @@ export default function LandingPage() {
               Discover authentic travel experiences through curated pin collections from people who know their cities best.
             </p>
 
-            {/* Airbnb-style search bar with redirect functionality */}
+            {/* Enhanced Airbnb-style search bar with subtle highlighting */}
             <div className="mt-12 max-w-2xl mx-auto">
               <form 
                 onSubmit={(e) => {
@@ -63,21 +63,29 @@ export default function LandingPage() {
                     ? `/browse?search=${encodeURIComponent(searchQuery)}`
                     : '/browse'
                 }}
-                className="search-bar p-2 flex items-center w-full"
+                className="bg-white/95 backdrop-blur-sm rounded-full shadow-airbnb hover:shadow-airbnb-hover border border-gray-300/80 hover:border-coral-300/60 p-2 flex items-center w-full transition-all duration-300 ring-2 ring-coral-100/50 hover:ring-coral-200/60"
+                style={{ 
+                  boxShadow: '0 6px 16px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 90, 95, 0.08), 0 0 20px rgba(255, 90, 95, 0.05)'
+                }}
               >
-                <div className="flex-1 flex items-center">
-                  <Search className="h-5 w-5 text-gray-400 ml-4 mr-3" />
+                {/* Search input section */}
+                <div className="flex-1 flex items-center pl-4 pr-2">
+                  <Search className="h-5 w-5 text-gray-400 mr-3 flex-shrink-0" />
                   <input
                     type="text"
                     placeholder="Where do you want to explore?"
-                    className="flex-1 border-none outline-none text-gray-700 text-lg placeholder-gray-400 bg-transparent w-full"
+                    className="flex-1 border-none outline-none text-gray-700 text-lg placeholder-gray-400 bg-transparent w-full py-2"
                   />
                 </div>
+                
+                {/* Circular search button - text only */}
                 <button 
                   type="submit"
-                  className="btn-primary ml-4 px-8 py-4 text-lg flex items-center"
+                  className="bg-coral-500 hover:bg-coral-600 text-white font-semibold rounded-full transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95 flex items-center justify-center h-12 px-6 ml-2"
+                  style={{ minWidth: '100px' }}
                 >
-                  Search
+                  <span className="hidden sm:inline">Search</span>
+                  <span className="sm:hidden">Go</span>
                 </button>
               </form>
             </div>
@@ -90,7 +98,7 @@ export default function LandingPage() {
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-coral-500 mb-1">100%</div>
-                <div className="text-gray-600 font-medium">Local Made</div>
+                <div className="text-gray-600 font-medium">Made by locals</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-coral-500 mb-1">Free</div>

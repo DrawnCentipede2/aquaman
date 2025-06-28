@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation } from 'lucide-react'
+import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation, Shield, Globe, User, MessageCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { exportToGoogleMyMaps } from '@/lib/googleMaps'
@@ -66,6 +66,11 @@ export default function PackDetailPage() {
     
     // Fallback gradient if map generation fails
     return null
+  }
+
+  // Get creator name based on creator_id (matching creator profile page logic)
+  const getCreatorName = (creatorId?: string) => {
+    return creatorId === 'local-expert' ? 'Local Expert' : 'Maria Rodriguez'
   }
 
   // Load pack details when the component first loads
@@ -275,8 +280,37 @@ export default function PackDetailPage() {
       if (!isAlreadyInCart) {
         currentCart.push(pack)
         localStorage.setItem('pinpacks_cart', JSON.stringify(currentCart))
-        setCartItems(prev => [...prev, pack.id])
+        
+        // Don't update state immediately - keep button text unchanged until redirect
         console.log('Added to cart:', pack.title)
+        
+        // Get the current search from referrer or URL if available
+        const referrerUrl = document.referrer
+        let searchQuery = ''
+        
+        if (referrerUrl && referrerUrl.includes('/browse')) {
+          try {
+            const referrerParams = new URL(referrerUrl).searchParams
+            searchQuery = referrerParams.get('search') || ''
+          } catch (error) {
+            console.warn('Could not parse referrer URL:', error)
+          }
+        }
+        
+        // Redirect to browse page with cart success parameters
+        const browseUrl = new URL('/browse', window.location.origin)
+        if (searchQuery) {
+          browseUrl.searchParams.set('search', searchQuery)
+        }
+        browseUrl.searchParams.set('cart_success', 'true')
+        browseUrl.searchParams.set('added_pack_id', pack.id)
+        browseUrl.searchParams.set('added_pack_title', pack.title)
+        browseUrl.searchParams.set('added_pack_price', pack.price.toString())
+        browseUrl.searchParams.set('added_pack_city', pack.city)
+        browseUrl.searchParams.set('added_pack_country', pack.country)
+        browseUrl.searchParams.set('added_pack_pin_count', (pins.length || pack.pin_count || 0).toString())
+        
+        window.location.href = browseUrl.toString()
       }
     } catch (error) {
       console.error('Error adding to cart:', error)
@@ -440,6 +474,20 @@ export default function PackDetailPage() {
 
   const openMyMapsImportPage = () => {
     window.open('https://www.google.com/maps/d/', '_blank')
+  }
+
+  // Handle profile picture click - always scroll to about section
+  const handleProfileClick = () => {
+    if (!pack) return
+    
+    const aboutSection = document.getElementById('creator-about-section')
+    aboutSection?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  // Handle navigation to creator shop
+  const navigateToCreatorShop = () => {
+    if (!pack) return
+    window.location.href = `/creator/${pack.creator_id || 'local-expert'}`
   }
 
   // Show loading screen while pack data is being loaded
@@ -717,17 +765,31 @@ export default function PackDetailPage() {
                     </button>
                     
                     {/* Add to cart button */}
-                    <button
-                      onClick={() => toggleCart(pack)}
-                      className={`w-full flex items-center justify-center py-3 transition-all ${
-                        cartItems.includes(pack.id)
-                          ? 'btn-secondary bg-coral-50 text-coral-600 border-coral-200'
-                          : 'btn-secondary'
-                      }`}
-                    >
-                      <ShoppingCart className="h-4 w-4 mr-2" />
-                      {cartItems.includes(pack.id) ? 'In Cart' : 'Add to Cart'}
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={() => {
+                          if (!cartItems.includes(pack.id)) {
+                            addToCart(pack)
+                          }
+                        }}
+                        className={`w-full flex items-center justify-center py-3 transition-all ${
+                          cartItems.includes(pack.id)
+                            ? 'btn-secondary bg-coral-50 text-coral-600 border-coral-200 cursor-default'
+                            : 'btn-secondary hover:border-coral-300 hover:text-coral-600'
+                        }`}
+                      >
+                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        {cartItems.includes(pack.id) ? 'Added to Cart' : 'Add to Cart'}
+                      </button>
+                      
+                      {/* Hover tooltip for already added items */}
+                      {cartItems.includes(pack.id) && (
+                        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm py-2 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                          Pack is already in cart
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                        </div>
+                      )}
+                    </div>
                   </>
                 ) : (
                   /* Free pack - direct download */
@@ -760,7 +822,165 @@ export default function PackDetailPage() {
               </div>
             </div>
 
+            {/* Creator Profile Card - Airbnb style */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 mt-6">
+              <div className="flex items-start space-x-4 mb-6">
+                {/* Creator Profile Picture */}
+                <div className="relative">
+                  <button 
+                    onClick={handleProfileClick}
+                    className="w-16 h-16 bg-gradient-to-br from-coral-500 to-primary-500 rounded-full flex items-center justify-center text-white text-xl font-bold hover:shadow-lg transform hover:scale-105 transition-all duration-200 cursor-pointer"
+                  >
+                    {getCreatorName(pack.creator_id)?.charAt(0).toUpperCase() || 'L'}
+                  </button>
+                  {/* Verification badge */}
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-coral-500 rounded-full flex items-center justify-center">
+                    <Shield className="h-3 w-3 text-white" />
+                  </div>
 
+                </div>
+
+                {/* Creator Stats */}
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <h3 className="text-lg font-bold text-gray-900">
+                      {getCreatorName(pack.creator_id)}
+                    </h3>
+                    <span className="bg-coral-100 text-coral-700 text-xs font-medium px-2 py-1 rounded-full">
+                      Superhost
+                    </span>
+                  </div>
+                  
+                  {/* Creator stats grid */}
+                  <div className="grid grid-cols-3 gap-4 text-center text-sm">
+                    <div>
+                      <div className="font-bold text-gray-900">
+                        73
+                      </div>
+                      <div className="text-gray-500 text-xs">Reviews</div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-900 flex items-center justify-center">
+                        4.9
+                        <Star className="h-3 w-3 text-yellow-400 fill-current ml-1" />
+                      </div>
+                      <div className="text-gray-500 text-xs">Rating</div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-900">
+                        5
+                      </div>
+                      <div className="text-gray-500 text-xs">Years creating</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+
+
+            </div>
+
+          </div>
+        </div>
+
+        {/* Creator About Section - Moved from sidebar */}
+        <div id="creator-about-section" className="mt-16">
+          <div className="bg-white rounded-2xl p-8 shadow-sm">
+            <button 
+              onClick={navigateToCreatorShop}
+              className="flex items-start space-x-6 mb-8 w-full text-left hover:bg-gray-50 p-4 rounded-xl transition-colors duration-200 group"
+            >
+              {/* Creator Profile Picture - Large version */}
+              <div className="relative flex-shrink-0">
+                <div className="w-24 h-24 bg-gradient-to-br from-coral-500 to-primary-500 rounded-full flex items-center justify-center text-white text-3xl font-bold group-hover:shadow-lg transition-shadow duration-200">
+                  {getCreatorName(pack.creator_id)?.charAt(0).toUpperCase() || 'L'}
+                </div>
+                {/* Verification badge */}
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-coral-500 rounded-full flex items-center justify-center border-4 border-white">
+                  <Shield className="h-4 w-4 text-white" />
+                </div>
+              </div>
+
+              {/* Creator Info */}
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-2">
+                  <h2 className="text-2xl font-bold text-gray-900">{getCreatorName(pack.creator_id)}</h2>
+                  <span className="bg-coral-100 text-coral-700 text-sm font-medium px-3 py-1 rounded-full">
+                    Superhost
+                  </span>
+                </div>
+
+                <div className="flex items-center text-gray-600 mb-4">
+                  <MapPin className="h-5 w-5 mr-2" />
+                  <span className="text-lg">Lives in {pack.city}, {pack.country}</span>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-6 mb-6">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900">73</div>
+                    <div className="text-gray-500 text-sm">Reviews</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900 flex items-center justify-center">
+                      4.9
+                      <Star className="h-4 w-4 text-yellow-400 fill-current ml-1" />
+                    </div>
+                    <div className="text-gray-500 text-sm">Rating</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900">5</div>
+                    <div className="text-gray-500 text-sm">Years creating</div>
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            {/* About Creator Details */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-bold text-gray-900">About {getCreatorName(pack.creator_id)}</h3>
+              
+              {/* Creator details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center text-gray-600">
+                  <MessageCircle className="h-5 w-5 mr-3" />
+                  <span>My work: Local tourism guide</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <Globe className="h-5 w-5 mr-3" />
+                  <span>Speaks English, Spanish, and local dialects</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <MapPin className="h-5 w-5 mr-3" />
+                  <span>Lives in {pack.city}, {pack.country}</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <Shield className="h-5 w-5 mr-3" />
+                  <span className="underline">Identity verified</span>
+                </div>
+              </div>
+
+              {/* Creator bio */}
+              <div className="prose prose-gray max-w-none">
+                <p className="text-gray-600 leading-relaxed">
+                  Hi! I'm passionate about sharing the authentic side of {pack.city}. Having lived here for over 8 years, 
+                  I know all the hidden gems that locals love. I specialize in creating curated experiences that show you 
+                  the real culture, amazing food spots, and unique places that most tourists never discover.
+                </p>
+                <p className="text-gray-600 leading-relaxed">
+                  I work as a local tourism guide and have helped hundreds of travelers experience the true essence of our city. 
+                  When I'm not creating pin packs, you can find me exploring new neighborhoods, trying local restaurants, 
+                  or chatting with longtime residents to discover even more hidden treasures.
+                </p>
+                <p className="text-gray-600 leading-relaxed">
+                  My packs are carefully crafted based on years of exploration and conversations with locals. 
+                  Each location is personally vetted and represents something special about our local culture.
+                </p>
+              </div>
+
+
+            </div>
           </div>
         </div>
 
