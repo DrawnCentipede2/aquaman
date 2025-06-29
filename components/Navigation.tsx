@@ -46,6 +46,9 @@ export default function Navigation() {
   const [selectedCurrency, setSelectedCurrency] = useState('USD')
   const [selectedLanguage, setSelectedLanguage] = useState('English')
   const [selectedRegion, setSelectedRegion] = useState('United States')
+  
+  // Creator status tracking
+  const [isCreatorEligible, setIsCreatorEligible] = useState(false)
 
   // Currency options
   const currencies = [
@@ -87,9 +90,12 @@ export default function Navigation() {
       const savedCurrency = localStorage.getItem('pinpacks_currency') || 'USD'
       const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
       const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
+      const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
+      
       setSelectedCurrency(savedCurrency)
       setSelectedLanguage(savedLanguage)
       setSelectedRegion(savedRegion)
+      setIsCreatorEligible(hasCreatedPacks)
     }
     
     // Listen for storage changes (when user signs in/out in another tab)
@@ -105,9 +111,12 @@ export default function Navigation() {
           const savedCurrency = localStorage.getItem('pinpacks_currency') || 'USD'
           const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
           const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
+          const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
+          
           setSelectedCurrency(savedCurrency)
           setSelectedLanguage(savedLanguage)
           setSelectedRegion(savedRegion)
+          setIsCreatorEligible(hasCreatedPacks)
         }
       }
     }
@@ -186,9 +195,11 @@ export default function Navigation() {
     localStorage.removeItem('pinpacks_user_email')
     localStorage.removeItem('pinpacks_user_ip')
     localStorage.removeItem('pinpacks_user_location')
+    localStorage.removeItem('pinpacks_has_created_packs')
     setUserProfile(null)
     setIsAuthenticated(false)
     setIsDropdownOpen(false)
+    setIsCreatorEligible(false)
     
     // Trigger storage event to update navigation
     window.dispatchEvent(new Event('storage'))
@@ -227,11 +238,13 @@ export default function Navigation() {
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language, region } }))
   }
 
+
+
   // Show loading state during hydration to prevent mismatch
   if (!isMounted) {
     return (
       <nav className="flex items-center space-x-1">
-        {/* Loading state - exact same navigation structure with normal colors */}
+        {/* Loading state - show buyer mode by default during hydration */}
         <div className="hidden md:flex items-center space-x-1">
           <a href="/browse" className={getLinkClasses('/browse')}>
             Browse
@@ -341,7 +354,6 @@ export default function Navigation() {
       <nav className="flex items-center space-x-1">
         {/* Main navigation links - consistent for all users */}
         <div className="hidden md:flex items-center space-x-1">
-          {/* Always visible navigation - no conditional rendering */}
           <a href="/browse" className={getLinkClasses('/browse')}>
             Browse
           </a>
@@ -364,10 +376,13 @@ export default function Navigation() {
             Cart
           </a>
 
-          <a href="/sell" className={getLinkClasses('/sell')}>
-            <DollarSign className="h-4 w-4 inline mr-1" />
-            Sell like a local
-          </a>
+          {/* Only show "Sell like a local" if user hasn't created packs yet */}
+          {!isCreatorEligible && (
+            <a href="/sell" className={getLinkClasses('/sell')}>
+              <DollarSign className="h-4 w-4 inline mr-1" />
+              Sell like a local
+            </a>
+          )}
         </div>
 
         {/* Right side actions - Consistent Profile button for all users */}
@@ -479,13 +494,13 @@ export default function Navigation() {
                   </>
                 ) : (
                   <>
-                    {/* Authenticated - Show profile section */}
+                                        {/* Authenticated - Show profile section */}
                     <div className="px-4 py-3 border-b border-gray-100">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-coral-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
                           {userProfile?.name?.charAt(0).toUpperCase() || userProfile?.email?.charAt(0).toUpperCase() || 'U'}
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <div className="text-sm font-semibold text-gray-900">
                             {userProfile?.name || userProfile?.email?.split('@')[0] || 'User'}
                           </div>
@@ -494,6 +509,20 @@ export default function Navigation() {
                           </div>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Creator Dashboard Link */}
+                    <div className="py-2">
+                      <a
+                        href="/creator-dashboard"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Settings className="h-4 w-4 mr-3 text-gray-500" />
+                        Creator Dashboard
+                      </a>
+                      
+                      <div className="border-t border-gray-100 my-2"></div>
                     </div>
 
                     {/* Quick Settings - Only essential items */}

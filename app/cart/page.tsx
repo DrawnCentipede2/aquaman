@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Check, AlertCircle } from 'lucide-react'
+import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Check, AlertCircle, ShoppingBag } from 'lucide-react'
 import PayPalCheckout from '@/components/PayPalCheckout'
 
 export default function CartPage() {
@@ -10,6 +10,9 @@ export default function CartPage() {
   const [showPayPal, setShowPayPal] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle')
   const [paymentMessage, setPaymentMessage] = useState('')
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showModalContent, setShowModalContent] = useState(false)
+  const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
 
   useEffect(() => {
     // Load cart from localStorage
@@ -76,16 +79,16 @@ export default function CartPage() {
       })
 
       if (response.ok) {
-        // Payment successful - clear cart and show success
+        // Payment successful - clear cart and show success modal
         setPaymentStatus('success')
         setPaymentMessage('Payment successful! Your pin packs are now available.')
         localStorage.removeItem('pinpacks_cart')
+        setPurchasedPacksCount(cartItems.length)
         setCartItems([])
         
-        // Redirect to a success page or show download links after a delay
-        setTimeout(() => {
-          window.location.href = '/pinventory'
-        }, 3000)
+        // Show success modal with animation
+        setShowSuccessModal(true)
+        setTimeout(() => setShowModalContent(true), 300)
       } else {
         throw new Error('Failed to complete order')
       }
@@ -108,6 +111,18 @@ export default function CartPage() {
     setShowPayPal(true)
     setPaymentStatus('idle')
     setPaymentMessage('')
+  }
+
+  // Handle modal actions
+  const handleViewPacks = () => {
+    window.location.href = '/pinventory'
+  }
+
+  const handleKeepBrowsing = () => {
+    setShowSuccessModal(false)
+    setShowModalContent(false)
+    setShowPayPal(false)
+    window.location.href = '/browse'
   }
 
   if (loading) {
@@ -328,6 +343,149 @@ export default function CartPage() {
           </div>
         )}
       </div>
+
+      {/* Payment Success Modal */}
+      {showSuccessModal && (
+        <>
+          {/* Modal backdrop */}
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {/* Modal content */}
+            <div className={`
+              bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 relative overflow-hidden
+              transform transition-all duration-500 ease-out
+              ${showModalContent ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}
+            `}>
+              {/* Falling pins animation container */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                {/* Generate multiple falling pins */}
+                {[...Array(12)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute text-coral-500"
+                    style={{
+                      left: `${Math.random() * 100}%`,
+                      animation: `fall-${i % 4} ${2.5 + Math.random() * 1.5}s ease-in infinite`,
+                      animationDelay: `${Math.random() * 2}s`,
+                      fontSize: `${15 + Math.random() * 15}px`
+                    }}
+                  >
+                    <MapPin className="w-8 h-8" />
+                  </div>
+                ))}
+              </div>
+
+              {/* Main content */}
+              <div className="relative z-10 p-8 text-center">
+                {/* Success checkmark with animation */}
+                <div className={`
+                  inline-flex items-center justify-center w-20 h-20 rounded-full 
+                  bg-green-100 mb-6 transform transition-all duration-700 ease-out
+                  ${showModalContent ? 'scale-100 rotate-0' : 'scale-0 rotate-180'}
+                `}>
+                  <Check className="w-10 h-10 text-green-600" />
+                </div>
+
+                {/* Success message */}
+                <h2 className={`
+                  text-3xl font-bold text-gray-900 mb-3 transform transition-all duration-500 ease-out delay-200
+                  ${showModalContent ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}
+                `}>
+                  Payment Successful!
+                </h2>
+
+                {/* Thank you message */}
+                <p className={`
+                  text-gray-600 text-lg mb-2 transform transition-all duration-500 ease-out delay-300
+                  ${showModalContent ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}
+                `}>
+                  Thank you for your purchase!
+                </p>
+
+                {/* Order details */}
+                <div className={`
+                  bg-coral-50 rounded-lg p-4 mb-8 transform transition-all duration-500 ease-out delay-400
+                  ${showModalContent ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}
+                `}>
+                  <div className="flex items-center justify-center text-coral-700">
+                    <ShoppingBag className="w-5 h-5 mr-2" />
+                    <span className="font-semibold">
+                      {purchasedPacksCount} Pin Pack{purchasedPacksCount !== 1 ? 's' : ''} Purchased
+                    </span>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className={`
+                  space-y-3 transform transition-all duration-500 ease-out delay-500
+                  ${showModalContent ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}
+                `}>
+                  {/* Primary action - View packs */}
+                  <button
+                    onClick={handleViewPacks}
+                    className="w-full btn-primary flex items-center justify-center text-lg py-4 font-semibold"
+                  >
+                    <MapPin className="w-5 h-5 mr-2" />
+                    View My Packs
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </button>
+
+                  {/* Secondary action - Keep browsing */}
+                  <button
+                    onClick={handleKeepBrowsing}
+                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-4 px-6 rounded-xl transition-colors duration-200"
+                  >
+                    Keep Browsing
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CSS animations for falling pins */}
+          <style jsx>{`
+            @keyframes fall-0 {
+              0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 0.8;
+              }
+              100% {
+                transform: translateY(400px) rotate(360deg);
+                opacity: 0;
+              }
+            }
+            @keyframes fall-1 {
+              0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 0.9;
+              }
+              100% {
+                transform: translateY(450px) rotate(-360deg);
+                opacity: 0;
+              }
+            }
+            @keyframes fall-2 {
+              0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 0.7;
+              }
+              100% {
+                transform: translateY(420px) rotate(180deg);
+                opacity: 0;
+              }
+            }
+            @keyframes fall-3 {
+              0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 0.8;
+              }
+              100% {
+                transform: translateY(480px) rotate(-180deg);
+                opacity: 0;
+              }
+            }
+          `}</style>
+        </>
+      )}
     </div>
   )
 } 

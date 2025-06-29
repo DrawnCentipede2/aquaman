@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders, CheckCircle, ShoppingCart, CreditCard, Package } from 'lucide-react'
+import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders, CheckCircle, ShoppingCart, CreditCard, Package, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import PayPalCheckout from '@/components/PayPalCheckout'
+import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 
 export default function BrowsePage() {
   // State for storing pin packs from database
@@ -41,6 +42,11 @@ export default function BrowsePage() {
   // Wishlist state - track which items are in wishlist
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
   
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  
   // Cart success state for showing success banner
   const [cartSuccess, setCartSuccess] = useState(false)
   const [addedPack, setAddedPack] = useState<{
@@ -53,12 +59,41 @@ export default function BrowsePage() {
   } | null>(null)
   const [countdownTime, setCountdownTime] = useState('24:00')
   
-  // Payment success state
-  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  // Payment success state for falling pins modal
   const [showPayPalModal, setShowPayPalModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
   
   // Get unique values for filter options
   const categories = ['Solo Travel', 'Couple', 'Family', 'Friends Group', 'Business Travel', 'Adventure', 'Relaxation', 'Cultural', 'Food & Drink', 'Nightlife']
+
+  // Check authentication status
+  const checkAuthentication = () => {
+    const userProfileData = localStorage.getItem('pinpacks_user_profile')
+    if (userProfileData) {
+      try {
+        const profile = JSON.parse(userProfileData)
+        setIsAuthenticated(true)
+        setUserProfile(profile)
+        return true
+      } catch (error) {
+        console.error('Error parsing user profile:', error)
+        localStorage.removeItem('pinpacks_user_profile')
+      }
+    }
+    setIsAuthenticated(false)
+    setUserProfile(null)
+    return false
+  }
+
+  // Handle protected actions (show login modal if not authenticated)
+  const handleProtectedAction = (action: () => void) => {
+    if (isAuthenticated) {
+      action()
+    } else {
+      setShowLoginModal(true)
+    }
+  }
 
   // Handle search button click
   const handleSearch = () => {
@@ -116,6 +151,7 @@ export default function BrowsePage() {
 
   // Load pin packs and check for URL parameters when component mounts
   useEffect(() => {
+    checkAuthentication()
     loadPinPacks()
     
     // Check for search parameter in URL
@@ -163,6 +199,34 @@ export default function BrowsePage() {
       }
     }
   }, [])
+
+  // Load wishlist when authentication status changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadWishlist()
+    } else {
+      setWishlistItems([])
+    }
+  }, [isAuthenticated])
+
+  // Load user's wishlist from browser storage (only when authenticated)
+  const loadWishlist = () => {
+    if (!isAuthenticated) {
+      setWishlistItems([])
+      return
+    }
+
+    const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+    if (savedWishlist) {
+      try {
+        const wishlist = JSON.parse(savedWishlist)
+        const wishlistIds = wishlist.map((item: any) => item.id)
+        setWishlistItems(wishlistIds)
+      } catch (error) {
+        console.error('Error loading wishlist:', error)
+      }
+    }
+  }
 
   // Countdown timer for cart success banner
   useEffect(() => {
@@ -765,13 +829,15 @@ export default function BrowsePage() {
     }
   }
 
-  // Function to toggle wishlist (add or remove)
+  // Function to toggle wishlist (add or remove) - protected action
   const toggleWishlist = (pack: PinPack) => {
-    if (wishlistItems.includes(pack.id)) {
-      removeFromWishlist(pack.id)
-    } else {
-      addToWishlist(pack)
-    }
+    handleProtectedAction(() => {
+      if (wishlistItems.includes(pack.id)) {
+        removeFromWishlist(pack.id)
+      } else {
+        addToWishlist(pack)
+      }
+    })
   }
 
   // Clear all filters
@@ -797,38 +863,83 @@ export default function BrowsePage() {
     return count
   }
 
-  // PayPal success handler
+  // PayPal success handler - shows falling pins modal
   const handlePayPalSuccess = async (orderData: any) => {
     try {
       console.log('PayPal payment successful:', orderData)
       
       if (addedPack) {
-        // Add to purchased list
-        const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
-        if (!existingPurchases.includes(addedPack.id)) {
-          existingPurchases.push(addedPack.id)
-          localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
+        // Create order in database (same API call as cart page)
+        const createOrderResponse = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cartItems: [{
+              id: addedPack.id,
+              title: addedPack.title,
+              price: parseFloat(addedPack.price),
+              city: addedPack.city,
+              country: addedPack.country,
+              pin_count: parseInt(addedPack.pin_count)
+            }],
+            totalAmount: parseFloat(addedPack.price),
+            processingFee: 0.50,
+            userLocation: 'Unknown',
+            userIp: 'Unknown'
+          })
+        })
+
+        if (createOrderResponse.ok) {
+          const { order } = await createOrderResponse.json()
+
+          // Complete the order with PayPal details
+          const completeOrderResponse = await fetch('/api/orders/complete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              orderId: order.id,
+              paypalOrderId: orderData.orderID,
+              paypalPayerId: orderData.payerID,
+              paypalPaymentId: orderData.details?.id,
+              customerEmail: orderData.details?.payer?.email_address,
+              customerName: (orderData.details?.payer?.name?.given_name || '') + ' ' + 
+                          (orderData.details?.payer?.name?.surname || ''),
+              paymentDetails: orderData.details
+            })
+          })
+
+          if (completeOrderResponse.ok) {
+            // Remove from cart since it's now purchased
+            const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
+            const updatedCart = existingCart.filter((item: any) => item.id !== addedPack.id)
+            localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
+            
+            // Close all modals and show falling pins success animation
+            setShowPayPalModal(false)
+            setCartSuccess(false)
+            setPurchasedPacksCount(1)
+            setShowSuccessModal(true)
+          }
         }
-        
-        // Remove from cart since it's now purchased
-        const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
-        const updatedCart = existingCart.filter((item: any) => item.id !== addedPack.id)
-        localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
-        
-        // Close PayPal modal and cart success banner
-        setShowPayPalModal(false)
-        setCartSuccess(false)
-        
-        // Show payment success
-        setPaymentSuccess(true)
-        
-        // Auto-hide payment success after 8 seconds
-        setTimeout(() => {
-          setPaymentSuccess(false)
-        }, 8000)
       }
     } catch (error) {
       console.error('Error handling PayPal success:', error)
+    }
+  }
+
+  // PayPal success handler for cart banner checkout
+  const handleCartBannerCheckout = async () => {
+    if (!addedPack) return
+    
+    try {
+      // Same PayPal logic but for cart banner flow
+      setShowPayPalModal(true)
+    } catch (error) {
+      console.error('Error with cart banner checkout:', error)
     }
   }
 
@@ -837,6 +948,16 @@ export default function BrowsePage() {
     console.error('PayPal payment error:', error)
     setShowPayPalModal(false)
     alert('Payment failed. Please try again.')
+  }
+
+  // Payment success modal handlers
+  const handleViewPacks = () => {
+    window.location.href = '/pinventory'
+  }
+
+  const handleKeepBrowsing = () => {
+    setShowSuccessModal(false)
+    setPurchasedPacksCount(0)
   }
 
   return (
@@ -1191,7 +1312,7 @@ export default function BrowsePage() {
                 </button>
                 
                 <button
-                  onClick={() => setShowPayPalModal(true)}
+                  onClick={handleCartBannerCheckout}
                   className="bg-coral-500 hover:bg-coral-600 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center"
                 >
                   <CreditCard className="h-4 w-4 mr-1" />
@@ -1323,13 +1444,17 @@ export default function BrowsePage() {
                   <button 
                     onClick={(e) => {
                       e.stopPropagation() // Prevent card click when clicking heart
-                      toggleWishlist(pack)
+                      if (isAuthenticated) {
+                        toggleWishlist(pack)
+                      } else {
+                        setShowLoginModal(true)
+                      }
                     }}
                     className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm"
                   >
                     <Heart 
                       className={`h-4 w-4 transition-colors ${
-                        wishlistItems.includes(pack.id) 
+                        isAuthenticated && wishlistItems.includes(pack.id) 
                           ? 'text-coral-500 fill-current' 
                           : 'text-gray-700 group-hover:text-coral-500'
                       }`} 
@@ -1469,52 +1594,61 @@ export default function BrowsePage() {
         </div>
       )}
 
-      {/* Payment Success Banner */}
-      {paymentSuccess && (
+
+
+      {/* Login Modal */}
+      {showLoginModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-fade-in">
-            {/* Success Animation */}
-            <div className="text-center p-8">
-              <div className="relative mb-6">
-                {/* Animated checkmark */}
-                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="h-12 w-12 text-green-500 animate-pulse" />
-                </div>
-                
-                {/* Celebration confetti effect */}
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute top-2 left-8 w-2 h-2 bg-coral-400 rounded-full animate-bounce"></div>
-                  <div className="absolute top-4 right-12 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce animation-delay-100"></div>
-                  <div className="absolute top-8 left-16 w-1 h-1 bg-blue-400 rounded-full animate-bounce animation-delay-200"></div>
-                  <div className="absolute top-6 right-8 w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce animation-delay-300"></div>
-                </div>
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <User className="h-8 w-8 text-coral-500" />
               </div>
-
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank you!</h2>
-              <p className="text-lg text-gray-600 mb-6">
-                Your pack is now available in your collection.
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in required</h2>
+              <p className="text-gray-600">
+                You need an account to save favorites and add items to your cart
               </p>
+            </div>
 
-              <div className="space-y-4">
-                <button
-                  onClick={() => window.location.href = '/pinventory'}
-                  className="w-full btn-primary flex items-center justify-center text-lg py-3"
-                >
-                  <Package className="h-5 w-5 mr-2" />
-                  See My Packs
-                </button>
-                
-                <button
-                  onClick={() => setPaymentSuccess(false)}
-                  className="w-full btn-secondary"
-                >
-                  Continue Browsing
-                </button>
-              </div>
+            <div className="space-y-4">
+              <button
+                onClick={() => {
+                  setShowLoginModal(false)
+                  window.location.href = '/auth'
+                }}
+                className="w-full btn-primary py-3 text-base"
+              >
+                Sign In
+              </button>
+              
+              <button
+                onClick={() => {
+                  setShowLoginModal(false)
+                  window.location.href = '/signup'
+                }}
+                className="w-full btn-secondary py-3 text-base"
+              >
+                Create Account
+              </button>
+              
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Payment Success Modal with Falling Pins */}
+      <PaymentSuccessModal
+        isOpen={showSuccessModal}
+        packsCount={purchasedPacksCount}
+        onViewPacks={handleViewPacks}
+        onKeepBrowsing={handleKeepBrowsing}
+      />
     </div>
   )
 } 

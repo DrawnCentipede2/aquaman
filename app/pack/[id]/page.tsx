@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation, Shield, Globe, User, MessageCircle } from 'lucide-react'
+import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation, Shield, Globe, User, MessageCircle, Package } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { exportToGoogleMyMaps } from '@/lib/googleMaps'
+import PayPalCheckout from '@/components/PayPalCheckout'
+import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 
 export default function PackDetailPage() {
   const params = useParams()
@@ -22,50 +24,53 @@ export default function PackDetailPage() {
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
   const [cartItems, setCartItems] = useState<string[]>([])
   
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  
   // Enhanced delivery modal state
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
   const [deliveryStep, setDeliveryStep] = useState<'options' | 'mymaps' | 'manual' | 'both'>('options')
   const [savedPlaces, setSavedPlaces] = useState<string[]>([])
   
+  // PayPal payment modal state
+  const [showPayPalModal, setShowPayPalModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
+  
+  // Purchase status state
+  const [isPurchased, setIsPurchased] = useState(false)
+  
   // Image gallery state for navigating through pack photos
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   
-  // Function to generate map with pins when there are no photos
-  const generateMapImage = () => {
-    if (!pack || pins.length === 0) return null
+  // Function to get the first available photo from any pin in the pack
+  const getPackDisplayImage = () => {
+    if (!pins || pins.length === 0) return null
     
-    // Create a static map with pins using Google Maps Static API
-    const mapWidth = 800
-    const mapHeight = 600
-    const zoom = 13
-    
-    // Use the first pin's coordinates, or fall back to city center
-    const centerLat = pins[0]?.latitude || 0
-    const centerLng = pins[0]?.longitude || 0
-    
-    // Create markers for all pins
-    const markers = pins
-      .filter(pin => pin.latitude && pin.longitude)
-      .map((pin, index) => `markers=color:red%7Clabel:${index + 1}%7C${pin.latitude},${pin.longitude}`)
-      .join('&')
-    
-    // Fallback to a simple map centered on the city if no coordinates
-    if (!centerLat || !centerLng) {
-      return `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(pack.city + ', ' + pack.country)}&zoom=12&size=${mapWidth}x${mapHeight}&maptype=roadmap&key=YOUR_API_KEY`
+    // Look for the first pin that has photos
+    for (const pin of pins) {
+      if (pin.photos && pin.photos.length > 0) {
+        return pin.photos[0] // Return the first photo of the first pin that has photos
+      }
     }
     
-    const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${centerLat},${centerLng}&zoom=${zoom}&size=${mapWidth}x${mapHeight}&maptype=roadmap&${markers}&key=YOUR_API_KEY`
-    
-    return mapUrl
+    return null // No photos found in any pins
   }
   
-  // Since we don't have actual photos yet, we'll use the map as background
-  const getDisplayImage = () => {
-    const mapUrl = generateMapImage()
-    if (mapUrl) return mapUrl
+  // Function to get all photos from all pins in the pack
+  const getAllPackPhotos = () => {
+    if (!pins || pins.length === 0) return []
     
-    // Fallback gradient if map generation fails
-    return null
+    const allPhotos: string[] = []
+    pins.forEach(pin => {
+      if (pin.photos && pin.photos.length > 0) {
+        allPhotos.push(...pin.photos)
+      }
+    })
+    
+    return allPhotos
   }
 
   // Get creator name based on creator_id (matching creator profile page logic)
@@ -73,16 +78,73 @@ export default function PackDetailPage() {
     return creatorId === 'local-expert' ? 'Local Expert' : 'Maria Rodriguez'
   }
 
+  // Check authentication status
+  const checkAuthentication = () => {
+    const userProfileData = localStorage.getItem('pinpacks_user_profile')
+    if (userProfileData) {
+      try {
+        const profile = JSON.parse(userProfileData)
+        setIsAuthenticated(true)
+        setUserProfile(profile)
+        return true
+      } catch (error) {
+        console.error('Error parsing user profile:', error)
+        localStorage.removeItem('pinpacks_user_profile')
+      }
+    }
+    setIsAuthenticated(false)
+    setUserProfile(null)
+    return false
+  }
+
+  // Check if pack is already purchased
+  const checkPurchaseStatus = () => {
+    if (!packId) return false
+    
+    const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+    const purchased = existingPurchases.includes(packId)
+    setIsPurchased(purchased)
+    return purchased
+  }
+
+  // Handle protected actions (show login modal if not authenticated)
+  const handleProtectedAction = (action: () => void) => {
+    if (isAuthenticated) {
+      action()
+    } else {
+      setShowLoginModal(true)
+    }
+  }
+
   // Load pack details when the component first loads
   useEffect(() => {
     if (packId) {
+      checkAuthentication()
       loadPackDetails()
-      loadWishlist()
+      checkPurchaseStatus()
     }
   }, [packId])
 
-  // Load user's wishlist and cart from browser storage
+  // Load wishlist and cart when authentication status changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadWishlist()
+    } else {
+      setWishlistItems([])
+      setCartItems([])
+    }
+    // Also check purchase status when auth changes
+    checkPurchaseStatus()
+  }, [isAuthenticated])
+
+  // Load user's wishlist and cart from browser storage (only when authenticated)
   const loadWishlist = () => {
+    if (!isAuthenticated) {
+      setWishlistItems([])
+      setCartItems([])
+      return
+    }
+
     // Load wishlist
     const savedWishlist = localStorage.getItem('pinpacks_wishlist')
     if (savedWishlist) {
@@ -261,60 +323,64 @@ export default function PackDetailPage() {
 
   // Toggle wishlist status - add if not in wishlist, remove if already in wishlist
   const toggleWishlist = (pack: PinPack) => {
-    const isInWishlist = wishlistItems.includes(pack.id)
-    if (isInWishlist) {
-      removeFromWishlist(pack.id)
-    } else {
-      addToWishlist(pack)
-    }
+    handleProtectedAction(() => {
+      const isInWishlist = wishlistItems.includes(pack.id)
+      if (isInWishlist) {
+        removeFromWishlist(pack.id)
+      } else {
+        addToWishlist(pack)
+      }
+    })
   }
 
-  // Add item to shopping cart
+  // Add item to shopping cart (protected action)
   const addToCart = (pack: PinPack) => {
-    try {
-      const savedCart = localStorage.getItem('pinpacks_cart')
-      let currentCart = savedCart ? JSON.parse(savedCart) : []
-      
-      const isAlreadyInCart = currentCart.some((item: any) => item.id === pack.id)
-      
-      if (!isAlreadyInCart) {
-        currentCart.push(pack)
-        localStorage.setItem('pinpacks_cart', JSON.stringify(currentCart))
+    handleProtectedAction(() => {
+      try {
+        const savedCart = localStorage.getItem('pinpacks_cart')
+        let currentCart = savedCart ? JSON.parse(savedCart) : []
         
-        // Don't update state immediately - keep button text unchanged until redirect
-        console.log('Added to cart:', pack.title)
+        const isAlreadyInCart = currentCart.some((item: any) => item.id === pack.id)
         
-        // Get the current search from referrer or URL if available
-        const referrerUrl = document.referrer
-        let searchQuery = ''
-        
-        if (referrerUrl && referrerUrl.includes('/browse')) {
-          try {
-            const referrerParams = new URL(referrerUrl).searchParams
-            searchQuery = referrerParams.get('search') || ''
-          } catch (error) {
-            console.warn('Could not parse referrer URL:', error)
+        if (!isAlreadyInCart) {
+          currentCart.push(pack)
+          localStorage.setItem('pinpacks_cart', JSON.stringify(currentCart))
+          
+          // Don't update state immediately - keep button text unchanged until redirect
+          console.log('Added to cart:', pack.title)
+          
+          // Get the current search from referrer or URL if available
+          const referrerUrl = document.referrer
+          let searchQuery = ''
+          
+          if (referrerUrl && referrerUrl.includes('/browse')) {
+            try {
+              const referrerParams = new URL(referrerUrl).searchParams
+              searchQuery = referrerParams.get('search') || ''
+            } catch (error) {
+              console.warn('Could not parse referrer URL:', error)
+            }
           }
+          
+          // Redirect to browse page with cart success parameters
+          const browseUrl = new URL('/browse', window.location.origin)
+          if (searchQuery) {
+            browseUrl.searchParams.set('search', searchQuery)
+          }
+          browseUrl.searchParams.set('cart_success', 'true')
+          browseUrl.searchParams.set('added_pack_id', pack.id)
+          browseUrl.searchParams.set('added_pack_title', pack.title)
+          browseUrl.searchParams.set('added_pack_price', pack.price.toString())
+          browseUrl.searchParams.set('added_pack_city', pack.city)
+          browseUrl.searchParams.set('added_pack_country', pack.country)
+          browseUrl.searchParams.set('added_pack_pin_count', (pins.length || pack.pin_count || 0).toString())
+          
+          window.location.href = browseUrl.toString()
         }
-        
-        // Redirect to browse page with cart success parameters
-        const browseUrl = new URL('/browse', window.location.origin)
-        if (searchQuery) {
-          browseUrl.searchParams.set('search', searchQuery)
-        }
-        browseUrl.searchParams.set('cart_success', 'true')
-        browseUrl.searchParams.set('added_pack_id', pack.id)
-        browseUrl.searchParams.set('added_pack_title', pack.title)
-        browseUrl.searchParams.set('added_pack_price', pack.price.toString())
-        browseUrl.searchParams.set('added_pack_city', pack.city)
-        browseUrl.searchParams.set('added_pack_country', pack.country)
-        browseUrl.searchParams.set('added_pack_pin_count', (pins.length || pack.pin_count || 0).toString())
-        
-        window.location.href = browseUrl.toString()
+      } catch (error) {
+        console.error('Error adding to cart:', error)
       }
-    } catch (error) {
-      console.error('Error adding to cart:', error)
-    }
+    })
   }
 
   // Remove item from shopping cart
@@ -341,35 +407,108 @@ export default function PackDetailPage() {
     }
   }
 
-  // Handle payment
+  // Handle payment - show PayPal modal
   const handlePayment = (pack: PinPack) => {
-    // For MVP, we'll simulate payment and add to purchased list for testing
-    // In production, you'd integrate with Stripe, PayPal, or other payment processors
-    
-    // Simulate successful payment
-    const confirmPayment = confirm(`Process payment for "${pack.title}" - $${pack.price}?\n\nThis is a test payment for demo purposes.`)
-    
-    if (confirmPayment) {
-      // Add pack to purchased list
-      const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
-      if (!existingPurchases.includes(pack.id)) {
-        existingPurchases.push(pack.id)
-        localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
-        
-        // Remove from cart if it was there
-        const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
-        const updatedCart = existingCart.filter((item: any) => item.id !== pack.id)
-        localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
-        
-        // Show success message
-        alert(`🎉 Payment successful! "${pack.title}" has been added to your Pinventory. You can now access your places anytime from your collection.`)
-        
-        // Update local state
-        setCartItems(prev => prev.filter(id => id !== pack.id))
-      } else {
-        alert('You already own this pack! Check your Pinventory to access your places.')
-      }
+    if (isAuthenticated) {
+      setShowPayPalModal(true)
+    } else {
+      setShowLoginModal(true)
     }
+  }
+
+  // PayPal success handler
+  const handlePayPalSuccess = async (orderData: any) => {
+    try {
+      console.log('PayPal payment successful:', orderData)
+      
+      if (pack) {
+        // Create order in database (same API call as cart page)
+        const createOrderResponse = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cartItems: [{
+              id: pack.id,
+              title: pack.title,
+              price: parseFloat(pack.price),
+              city: pack.city,
+              country: pack.country,
+              pin_count: pins.length
+            }],
+            totalAmount: parseFloat(pack.price),
+            processingFee: 0.50,
+            userLocation: 'Unknown',
+            userIp: 'Unknown'
+          })
+        })
+
+        if (createOrderResponse.ok) {
+          const { order } = await createOrderResponse.json()
+
+          // Complete the order with PayPal details
+          const completeOrderResponse = await fetch('/api/orders/complete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              orderId: order.id,
+              paypalOrderId: orderData.orderID,
+              paypalPayerId: orderData.payerID,
+              paypalPaymentId: orderData.details?.id,
+              customerEmail: orderData.details?.payer?.email_address,
+              customerName: (orderData.details?.payer?.name?.given_name || '') + ' ' + 
+                          (orderData.details?.payer?.name?.surname || ''),
+              paymentDetails: orderData.details
+            })
+          })
+
+          if (completeOrderResponse.ok) {
+            // Add pack to purchased list
+            const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+            if (!existingPurchases.includes(pack.id)) {
+              existingPurchases.push(pack.id)
+              localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
+              
+              // Remove from cart if it was there
+              const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
+              const updatedCart = existingCart.filter((item: any) => item.id !== pack.id)
+              localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
+              
+              // Update local state
+              setCartItems(prev => prev.filter(id => id !== pack.id))
+            }
+            
+            // Update purchase status and show falling pins success modal
+            setIsPurchased(true)
+            setShowPayPalModal(false)
+            setPurchasedPacksCount(1)
+            setShowSuccessModal(true)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error handling PayPal success:', error)
+    }
+  }
+
+  // PayPal error handler
+  const handlePayPalError = (error: any) => {
+    console.error('PayPal payment error:', error)
+    setShowPayPalModal(false)
+    alert('Payment failed. Please try again.')
+  }
+
+  // Payment success modal handlers
+  const handleViewPacks = () => {
+    window.location.href = '/pinventory'
+  }
+
+  const handleKeepBrowsing = () => {
+    setShowSuccessModal(false)
+    setPurchasedPacksCount(0)
   }
 
   // Navigate to another similar pack's detail page
@@ -387,6 +526,9 @@ export default function PackDetailPage() {
       if (!existingPurchases.includes(pack.id)) {
         existingPurchases.push(pack.id)
         localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
+        
+        // Update purchase status
+        setIsPurchased(true)
         
         // Show success message
         alert(`🎉 Free pack "${pack.title}" added to your Pinventory! You can now access it anytime from your collection.`)
@@ -546,34 +688,41 @@ export default function PackDetailPage() {
           {/* Main Content Area - Takes up 2/3 of the space on large screens */}
           <div className="lg:col-span-2 space-y-8">
             
-            {/* Map Display Section showing pack location */}
+            {/* Pack Image Display Section */}
             <div className="relative">
               <div className="aspect-[4/3] bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-2xl overflow-hidden relative">
-                {/* Simple map background that always works - using a generic map pattern */}
-                <div 
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e0e0e0' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #4facfe 100%)`,
-                    backgroundSize: '60px 60px, cover',
-                    backgroundPosition: 'center, center'
-                  }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-                  
-                  {/* Add some map-like elements for visual interest */}
-                  <div className="absolute inset-0">
-                    {/* Simulated roads/paths */}
-                    <div className="absolute top-1/3 left-0 right-0 h-1 bg-white/30 transform -rotate-12"></div>
-                    <div className="absolute top-2/3 left-0 right-0 h-1 bg-white/30 transform rotate-12"></div>
-                    <div className="absolute left-1/4 top-0 bottom-0 w-1 bg-white/30 transform rotate-6"></div>
-                    <div className="absolute right-1/3 top-0 bottom-0 w-1 bg-white/30 transform -rotate-6"></div>
-                    
-                    {/* Simulated landmarks/pins */}
-                    <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
-                    <div className="absolute top-3/5 right-1/4 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
-                    <div className="absolute bottom-1/4 left-2/3 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
+                {/* Display actual photos if available, otherwise show placeholder */}
+                {getPackDisplayImage() ? (
+                  <img 
+                    src={getPackDisplayImage()!}
+                    alt={pack.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  /* Fallback to gradient pattern if no photos */
+                  <div 
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e0e0e0' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #4facfe 100%)`,
+                      backgroundSize: '60px 60px, cover',
+                      backgroundPosition: 'center, center'
+                    }}
+                  >
+                    {/* Add some map-like elements for visual interest when no photos */}
+                    <div className="absolute inset-0">
+                      <div className="absolute top-1/3 left-0 right-0 h-1 bg-white/30 transform -rotate-12"></div>
+                      <div className="absolute top-2/3 left-0 right-0 h-1 bg-white/30 transform rotate-12"></div>
+                      <div className="absolute left-1/4 top-0 bottom-0 w-1 bg-white/30 transform rotate-6"></div>
+                      <div className="absolute right-1/3 top-0 bottom-0 w-1 bg-white/30 transform -rotate-6"></div>
+                      <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
+                      <div className="absolute top-3/5 right-1/4 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
+                      <div className="absolute bottom-1/4 left-2/3 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
+                    </div>
                   </div>
-                </div>
+                )}
+                
+                {/* Dark overlay for better text readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
 
                 {/* Overlay content */}
                 <div className="absolute inset-0 flex flex-col justify-between p-6">
@@ -626,12 +775,18 @@ export default function PackDetailPage() {
                 {/* Action buttons for wishlist and sharing */}
                 <div className="flex items-center space-x-3">
                   <button
-                    onClick={() => toggleWishlist(pack)}
+                    onClick={() => {
+                      if (isAuthenticated) {
+                        toggleWishlist(pack)
+                      } else {
+                        setShowLoginModal(true)
+                      }
+                    }}
                     className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
                   >
                     <Heart 
                       className={`h-5 w-5 transition-colors ${
-                        wishlistItems.includes(pack.id) 
+                        isAuthenticated && wishlistItems.includes(pack.id) 
                           ? 'text-coral-500 fill-current' 
                           : 'text-gray-600'
                       }`} 
@@ -753,7 +908,16 @@ export default function PackDetailPage() {
               </div>
 
               <div className="space-y-4">
-                {pack.price > 0 ? (
+                {isPurchased ? (
+                  /* Already purchased - show pinventory button */
+                  <button
+                    onClick={() => window.location.href = '/pinventory'}
+                    className="w-full btn-primary flex items-center justify-center text-lg py-4"
+                  >
+                    <Package className="h-5 w-5 mr-2" />
+                    Go to My Pinventory
+                  </button>
+                ) : pack.price > 0 ? (
                   <>
                     {/* Pay button for paid packs */}
                     <button
@@ -768,22 +932,27 @@ export default function PackDetailPage() {
                     <div className="relative group">
                       <button
                         onClick={() => {
-                          if (!cartItems.includes(pack.id)) {
+                          if (isAuthenticated && !cartItems.includes(pack.id)) {
                             addToCart(pack)
+                          } else if (!isAuthenticated) {
+                            setShowLoginModal(true)
                           }
                         }}
                         className={`w-full flex items-center justify-center py-3 transition-all ${
-                          cartItems.includes(pack.id)
+                          isAuthenticated && cartItems.includes(pack.id)
                             ? 'btn-secondary bg-coral-50 text-coral-600 border-coral-200 cursor-default'
                             : 'btn-secondary hover:border-coral-300 hover:text-coral-600'
                         }`}
                       >
                         <ShoppingCart className="h-4 w-4 mr-2" />
-                        {cartItems.includes(pack.id) ? 'Added to Cart' : 'Add to Cart'}
+                        {!isAuthenticated 
+                          ? 'Sign in to Add to Cart'
+                          : (cartItems.includes(pack.id) ? 'Added to Cart' : 'Add to Cart')
+                        }
                       </button>
                       
                       {/* Hover tooltip for already added items */}
-                      {cartItems.includes(pack.id) && (
+                      {isAuthenticated && cartItems.includes(pack.id) && (
                         <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm py-2 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                           Pack is already in cart
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
@@ -800,7 +969,7 @@ export default function PackDetailPage() {
                     <Download className="h-5 w-5 mr-2" />
                     Get Free Pack
                   </button>
-                                  )}
+                )}
                 
 
               </div>
@@ -1023,13 +1192,17 @@ export default function PackDetailPage() {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation()
-                          toggleWishlist(similarPack)
+                          if (isAuthenticated) {
+                            toggleWishlist(similarPack)
+                          } else {
+                            setShowLoginModal(true)
+                          }
                         }}
                         className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm z-10"
                       >
                         <Heart 
                           className={`h-4 w-4 transition-colors ${
-                            wishlistItems.includes(similarPack.id) 
+                            isAuthenticated && wishlistItems.includes(similarPack.id) 
                               ? 'text-coral-500 fill-current' 
                               : 'text-gray-700 group-hover:text-coral-500'
                           }`} 
@@ -1461,6 +1634,139 @@ export default function PackDetailPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PayPal Modal for Pack Purchase */}
+      {showPayPalModal && pack && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Complete Purchase</h2>
+              <button
+                onClick={() => setShowPayPalModal(false)}
+                className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+              >
+                <X className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Pack Summary */}
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center space-x-4">
+                {/* Pack thumbnail */}
+                <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
+                  <img 
+                    src="/google-maps-bg.svg"
+                    alt="Pack thumbnail"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  <div className="absolute bottom-1 right-1">
+                    <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">
+                      {pins.length} pins
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Pack details */}
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{pack.title}</h3>
+                  <p className="text-sm text-gray-600">{pack.city}, {pack.country}</p>
+                  <div className="mt-2">
+                    <span className="text-lg font-bold text-coral-600">
+                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* PayPal Checkout */}
+            <div className="p-6">
+              {pack.price > 0 ? (
+                <PayPalCheckout
+                  cartItems={[{
+                    id: pack.id,
+                    title: pack.title,
+                    price: pack.price,
+                    city: pack.city,
+                    country: pack.country,
+                    pin_count: pins.length
+                  }]}
+                  totalAmount={pack.price}
+                  processingFee={0.50} // Small processing fee
+                  onSuccess={handlePayPalSuccess}
+                  onError={handlePayPalError}
+                />
+              ) : (
+                <div className="text-center">
+                  <p className="text-gray-600 mb-4">This pack is free! Click to add to your collection.</p>
+                  <button
+                    onClick={() => handlePayPalSuccess({ orderID: 'free', payerID: 'free' })}
+                    className="w-full btn-primary"
+                  >
+                    Get Free Pack
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Success Modal with Falling Pins */}
+      <PaymentSuccessModal
+        isOpen={showSuccessModal}
+        packsCount={purchasedPacksCount}
+        onViewPacks={handleViewPacks}
+        onKeepBrowsing={handleKeepBrowsing}
+      />
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <User className="h-8 w-8 text-coral-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in required</h2>
+              <p className="text-gray-600">
+                You need an account to save favorites and add items to your cart
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => {
+                  setShowLoginModal(false)
+                  window.location.href = '/auth'
+                }}
+                className="w-full btn-primary py-3 text-base"
+              >
+                Sign In
+              </button>
+              
+              <button
+                onClick={() => {
+                  setShowLoginModal(false)
+                  window.location.href = '/signup'
+                }}
+                className="w-full btn-secondary py-3 text-base"
+              >
+                Create Account
+              </button>
+              
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

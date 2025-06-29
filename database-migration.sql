@@ -17,7 +17,8 @@ ADD COLUMN IF NOT EXISTS current_opening_hours JSONB,
 ADD COLUMN IF NOT EXISTS reviews JSONB,
 ADD COLUMN IF NOT EXISTS place_id TEXT,
 ADD COLUMN IF NOT EXISTS needs_manual_edit BOOLEAN DEFAULT FALSE,
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW(),
+ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'::jsonb;
 
 -- Add constraint for rating validation
 ALTER TABLE pins 
@@ -28,6 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_pins_city_country ON pins(city, country);
 CREATE INDEX IF NOT EXISTS idx_pins_rating ON pins(rating);
 CREATE INDEX IF NOT EXISTS idx_pins_business_status ON pins(business_status);
 CREATE INDEX IF NOT EXISTS idx_pins_place_id ON pins(place_id);
+CREATE INDEX IF NOT EXISTS idx_pins_photos ON pins USING GIN (photos);
 
 -- Create place_edit_requests table if it doesn't exist
 CREATE TABLE IF NOT EXISTS place_edit_requests (
@@ -69,6 +71,7 @@ COMMENT ON TABLE place_edit_requests IS 'Stores user requests to edit place info
 COMMENT ON COLUMN pins.current_opening_hours IS 'JSON object containing opening hours from Google Places API';
 COMMENT ON COLUMN pins.reviews IS 'JSON array containing recent reviews from Google Places API';
 COMMENT ON COLUMN pins.business_status IS 'Business operational status: OPERATIONAL, CLOSED_TEMPORARILY, CLOSED_PERMANENTLY';
+COMMENT ON COLUMN pins.photos IS 'Array of base64 encoded image strings uploaded by users';
 
 -- Migration: Add Orders Table for PayPal Integration
 -- Run this in your Supabase SQL editor after the main schema

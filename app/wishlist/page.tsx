@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Heart, MapPin, Star, Download, Trash2 } from 'lucide-react'
+import { Heart, MapPin, Star, Download } from 'lucide-react'
 
 export default function WishlistPage() {
   const [wishlistItems, setWishlistItems] = useState<any[]>([])
@@ -16,11 +16,29 @@ export default function WishlistPage() {
     setLoading(false)
   }, [])
 
-  const removeFromWishlist = (itemId: string) => {
-    const updatedWishlist = wishlistItems.filter(item => item.id !== itemId)
-    setWishlistItems(updatedWishlist)
-    localStorage.setItem('pinpacks_wishlist', JSON.stringify(updatedWishlist))
+  // Function to remove item from wishlist
+  const removeFromWishlist = (packId: string) => {
+    try {
+      // Get current wishlist from localStorage
+      const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+      let currentWishlist = savedWishlist ? JSON.parse(savedWishlist) : []
+      
+      // Remove the item
+      currentWishlist = currentWishlist.filter((item: any) => item.id !== packId)
+      
+      // Save to localStorage
+      localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
+      
+      // Update local state
+      setWishlistItems(currentWishlist)
+      
+      console.log('Removed from wishlist:', packId)
+    } catch (error) {
+      console.error('Error removing from wishlist:', error)
+    }
   }
+
+
 
   if (loading) {
     return (
@@ -74,19 +92,10 @@ export default function WishlistPage() {
         {/* Wishlist Grid */}
         {wishlistItems.length > 0 && (
           <>
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6">
               <p className="text-gray-600">
                 {wishlistItems.length} saved {wishlistItems.length === 1 ? 'pack' : 'packs'}
               </p>
-              <button 
-                onClick={() => {
-                  setWishlistItems([])
-                  localStorage.removeItem('pinpacks_wishlist')
-                }}
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                Clear all
-              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -109,31 +118,23 @@ export default function WishlistPage() {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                     </div>
                     
-                    {/* Remove from wishlist button */}
+                    {/* Heart icon - Remove from wishlist */}
                     <button 
                       onClick={(e) => {
-                        e.stopPropagation() // Prevent card click when clicking trash
+                        e.stopPropagation() // Prevent card click when clicking heart
                         removeFromWishlist(pack.id)
                       }}
                       className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm"
                     >
-                      <Trash2 className="h-4 w-4 text-gray-700 group-hover:text-red-500 transition-colors" />
+                      <Heart 
+                        className="h-4 w-4 text-red-500 fill-current transition-colors"
+                      />
                     </button>
-                    
-
                     
                     {/* Pin count */}
                     <div className="absolute bottom-3 right-3">
                       <span className="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
                         {pack.pin_count} pins
-                      </span>
-                    </div>
-
-                    {/* Saved indicator */}
-                    <div className="absolute bottom-3 left-3">
-                      <span className="bg-coral-500 text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center">
-                        <Heart className="h-3 w-3 mr-1 fill-current" />
-                        Saved
                       </span>
                     </div>
                   </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Download, Star, Calendar, Package, ExternalLink, X, CheckCircle, Smartphone, ChevronDown, ChevronRight } from 'lucide-react'
+import { MapPin, Download, Star, Calendar, Package, ExternalLink, X, CheckCircle, Smartphone, ChevronDown, ChevronRight, Share2, ChevronUp, Clock, Globe } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 
@@ -21,6 +21,10 @@ export default function PinventoryPage() {
   
   // Country expansion state
   const [expandedCountries, setExpandedCountries] = useState<{[key: string]: boolean}>({})
+  
+  // Pack card expansion state
+  const [expandedPacks, setExpandedPacks] = useState<{[key: string]: boolean}>({})
+  const [packPinsData, setPackPinsData] = useState<{[key: string]: any[]}>({})
   
   // Enhanced delivery modal state
   const [showDeliveryModal, setShowDeliveryModal] = useState(false)
@@ -44,6 +48,28 @@ export default function PinventoryPage() {
     
     checkAuth()
   }, [])
+
+  // Function to sync with database and clear localStorage cache
+  const syncWithDatabase = async () => {
+    try {
+      setLoading(true)
+      
+      // Clear localStorage purchased packs
+      localStorage.removeItem('pinpacks_purchased')
+      console.log('Cleared localStorage cached packs')
+      
+      // Debug: Show what user profile we have
+      console.log('Current user profile:', userProfile)
+      console.log('User email for filtering:', userProfile?.email)
+      
+      // Reload from database only
+      await loadPurchasedPacks()
+      
+    } catch (error) {
+      console.error('Error syncing with database:', error)
+      setError('Failed to sync with database')
+    }
+  }
 
   // Load purchased packs when user is authenticated
   useEffect(() => {
@@ -69,18 +95,30 @@ export default function PinventoryPage() {
       let purchasedPackIds: string[] = []
       
       // 1. Get from database orders (new PayPal purchases)
-      const { data: orderItems, error: orderError } = await supabase
-        .from('order_items')
-        .select(`
-          pin_pack_id,
-          orders!inner(status)
-        `)
-        .eq('orders.status', 'completed')
+      // Only get orders for the current user's email
+      const userEmail = userProfile?.email
+      let databasePackIds: string[] = []
       
-      if (!orderError && orderItems) {
-        const databasePackIds = orderItems.map(item => item.pin_pack_id)
-        purchasedPackIds.push(...databasePackIds)
+      if (userEmail) {
+        const { data: orderItems, error: orderError } = await supabase
+          .from('order_items')
+          .select(`
+            pin_pack_id,
+            orders!inner(status, customer_email)
+          `)
+          .eq('orders.status', 'completed')
+          .eq('orders.customer_email', userEmail)
+        
+        if (!orderError && orderItems) {
+          databasePackIds = orderItems.map(item => item.pin_pack_id)
+        } else if (orderError) {
+          console.error('Error fetching user orders:', orderError)
+        }
+      } else {
+        console.log('No user email found - skipping database orders')
       }
+      
+      purchasedPackIds.push(...databasePackIds)
       
       // 2. Get from localStorage (old purchases and free packs)
       const localStorageIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
@@ -161,6 +199,107 @@ export default function PinventoryPage() {
       ...prev,
       [country]: !prev[country]
     }))
+  }
+
+  // Toggle pack expansion and load pins if needed
+  const togglePackExpansion = async (packId: string) => {
+    const isCurrentlyExpanded = expandedPacks[packId]
+    
+    setExpandedPacks(prev => ({
+      ...prev,
+      [packId]: !isCurrentlyExpanded
+    }))
+
+    // Load pins if expanding and not already loaded
+    if (!isCurrentlyExpanded && !packPinsData[packId]) {
+      await loadPackPins(packId)
+    }
+  }
+
+  // Load pins for a specific pack
+  const loadPackPins = async (packId: string) => {
+    try {
+      const { data: packPinsResult, error: pinsError } = await supabase
+        .from('pin_pack_pins')
+        .select(`
+          pins (
+            id,
+            title,
+            description,
+            google_maps_url,
+            category,
+            latitude,
+            longitude
+          )
+        `)
+        .eq('pin_pack_id', packId)
+
+      if (pinsError) throw pinsError
+
+      const pinsData = packPinsResult?.map((item: any) => ({
+        id: item.pins.id,
+        name: item.pins.title,
+        title: item.pins.title,
+        description: item.pins.description,
+        google_maps_url: item.pins.google_maps_url,
+        category: item.pins.category,
+        latitude: item.pins.latitude,
+        longitude: item.pins.longitude
+      })) || []
+      
+      setPackPinsData(prev => ({
+        ...prev,
+        [packId]: pinsData
+      }))
+      
+    } catch (error) {
+      console.error('Error loading pack pins:', error)
+    }
+  }
+
+  // Share pack functionality
+  const sharePack = async (pack: PinPack) => {
+    const shareUrl = `${window.location.origin}/pack/${pack.id}`
+    const shareText = `Check out "${pack.title}" - ${pack.pin_count} amazing places in ${pack.city}, ${pack.country}!`
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: pack.title,
+          text: shareText,
+          url: shareUrl,
+        })
+      } catch (error) {
+        console.log('Error sharing:', error)
+      }
+    } else {
+      // Fallback: copy link to clipboard
+      try {
+        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`)
+        alert('Pack details copied to clipboard!')
+      } catch (error) {
+        console.error('Failed to copy:', error)
+        alert('Unable to copy. Please share manually: ' + shareUrl)
+      }
+    }
+  }
+
+  // Open pack in Google Maps (if we have a direct Google Maps list URL)
+  const openInGoogleMaps = (pack: PinPack) => {
+    // For now, we'll construct a search URL with all places
+    const pins = packPinsData[pack.id] || []
+    if (pins.length > 0) {
+      const placesQuery = pins
+        .map(pin => `${pin.name}, ${pack.city}`)
+        .join(' | ')
+      
+      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(placesQuery)}`
+      window.open(mapsUrl, '_blank')
+    } else {
+      // Fallback to city search
+      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(pack.city + ', ' + pack.country)}`
+      window.open(mapsUrl, '_blank')
+    }
   }
 
   // Handle "Get Your Places" button click
@@ -342,13 +481,24 @@ export default function PinventoryPage() {
                 All your purchased pin packs in one place
               </p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-coral-500">
-                {Object.keys(groupedPacks).length}
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-2xl font-bold text-coral-500">
+                  {Object.keys(groupedPacks).length}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {Object.keys(groupedPacks).length === 1 ? 'country' : 'countries'} available
+                </div>
               </div>
-              <div className="text-sm text-gray-500">
-                {Object.keys(groupedPacks).length === 1 ? 'country' : 'countries'} available
-              </div>
+              <button
+                onClick={syncWithDatabase}
+                disabled={loading}
+                className="btn-secondary flex items-center text-sm px-4 py-2"
+                title="Clear cache and sync with database records only"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                {loading ? 'Syncing...' : 'Sync with DB'}
+              </button>
             </div>
           </div>
         </div>
@@ -369,6 +519,15 @@ export default function PinventoryPage() {
                 className="btn-primary"
               >
                 Browse Pin Packs
+              </button>
+              <button
+                onClick={syncWithDatabase}
+                disabled={loading}
+                className="btn-secondary"
+                title="Clear cache and reload only database purchases"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                {loading ? 'Syncing...' : 'Sync with Database'}
               </button>
               <button
                 onClick={addTestPack}
@@ -392,7 +551,7 @@ export default function PinventoryPage() {
                       <MapPin className="h-5 w-5 text-coral-500 mr-2" />
                       <h2 className="text-xl font-semibold text-gray-900">{country}</h2>
                     </div>
-                    <span className="bg-coral-100 text-coral-700 px-3 py-1 rounded-full text-sm font-medium">
+                    <span className="bg-coral-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">
                       {groupedPacks[country].length} {groupedPacks[country].length === 1 ? 'pack' : 'packs'}
                     </span>
                   </div>
@@ -404,82 +563,96 @@ export default function PinventoryPage() {
                 {/* Country Packs */}
                 {expandedCountries[country] && (
                   <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {groupedPacks[country].map((pack) => (
-                        <div key={pack.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                          {/* Pack Image/Map */}
-                          <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative">
-                            <div 
-                              className="absolute inset-0 bg-cover bg-center"
-                              style={{
-                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e0e0e0' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #4facfe 100%)`,
-                                backgroundSize: '60px 60px, cover'
-                              }}
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-                              
-                              {/* Pin count badge */}
-                              <div className="absolute top-3 right-3">
-                                <span className="bg-white/90 backdrop-blur-sm text-gray-800 px-2 py-1 rounded-lg text-xs font-medium">
-                                  {pack.pin_count} places
-                                </span>
-                              </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {groupedPacks[country].map((pack) => {
+                        return (
+                          <div 
+                            key={pack.id} 
+                            onClick={() => openInGoogleMaps(pack)}
+                            className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg hover:border-coral-200 transition-all duration-200 cursor-pointer group relative"
+                          >
+                            {/* Big hover pin */}
+                            <div className="absolute top-4 right-4 pointer-events-none z-10">
+                              <MapPin className="w-12 h-12 text-coral-500 opacity-0 group-hover:opacity-40 transition-opacity duration-300" />
+                            </div>
 
-                              {/* Location badge */}
-                              <div className="absolute bottom-3 left-3 text-white">
-                                <div className="flex items-center text-sm">
-                                  <MapPin className="h-4 w-4 mr-1" />
-                                  {pack.city}, {pack.country}
+                            {/* Clickable Pack Card */}
+                            <div className="p-6 relative z-20">
+                              {/* Header with thumbnail and basic info */}
+                              <div className="flex items-start space-x-4 mb-4">
+                                {/* Thumbnail */}
+                                <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
+                                  <img 
+                                    src="/google-maps-bg.svg"
+                                    alt="Pack thumbnail"
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                                  <div className="absolute bottom-1 right-1">
+                                    <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">
+                                      {pack.pin_count}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Pack info */}
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">
+                                    {pack.title}
+                                  </h3>
+                                  <div className="flex items-center text-gray-600 mb-2">
+                                    <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
+                                    <span className="text-sm">{pack.city}, {pack.country} • {pack.pin_count} places</span>
+                                  </div>
+                                  
+                                  {/* Star rating */}
+                                  <div className="flex items-center text-xs text-gray-600 mb-1">
+                                    <div className="flex items-center mr-3">
+                                      {[...Array(5)].map((_, i) => (
+                                        <Star 
+                                          key={i}
+                                          className={`h-3 w-3 ${
+                                            i < Math.floor(pack.average_rating || 0) 
+                                              ? 'text-yellow-400 fill-current' 
+                                              : 'text-gray-300'
+                                          }`}
+                                        />
+                                      ))}
+                                      <span className="ml-1 font-medium">
+                                        {(pack.average_rating || 0).toFixed(1)}
+                                      </span>
+                                    </div>
+                                    <span className="text-gray-500">
+                                      ({pack.rating_count || 0} {pack.rating_count === 1 ? 'review' : 'reviews'})
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="flex items-center text-xs text-gray-500 mb-1">
+                                    <Calendar className="h-3 w-3 mr-1" />
+                                    Added {new Date(pack.created_at).toLocaleDateString()}
+                                  </div>
+                                  
+                                  {/* Creator info */}
+                                  {pack.creator_id && (
+                                    <div className="flex items-center text-xs text-gray-500">
+                                      <span className="mr-1">Created by</span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation() // Prevent opening maps when clicking creator
+                                          window.location.href = `/creator/${pack.creator_id}`
+                                        }}
+                                        className="text-coral-500 hover:text-coral-600 hover:underline transition-colors"
+                                      >
+                                        {pack.creator_id.substring(0, 8)}...
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
                           </div>
-
-                          {/* Pack Details */}
-                          <div className="p-6">
-                            <div className="mb-4">
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
-                                {pack.title}
-                              </h3>
-                              <p className="text-gray-600 text-sm line-clamp-2">
-                                {pack.description}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                              <div className="flex items-center">
-                                <Calendar className="h-4 w-4 mr-1" />
-                                Purchased {new Date(pack.created_at).toLocaleDateString()}
-                              </div>
-                              <div className="flex items-center">
-                                <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
-                                <span>{pack.average_rating || 4.8}</span>
-                              </div>
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="space-y-3">
-                              {/* Get Your Places Button - Main CTA */}
-                              <button
-                                onClick={() => handleGetPlaces(pack)}
-                                className="w-full btn-primary flex items-center justify-center py-3"
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                Get Your Places
-                              </button>
-
-                              {/* View Pack Details Button */}
-                              <button
-                                onClick={() => router.push(`/pack/${pack.id}`)}
-                                className="w-full btn-secondary flex items-center justify-center py-2"
-                              >
-                                <ExternalLink className="h-4 w-4 mr-2" />
-                                View Details
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}

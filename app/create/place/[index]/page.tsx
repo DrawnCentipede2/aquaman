@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { MapPin, Save, ArrowLeft, Upload, Globe, Star, Clock, Phone, ExternalLink, Trash2, ChevronUp, ChevronDown, Tag, Building, HelpCircle, X } from 'lucide-react'
+import { MapPin, Save, ArrowLeft, Upload, Globe, Star, Clock, Phone, ExternalLink, Trash2, ChevronUp, ChevronDown, Tag, Building, HelpCircle, X, Image as ImageIcon, Plus } from 'lucide-react'
 
 // Interface for a single pin (same as in main create page)
 interface Pin {
@@ -49,6 +49,9 @@ export default function IndividualPlacePage() {
   const [showOverview, setShowOverview] = useState(true)
   // Add state for showing help modal
   const [showHelpModal, setShowHelpModal] = useState(false)
+  // Photo upload state
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load the place data from localStorage on component mount
   useEffect(() => {
@@ -179,6 +182,121 @@ export default function IndividualPlacePage() {
     const todayHours = hours.weekday_text.find(day => day.includes(dayNames[today]))
     
     return todayHours || (hours.open_now ? 'Open now' : 'Closed now')
+  }
+
+  // Photo upload helper functions
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = error => reject(error)
+    })
+  }
+
+  // Compress image to reduce payload size
+  const compressImage = (file: File, maxWidth: number = 600, quality: number = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = new Image()
+      
+      img.onload = () => {
+        // Calculate new dimensions while maintaining aspect ratio
+        let { width, height } = img
+        
+        // Only resize if image is larger than maxWidth
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width
+              width = maxWidth
+            }
+          } else {
+            if (height > maxWidth) {
+              width = (width * maxWidth) / height
+              height = maxWidth
+            }
+          }
+        }
+        
+        // Set canvas dimensions
+        canvas.width = width
+        canvas.height = height
+        
+        // Draw image on canvas and compress
+        ctx!.drawImage(img, 0, 0, width, height)
+        const compressedBase64 = canvas.toDataURL('image/jpeg', quality)
+        resolve(compressedBase64)
+      }
+      
+      img.onerror = () => reject(new Error('Failed to load image'))
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploadingPhoto(true)
+    
+    try {
+      const newPhotos: string[] = []
+      
+      // Process each selected file
+      for (let i = 0; i < Math.min(files.length, 5); i++) { // Limit to 5 photos
+        const file = files[i]
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          alert(`File "${file.name}" is not an image. Please select only image files.`)
+          continue
+        }
+        
+        // Validate file size (max 10MB before compression)
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
+          continue
+        }
+        
+        // Compress image to reduce payload size
+        const compressedBase64 = await compressImage(file, 600, 0.7)
+        newPhotos.push(compressedBase64)
+      }
+      
+      if (newPhotos.length > 0) {
+        const currentPhotos = pin?.photos || []
+        const updatedPhotos = [...currentPhotos, ...newPhotos].slice(0, 5) // Max 5 photos total
+        updatePin({ photos: updatedPhotos })
+        
+        if (newPhotos.length === 1) {
+          alert(`✅ Photo uploaded and compressed successfully!`)
+        } else {
+          alert(`✅ ${newPhotos.length} photos uploaded and compressed successfully!`)
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading photos:', error)
+      alert('Error uploading photos. Please try again.')
+    } finally {
+      setIsUploadingPhoto(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const removePhoto = (indexToRemove: number) => {
+    if (!pin?.photos) return
+    
+    const updatedPhotos = pin.photos.filter((_, index) => index !== indexToRemove)
+    updatePin({ photos: updatedPhotos })
+  }
+
+  const triggerPhotoUpload = () => {
+    fileInputRef.current?.click()
   }
 
   if (isLoading) {
@@ -423,7 +541,7 @@ export default function IndividualPlacePage() {
             <div>
               <div className="flex items-center mb-2">
                 <label className="block text-sm font-semibold text-gray-900">
-                  Share your experience and recommendations
+                  Why are you recommending this place?
                 </label>
                 <button
                   onClick={() => setShowHelpModal(true)}
@@ -438,7 +556,7 @@ export default function IndividualPlacePage() {
                 value={pin.description}
                 onChange={(e) => updatePin({ description: e.target.value })}
                 placeholder="Share your personal insights!"
-                rows={8}
+                rows={5}
                 className="input-airbnb w-full resize-none"
               />
             </div>
@@ -446,21 +564,106 @@ export default function IndividualPlacePage() {
 
           {/* Photos Section */}
           <div className="card-airbnb p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Photos</h2>
-            
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-              <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Your Photos</h3>
-              <p className="text-gray-600 mb-4">
-                Share your own photos of this place to help travelers know what to expect
-              </p>
-              <button className="btn-secondary">
-                Choose Photos
-              </button>
-              <p className="text-xs text-gray-500 mt-2">
-                Photo upload feature coming soon! For now, the place will use photos from Google Maps.
-              </p>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Photos</h2>
+              {pin.photos && pin.photos.length > 0 && (
+                <span className="text-sm text-gray-500">
+                  {pin.photos.length}/5 photos
+                </span>
+              )}
             </div>
+            
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
+            
+            {/* Photo grid or upload area */}
+            {pin.photos && pin.photos.length > 0 ? (
+              <div className="space-y-4">
+                {/* Existing photos grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {pin.photos.map((photo, index) => (
+                    <div key={index} className="relative group">
+                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <img
+                          src={photo}
+                          alt={`Photo ${index + 1} of ${pin.title}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      {/* Remove button */}
+                      <button
+                        onClick={() => removePhoto(index)}
+                        className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 flex items-center justify-center"
+                        title="Remove photo"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Add more photos button (if less than 5) */}
+                  {pin.photos.length < 5 && (
+                    <button
+                      onClick={triggerPhotoUpload}
+                      disabled={isUploadingPhoto}
+                      className="aspect-square border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 hover:border-coral-400 transition-colors flex flex-col items-center justify-center group disabled:opacity-50"
+                    >
+                      {isUploadingPhoto ? (
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-coral-500"></div>
+                      ) : (
+                        <>
+                          <Plus className="h-6 w-6 text-gray-400 group-hover:text-coral-500 mb-1" />
+                          <span className="text-xs text-gray-500 group-hover:text-coral-600">Add Photo</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                
+                {/* Upload instructions */}
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">
+                    💡 Add your own photos to help travelers see what to expect. Max 5 photos, 5MB each.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* Initial upload area when no photos */
+              <div 
+                onClick={triggerPhotoUpload}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50 hover:bg-gray-100 hover:border-coral-400 transition-colors cursor-pointer"
+              >
+                {isUploadingPhoto ? (
+                  <div className="flex flex-col items-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-coral-500 mb-4"></div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Uploading Photos...</h3>
+                    <p className="text-gray-600">Please wait while we process your images</p>
+                  </div>
+                ) : (
+                  <>
+                    <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Your Photos</h3>
+                    <p className="text-gray-600 mb-4">
+                      Share your own photos of this place to help travelers know what to expect
+                    </p>
+                    <div className="btn-secondary inline-flex items-center">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Choose Photos
+                    </div>
+                    <p className="text-xs text-gray-500 mt-4">
+                      Supports JPG, PNG, WebP • Max 5 photos • 5MB per photo
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Reviews Preview (if available) */}

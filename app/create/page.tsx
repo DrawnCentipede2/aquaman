@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -47,7 +47,7 @@ export default function CreatePackPage() {
   const [packDescription, setPackDescription] = useState('')
   const [city, setCity] = useState('')
   const [country, setCountry] = useState('')
-  const [price, setPrice] = useState(0)
+  const [price, setPrice] = useState('')
   
   // State for pins in the pack
   const [pins, setPins] = useState<Pin[]>([])
@@ -61,6 +61,42 @@ export default function CreatePackPage() {
   // State for form submission
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [userId, setUserId] = useState<string>('')
+
+  // Autocompletion state for city and country
+  const [citySuggestions, setCitySuggestions] = useState<string[]>([])
+  const [countrySuggestions, setCountrySuggestions] = useState<string[]>([])
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false)
+  const [showCountrySuggestions, setShowCountrySuggestions] = useState(false)
+  const [selectedCityIndex, setSelectedCityIndex] = useState(-1)
+  const [selectedCountryIndex, setSelectedCountryIndex] = useState(-1)
+  const cityInputRef = useRef<HTMLInputElement>(null)
+  const countryInputRef = useRef<HTMLInputElement>(null)
+  const selectedCityIndexRef = useRef(-1)
+  const selectedCountryIndexRef = useRef(-1)
+
+  // Popular cities and countries for autocompletion
+  const popularCities = [
+    'Amsterdam', 'Athens', 'Barcelona', 'Berlin', 'Budapest', 'Copenhagen', 'Dublin', 'Edinburgh', 
+    'Florence', 'Geneva', 'Lisbon', 'London', 'Madrid', 'Munich', 'Paris', 'Prague', 'Rome', 
+    'Stockholm', 'Vienna', 'Zurich', 'Bangkok', 'Beijing', 'Delhi', 'Hong Kong', 'Jakarta', 
+    'Kuala Lumpur', 'Mumbai', 'Seoul', 'Shanghai', 'Singapore', 'Tokyo', 'Osaka', 'Manila', 
+    'Ho Chi Minh City', 'Taipei', 'Buenos Aires', 'Chicago', 'Los Angeles', 'Mexico City', 
+    'Montreal', 'New York', 'San Francisco', 'São Paulo', 'Toronto', 'Vancouver', 'Miami', 
+    'Las Vegas', 'Rio de Janeiro', 'Lima', 'Bogotá', 'Cairo', 'Cape Town', 'Dubai', 'Istanbul', 
+    'Johannesburg', 'Marrakech', 'Tel Aviv', 'Casablanca', 'Nairobi', 'Lagos', 'Auckland', 
+    'Melbourne', 'Sydney', 'Wellington'
+  ]
+
+  const popularCountries = [
+    'Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 
+    'Chile', 'China', 'Colombia', 'Croatia', 'Czech Republic', 'Denmark', 'Egypt', 'England', 
+    'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'India', 
+    'Indonesia', 'Ireland', 'Israel', 'Italy', 'Japan', 'Kenya', 'Latvia', 'Lithuania', 
+    'Malaysia', 'Mexico', 'Morocco', 'Netherlands', 'New Zealand', 'Norway', 'Peru', 
+    'Philippines', 'Poland', 'Portugal', 'Romania', 'Scotland', 'Singapore', 'Slovakia', 
+    'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Taiwan', 
+    'Thailand', 'Turkey', 'Ukraine', 'United Kingdom', 'United States', 'Vietnam', 'Wales'
+  ]
 
   // Check for authenticated user or redirect to sign in
   useEffect(() => {
@@ -566,7 +602,7 @@ export default function CreatePackPage() {
         description: packDescription.trim(),
         city: city.trim(),
         country: country.trim(),
-        price: price,
+        price: price === '' ? 0 : Number(price),
         creator_id: userId,
         pin_count: pins.length,
         created_at: new Date().toISOString()
@@ -612,6 +648,9 @@ export default function CreatePackPage() {
         reviews: pin.reviews || null,
         needs_manual_edit: pin.needs_manual_edit || false,
         
+        // Include photos array
+        photos: pin.photos || [],
+        
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }))
@@ -655,7 +694,7 @@ export default function CreatePackPage() {
       setPackDescription('')
       setCity('')
       setCountry('')
-      setPrice(0)
+      setPrice('')
       setPins([])
       
       // Redirect to manage page
@@ -728,6 +767,166 @@ export default function CreatePackPage() {
     }
   }
 
+  // Function to generate city suggestions
+  const generateCitySuggestions = (query: string) => {
+    if (!query.trim() || query.length < 1) {
+      setCitySuggestions([])
+      setShowCitySuggestions(false)
+      setSelectedCityIndex(-1)
+      return
+    }
+
+    const searchQuery = query.toLowerCase()
+    const suggestions = popularCities
+      .filter(city => city.toLowerCase().includes(searchQuery))
+      .slice(0, 6)
+    
+    setCitySuggestions(suggestions)
+    setShowCitySuggestions(suggestions.length > 0)
+    setSelectedCityIndex(-1) // Reset selection when generating new suggestions
+  }
+
+  // Function to generate country suggestions
+  const generateCountrySuggestions = (query: string) => {
+    if (!query.trim() || query.length < 1) {
+      setCountrySuggestions([])
+      setShowCountrySuggestions(false)
+      setSelectedCountryIndex(-1)
+      return
+    }
+
+    const searchQuery = query.toLowerCase()
+    const suggestions = popularCountries
+      .filter(country => country.toLowerCase().includes(searchQuery))
+      .slice(0, 6)
+    
+    setCountrySuggestions(suggestions)
+    setShowCountrySuggestions(suggestions.length > 0)
+    setSelectedCountryIndex(-1) // Reset selection when generating new suggestions
+  }
+
+  // Handle city input change
+  const handleCityInputChange = (value: string) => {
+    setCity(value)
+    setSelectedCityIndex(-1) // Reset selection when typing
+    generateCitySuggestions(value)
+  }
+
+  // Handle country input change
+  const handleCountryInputChange = (value: string) => {
+    setCountry(value)
+    setSelectedCountryIndex(-1) // Reset selection when typing
+    generateCountrySuggestions(value)
+  }
+
+  // Handle city keyboard navigation
+  const handleCityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) {
+      e.preventDefault()
+      
+      const suggestionsCount = citySuggestions.length
+      
+      if (e.key === 'ArrowDown') {
+        if (showCitySuggestions && suggestionsCount > 0) {
+          const currentIndex = selectedCityIndexRef.current === -1 ? -1 : selectedCityIndexRef.current
+          const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
+          setSelectedCityIndex(newIndex)
+        }
+      } else if (e.key === 'ArrowUp') {
+        if (showCitySuggestions && suggestionsCount > 0) {
+          const currentIndex = selectedCityIndexRef.current === -1 ? suggestionsCount : selectedCityIndexRef.current
+          const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
+          setSelectedCityIndex(newIndex)
+        }
+      } else if (e.key === 'Enter') {
+        if (showCitySuggestions && suggestionsCount > 0 && selectedCityIndexRef.current >= 0) {
+          const selectedSuggestion = citySuggestions[selectedCityIndexRef.current]
+          handleCitySuggestionClick(selectedSuggestion)
+        }
+      } else if (e.key === 'Escape') {
+        setShowCitySuggestions(false)
+        setSelectedCityIndex(-1)
+        cityInputRef.current?.blur()
+      }
+    }
+  }
+
+  // Handle country keyboard navigation
+  const handleCountryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) {
+      e.preventDefault()
+      
+      const suggestionsCount = countrySuggestions.length
+      
+      if (e.key === 'ArrowDown') {
+        if (showCountrySuggestions && suggestionsCount > 0) {
+          const currentIndex = selectedCountryIndexRef.current === -1 ? -1 : selectedCountryIndexRef.current
+          const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
+          setSelectedCountryIndex(newIndex)
+        }
+      } else if (e.key === 'ArrowUp') {
+        if (showCountrySuggestions && suggestionsCount > 0) {
+          const currentIndex = selectedCountryIndexRef.current === -1 ? suggestionsCount : selectedCountryIndexRef.current
+          const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
+          setSelectedCountryIndex(newIndex)
+        }
+      } else if (e.key === 'Enter') {
+        if (showCountrySuggestions && suggestionsCount > 0 && selectedCountryIndexRef.current >= 0) {
+          const selectedSuggestion = countrySuggestions[selectedCountryIndexRef.current]
+          handleCountrySuggestionClick(selectedSuggestion)
+        }
+      } else if (e.key === 'Escape') {
+        setShowCountrySuggestions(false)
+        setSelectedCountryIndex(-1)
+        countryInputRef.current?.blur()
+      }
+    }
+  }
+
+  // Handle city suggestion click
+  const handleCitySuggestionClick = (suggestion: string) => {
+    setCity(suggestion)
+    setShowCitySuggestions(false)
+    setSelectedCityIndex(-1)
+    cityInputRef.current?.blur()
+  }
+
+  // Handle country suggestion click
+  const handleCountrySuggestionClick = (suggestion: string) => {
+    setCountry(suggestion)
+    setShowCountrySuggestions(false)
+    setSelectedCountryIndex(-1)
+    countryInputRef.current?.blur()
+  }
+
+  // Sync refs with state for keyboard navigation
+  useEffect(() => {
+    selectedCityIndexRef.current = selectedCityIndex
+  }, [selectedCityIndex])
+
+  useEffect(() => {
+    selectedCountryIndexRef.current = selectedCountryIndex
+  }, [selectedCountryIndex])
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cityInputRef.current && !cityInputRef.current.contains(event.target as Node)) {
+        setShowCitySuggestions(false)
+        setSelectedCityIndex(-1)
+      }
+      if (countryInputRef.current && !countryInputRef.current.contains(event.target as Node)) {
+        setShowCountrySuggestions(false)
+        setSelectedCountryIndex(-1)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-gray-25">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -783,7 +982,7 @@ export default function CreatePackPage() {
 
         {/* Main Form */}
         <div className="space-y-8">
-          {/* Pack Details Card */}
+          {/* Pack Details Card - Now includes Add Place functionality */}
           <div className="card-airbnb p-8">
             <div className="flex items-center mb-6">
               <Globe className="h-6 w-6 text-coral-500 mr-3" />
@@ -806,45 +1005,114 @@ export default function CreatePackPage() {
               
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Price (USD)
+                  Price (EUR)
                 </label>
                 <input
                   type="number"
                   value={price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
+                  onChange={(e) => {
+                    const inputValue = e.target.value
+                    // Allow empty string or valid numbers up to 10
+                    if (inputValue === '' || (Number(inputValue) >= 0 && Number(inputValue) <= 10)) {
+                      setPrice(inputValue)
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Prevent entering letters, 'e', '+', '-' and other non-numeric characters
+                    if (
+                      !['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'Home', 'End', 'ArrowLeft', 'ArrowRight', 'Clear', 'Copy', 'Paste'].includes(e.key) &&
+                      !e.ctrlKey && 
+                      !e.metaKey &&
+                      (e.key.length === 1 && !/[0-9]/.test(e.key))
+                    ) {
+                      e.preventDefault()
+                    }
+                  }}
                   min="0"
+                  max="10"
                   step="1"
-                  className="input-airbnb w-full"
+                  placeholder="0"
+                  className="input-airbnb w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
+                <p className="text-xs text-gray-500 mt-1">Maximum price is €10</p>
               </div>
 
-              <div>
+              {/* City with autocompletion */}
+              <div className="relative" ref={cityInputRef}>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   City *
                 </label>
                 <input
                   type="text"
                   value={city}
-                  onChange={(e) => setCity(e.target.value)}
+                  onChange={(e) => handleCityInputChange(e.target.value)}
+                  onKeyDown={handleCityKeyDown}
+                  onFocus={() => city.length > 0 && generateCitySuggestions(city)}
                   placeholder="Barcelona"
                   className="input-airbnb w-full"
                 />
+                {/* City suggestions dropdown */}
+                {showCitySuggestions && citySuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {citySuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleCitySuggestionClick(suggestion)}
+                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl transition-colors ${
+                          selectedCityIndex === index 
+                            ? 'bg-gray-100 shadow-sm' 
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <MapPin className="h-4 w-4 text-gray-400 mr-3" />
+                          <span className="text-gray-900">{suggestion}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div>
+              {/* Country with autocompletion */}
+              <div className="relative" ref={countryInputRef}>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Country *
                 </label>
                 <input
                   type="text"
                   value={country}
-                  onChange={(e) => setCountry(e.target.value)}
+                  onChange={(e) => handleCountryInputChange(e.target.value)}
+                  onKeyDown={handleCountryKeyDown}
+                  onFocus={() => country.length > 0 && generateCountrySuggestions(country)}
                   placeholder="Spain"
                   className="input-airbnb w-full"
                 />
+                {/* Country suggestions dropdown */}
+                {showCountrySuggestions && countrySuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {countrySuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleCountrySuggestionClick(suggestion)}
+                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl transition-colors ${
+                          selectedCountryIndex === index 
+                            ? 'bg-gray-100 shadow-sm' 
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <Globe className="h-4 w-4 text-gray-400 mr-3" />
+                          <span className="text-gray-900">{suggestion}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
+            {/* Description */}
             <div className="mt-6">
               <label className="block text-sm font-semibold text-gray-900 mb-2">
                 Description
@@ -853,24 +1121,18 @@ export default function CreatePackPage() {
                 value={packDescription}
                 onChange={(e) => setPackDescription(e.target.value)}
                 placeholder="Describe what makes these places special and why travelers should visit them..."
-                rows={4}
+                rows={2}
                 className="input-airbnb w-full resize-none"
               />
             </div>
-          </div>
 
-          {/* Quick Import Section */}
-          <div className="card-airbnb p-8">
-            <div className="flex items-center mb-6">
-              <Upload className="h-6 w-6 text-coral-500 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-900">Add place</h2>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Google Maps Place URL
-                </label>
+            {/* Add Place Section - Now integrated here */}
+            <div className="mt-6">
+              <div className="flex items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Add Places</h3>
+              </div>
+              
+              <div className="space-y-3">
                 <div className="flex gap-3">
                   <input
                     type="url"
@@ -884,12 +1146,9 @@ export default function CreatePackPage() {
                     disabled={!googleMapsListUrl.trim() || isImporting}
                     className="btn-primary px-6 disabled:opacity-50"
                   >
-                    {isImporting ? 'Importing...' : 'Fetch Info'}
+                    {isImporting ? 'Importing...' : 'Add Place'}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  💡 Paste a Google Maps place URL to automatically extract place information including ratings, hours, and reviews.
-                </p>
               </div>
             </div>
           </div>

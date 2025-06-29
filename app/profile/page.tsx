@@ -23,11 +23,11 @@ export default function ProfilePage() {
         } catch (error) {
           console.error('Error parsing user profile:', error)
           // Redirect to sign in if profile is corrupted
-          window.location.href = '/signin'
+          window.location.href = '/auth'
         }
       } else {
         // No profile found, redirect to sign in
-        window.location.href = '/signin'
+        window.location.href = '/auth'
       }
       setIsLoading(false)
     }
