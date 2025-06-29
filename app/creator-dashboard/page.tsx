@@ -45,10 +45,15 @@ export default function CreatorDashboard() {
     loadCreatorData()
   }, [])
 
-  // Handle marking user as creator-eligible
+  // Handle marking user as creator-eligible and registered
   useEffect(() => {
     // Mark user as creator eligible when they visit dashboard
     localStorage.setItem('pinpacks_has_created_packs', 'true')
+    // Register user as a creator when they access the dashboard
+    localStorage.setItem('pinpacks_is_registered_creator', 'true')
+    
+    // Trigger storage event to update navigation
+    window.dispatchEvent(new Event('storage'))
   }, [])
 
   if (isLoading) {

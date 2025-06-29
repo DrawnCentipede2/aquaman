@@ -7,10 +7,15 @@ import type { PinPack } from '@/lib/supabase'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 
+// Extended PinPack type to include cover photo
+interface PinPackWithPhoto extends PinPack {
+  coverPhoto?: string | null
+}
+
 export default function BrowsePage() {
   // State for storing pin packs from database
-  const [pinPacks, setPinPacks] = useState<PinPack[]>([])
-  const [filteredPacks, setFilteredPacks] = useState<PinPack[]>([])
+  const [pinPacks, setPinPacks] = useState<PinPackWithPhoto[]>([])
+  const [filteredPacks, setFilteredPacks] = useState<PinPackWithPhoto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -764,14 +769,58 @@ export default function BrowsePage() {
   const loadPinPacks = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
+      
+      // First get all pin packs
+      const { data: packData, error: packError } = await supabase
         .from('pin_packs')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
-      setPinPacks(data || [])
-      setFilteredPacks(data || [])
+      if (packError) throw packError
+
+      // For each pack, get the first available photo from its pins
+      const packsWithPhotos = await Promise.all(
+        (packData || []).map(async (pack) => {
+          try {
+            // Get first pin with photos for this pack
+            const { data: pinData, error: pinError } = await supabase
+              .from('pin_pack_pins')
+              .select(`
+                pins (
+                  photos
+                )
+              `)
+              .eq('pin_pack_id', pack.id)
+              .limit(10) // Get up to 10 pins to check for photos
+
+            if (!pinError && pinData) {
+              // Find first pin that has photos
+              const pinWithPhoto = pinData.find((item: any) => {
+                const pin = item.pins as any
+                return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
+              })
+              
+              if (pinWithPhoto) {
+                const pin = pinWithPhoto.pins as any
+                return {
+                  ...pack,
+                  coverPhoto: pin.photos[0] // Add first photo as cover
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Error loading photos for pack:', pack.id, error)
+          }
+          
+          return {
+            ...pack,
+            coverPhoto: null // No photos found
+          }
+        })
+      )
+
+      setPinPacks(packsWithPhotos)
+      setFilteredPacks(packsWithPhotos)
     } catch (err) {
       setError('Failed to load pin packs')
       console.error('Error loading pin packs:', err)
@@ -1427,16 +1476,29 @@ export default function BrowsePage() {
                 onClick={() => window.location.href = `/pack/${pack.id}`}
                 className="card-airbnb group cursor-pointer"
               >
-                {/* Image placeholder - Google Maps style background */}
+                {/* Pack cover image or Google Maps background */}
                 <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
                   {/* Inner container that scales - maintains boundaries */}
                   <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
-                    {/* Google Maps background */}
-                    <img 
-                      src="/google-maps-bg.svg"
-                      alt="Map background"
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
+                    {/* Display actual photo if available, otherwise Google Maps background */}
+                    {pack.coverPhoto ? (
+                      <img 
+                        src={`${pack.coverPhoto}`}
+                        alt={`${pack.title} cover`}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        style={{ aspectRatio: '4/3' }}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                        }}
+                      />
+                    ) : (
+                      <img 
+                        src="/google-maps-bg.svg"
+                        alt="Map background"
+                        className="absolute inset-0 w-full h-full object-cover"
+                        style={{ aspectRatio: '4/3' }}
+                      />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                   </div>
                   

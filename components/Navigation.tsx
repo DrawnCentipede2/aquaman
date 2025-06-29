@@ -49,6 +49,7 @@ export default function Navigation() {
   
   // Creator status tracking
   const [isCreatorEligible, setIsCreatorEligible] = useState(false)
+  const [isRegisteredCreator, setIsRegisteredCreator] = useState(false)
 
   // Currency options
   const currencies = [
@@ -91,17 +92,19 @@ export default function Navigation() {
       const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
       const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
       const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
+      const isCreatorRegistered = localStorage.getItem('pinpacks_is_registered_creator') === 'true'
       
       setSelectedCurrency(savedCurrency)
       setSelectedLanguage(savedLanguage)
       setSelectedRegion(savedRegion)
       setIsCreatorEligible(hasCreatedPacks)
+      setIsRegisteredCreator(isCreatorRegistered)
     }
     
     // Listen for storage changes (when user signs in/out in another tab)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'pinpacks_user_profile') {
-        console.log('User profile storage changed, updating auth state')
+      if (e.key === 'pinpacks_user_profile' || e.key === 'pinpacks_is_registered_creator' || e.key === 'pinpacks_has_created_packs') {
+        console.log('User profile or creator status storage changed, updating auth state')
         const newAuthState = getInitialAuthState()
         setIsAuthenticated(newAuthState.isAuthenticated)
         setUserProfile(newAuthState.userProfile)
@@ -112,19 +115,37 @@ export default function Navigation() {
           const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
           const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
           const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
+          const isCreatorRegistered = localStorage.getItem('pinpacks_is_registered_creator') === 'true'
           
           setSelectedCurrency(savedCurrency)
           setSelectedLanguage(savedLanguage)
           setSelectedRegion(savedRegion)
           setIsCreatorEligible(hasCreatedPacks)
+          setIsRegisteredCreator(isCreatorRegistered)
+        } else {
+          // Reset creator status if not authenticated
+          setIsCreatorEligible(false)
+          setIsRegisteredCreator(false)
         }
       }
     }
     
+    // Also listen for custom storage events (triggered manually)
+    const handleCustomStorageEvent = () => {
+      if (isAuthenticated) {
+        const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
+        const isCreatorRegistered = localStorage.getItem('pinpacks_is_registered_creator') === 'true'
+        setIsCreatorEligible(hasCreatedPacks)
+        setIsRegisteredCreator(isCreatorRegistered)
+      }
+    }
+    
     window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('storage', handleCustomStorageEvent)
     
     return () => {
       window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('storage', handleCustomStorageEvent)
     }
   }, [])
 
@@ -196,10 +217,12 @@ export default function Navigation() {
     localStorage.removeItem('pinpacks_user_ip')
     localStorage.removeItem('pinpacks_user_location')
     localStorage.removeItem('pinpacks_has_created_packs')
+    localStorage.removeItem('pinpacks_is_registered_creator')
     setUserProfile(null)
     setIsAuthenticated(false)
     setIsDropdownOpen(false)
     setIsCreatorEligible(false)
+    setIsRegisteredCreator(false)
     
     // Trigger storage event to update navigation
     window.dispatchEvent(new Event('storage'))
@@ -238,6 +261,19 @@ export default function Navigation() {
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language, region } }))
   }
 
+  // Handle "Sell like a local" click - route based on creator registration status
+  const handleSellLikeLocal = (e: React.MouseEvent) => {
+    e.preventDefault()
+    
+    if (isAuthenticated && isRegisteredCreator) {
+      // User is signed in and registered as creator → go to creator dashboard
+      window.location.href = '/creator-dashboard'
+    } else {
+      // User is not signed in OR not registered as creator → go to sell page
+      window.location.href = '/sell'
+    }
+  }
+
 
 
   // Show loading state during hydration to prevent mismatch
@@ -274,7 +310,14 @@ export default function Navigation() {
             Cart
           </a>
 
-          <a href="/sell" className={getLinkClasses('/sell')}>
+          <a 
+            href="/sell" 
+            className={getLinkClasses('/sell')}
+            onClick={(e) => {
+              e.preventDefault()
+              // During loading, just prevent default - no popup yet
+            }}
+          >
             <DollarSign className="h-4 w-4 inline mr-1" />
             Sell like a local
           </a>
@@ -376,13 +419,15 @@ export default function Navigation() {
             Cart
           </a>
 
-          {/* Only show "Sell like a local" if user hasn't created packs yet */}
-          {!isCreatorEligible && (
-            <a href="/sell" className={getLinkClasses('/sell')}>
-              <DollarSign className="h-4 w-4 inline mr-1" />
-              Sell like a local
-            </a>
-          )}
+          {/* Always show "Sell like a local" - routes to dashboard if registered creator, sell page otherwise */}
+          <a 
+            href="/sell" 
+            className={getLinkClasses('/sell')}
+            onClick={handleSellLikeLocal}
+          >
+            <DollarSign className="h-4 w-4 inline mr-1" />
+            Sell like a local
+          </a>
         </div>
 
         {/* Right side actions - Consistent Profile button for all users */}
@@ -507,23 +552,30 @@ export default function Navigation() {
                           <div className="text-xs text-gray-500 truncate">
                             {userProfile?.email}
                           </div>
+                          {isRegisteredCreator && (
+                            <div className="text-xs text-coral-600 font-medium mt-1">
+                              Creator
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Creator Dashboard Link */}
-                    <div className="py-2">
-                      <a
-                        href="/creator-dashboard"
-                        onClick={() => setIsDropdownOpen(false)}
-                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <Settings className="h-4 w-4 mr-3 text-gray-500" />
-                        Creator Dashboard
-                      </a>
-                      
-                      <div className="border-t border-gray-100 my-2"></div>
-                    </div>
+                    {/* Creator Dashboard Link - Only show if registered creator */}
+                    {isRegisteredCreator && (
+                      <div className="py-2">
+                        <a
+                          href="/creator-dashboard"
+                          onClick={() => setIsDropdownOpen(false)}
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Settings className="h-4 w-4 mr-3 text-gray-500" />
+                          Creator Dashboard
+                        </a>
+                        
+                        <div className="border-t border-gray-100 my-2"></div>
+                      </div>
+                    )}
 
                     {/* Quick Settings - Only essential items */}
                     <div className="py-2">

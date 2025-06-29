@@ -20,9 +20,18 @@ ADD COLUMN IF NOT EXISTS needs_manual_edit BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW(),
 ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'::jsonb;
 
--- Add constraint for rating validation
-ALTER TABLE pins 
-ADD CONSTRAINT IF NOT EXISTS valid_rating CHECK (rating IS NULL OR (rating >= 0 AND rating <= 5));
+-- Add constraint for rating validation (using DO block to handle IF NOT EXISTS)
+DO $$ 
+BEGIN
+    -- Check if constraint doesn't exist, then add it
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE table_name = 'pins' AND constraint_name = 'valid_rating'
+    ) THEN
+        ALTER TABLE pins 
+        ADD CONSTRAINT valid_rating CHECK (rating IS NULL OR (rating >= 0 AND rating <= 5));
+    END IF;
+END $$;
 
 -- Create additional indexes for new fields
 CREATE INDEX IF NOT EXISTS idx_pins_city_country ON pins(city, country);
@@ -54,15 +63,36 @@ CREATE INDEX IF NOT EXISTS idx_edit_requests_pin_id ON place_edit_requests(pin_i
 CREATE INDEX IF NOT EXISTS idx_edit_requests_status ON place_edit_requests(status);
 CREATE INDEX IF NOT EXISTS idx_edit_requests_created_at ON place_edit_requests(created_at);
 
--- Create policies for place_edit_requests table
-CREATE POLICY IF NOT EXISTS "Anyone can view edit requests" ON place_edit_requests
-    FOR SELECT USING (true);
-
-CREATE POLICY IF NOT EXISTS "Anyone can insert edit requests" ON place_edit_requests
-    FOR INSERT WITH CHECK (true);
-
-CREATE POLICY IF NOT EXISTS "Anyone can update edit requests" ON place_edit_requests
-    FOR UPDATE USING (true);
+-- Create policies for place_edit_requests table (using DO blocks to handle IF NOT EXISTS)
+DO $$ 
+BEGIN
+    -- Create view policy if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'place_edit_requests' AND policyname = 'Anyone can view edit requests'
+    ) THEN
+        CREATE POLICY "Anyone can view edit requests" ON place_edit_requests
+            FOR SELECT USING (true);
+    END IF;
+    
+    -- Create insert policy if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'place_edit_requests' AND policyname = 'Anyone can insert edit requests'
+    ) THEN
+        CREATE POLICY "Anyone can insert edit requests" ON place_edit_requests
+            FOR INSERT WITH CHECK (true);
+    END IF;
+    
+    -- Create update policy if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'place_edit_requests' AND policyname = 'Anyone can update edit requests'
+    ) THEN
+        CREATE POLICY "Anyone can update edit requests" ON place_edit_requests
+            FOR UPDATE USING (true);
+    END IF;
+END $$;
 
 -- Update existing pins table policies to handle new fields (if needed)
 -- The existing policies should already cover the new fields since they allow all operations

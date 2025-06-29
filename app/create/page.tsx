@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star } from 'lucide-react'
+import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { importSinglePlace, extractCoordinates, extractPlaceId } from '@/lib/googleMaps'
+import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 
 // Interface for a single pin
 interface Pin {
@@ -62,41 +63,65 @@ export default function CreatePackPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [userId, setUserId] = useState<string>('')
 
-  // Autocompletion state for city and country
-  const [citySuggestions, setCitySuggestions] = useState<string[]>([])
-  const [countrySuggestions, setCountrySuggestions] = useState<string[]>([])
-  const [showCitySuggestions, setShowCitySuggestions] = useState(false)
-  const [showCountrySuggestions, setShowCountrySuggestions] = useState(false)
-  const [selectedCityIndex, setSelectedCityIndex] = useState(-1)
+  // Country and city dropdown state
+  const [availableCountries, setAvailableCountries] = useState<string[]>([])
+  const [availableCities, setAvailableCities] = useState<string[]>([])
+  const [filteredCountries, setFilteredCountries] = useState<string[]>([])
+  const [filteredCities, setFilteredCities] = useState<string[]>([])
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false)
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const [countrySearchTerm, setCountrySearchTerm] = useState('')
+  const [citySearchTerm, setCitySearchTerm] = useState('')
+  
+  // Keyboard navigation state
   const [selectedCountryIndex, setSelectedCountryIndex] = useState(-1)
-  const cityInputRef = useRef<HTMLInputElement>(null)
-  const countryInputRef = useRef<HTMLInputElement>(null)
-  const selectedCityIndexRef = useRef(-1)
+  const [selectedCityIndex, setSelectedCityIndex] = useState(-1)
   const selectedCountryIndexRef = useRef(-1)
+  const selectedCityIndexRef = useRef(-1)
+  
+  // Dropdown container refs for auto-scrolling
+  const countryDropdownRef = useRef<HTMLDivElement>(null)
+  const cityDropdownRef = useRef<HTMLDivElement>(null)
 
-  // Popular cities and countries for autocompletion
-  const popularCities = [
-    'Amsterdam', 'Athens', 'Barcelona', 'Berlin', 'Budapest', 'Copenhagen', 'Dublin', 'Edinburgh', 
-    'Florence', 'Geneva', 'Lisbon', 'London', 'Madrid', 'Munich', 'Paris', 'Prague', 'Rome', 
-    'Stockholm', 'Vienna', 'Zurich', 'Bangkok', 'Beijing', 'Delhi', 'Hong Kong', 'Jakarta', 
-    'Kuala Lumpur', 'Mumbai', 'Seoul', 'Shanghai', 'Singapore', 'Tokyo', 'Osaka', 'Manila', 
-    'Ho Chi Minh City', 'Taipei', 'Buenos Aires', 'Chicago', 'Los Angeles', 'Mexico City', 
-    'Montreal', 'New York', 'San Francisco', 'São Paulo', 'Toronto', 'Vancouver', 'Miami', 
-    'Las Vegas', 'Rio de Janeiro', 'Lima', 'Bogotá', 'Cairo', 'Cape Town', 'Dubai', 'Istanbul', 
-    'Johannesburg', 'Marrakech', 'Tel Aviv', 'Casablanca', 'Nairobi', 'Lagos', 'Auckland', 
-    'Melbourne', 'Sydney', 'Wellington'
-  ]
+  // Load countries and cities data on component mount
+  useEffect(() => {
+    const countries = getAllCountries()
+    setAvailableCountries(countries)
+    setFilteredCountries(countries)
+  }, [])
 
-  const popularCountries = [
-    'Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 
-    'Chile', 'China', 'Colombia', 'Croatia', 'Czech Republic', 'Denmark', 'Egypt', 'England', 
-    'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'India', 
-    'Indonesia', 'Ireland', 'Israel', 'Italy', 'Japan', 'Kenya', 'Latvia', 'Lithuania', 
-    'Malaysia', 'Mexico', 'Morocco', 'Netherlands', 'New Zealand', 'Norway', 'Peru', 
-    'Philippines', 'Poland', 'Portugal', 'Romania', 'Scotland', 'Singapore', 'Slovakia', 
-    'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Taiwan', 
-    'Thailand', 'Turkey', 'Ukraine', 'United Kingdom', 'United States', 'Vietnam', 'Wales'
-  ]
+  // Sync refs with state for keyboard navigation and auto-scroll
+  useEffect(() => {
+    selectedCountryIndexRef.current = selectedCountryIndex
+    
+    // Auto-scroll the selected country item into view
+    if (selectedCountryIndex >= 0 && countryDropdownRef.current) {
+      const dropdown = countryDropdownRef.current
+      const selectedButton = dropdown.children[selectedCountryIndex] as HTMLElement
+      if (selectedButton) {
+        selectedButton.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        })
+      }
+    }
+  }, [selectedCountryIndex])
+
+  useEffect(() => {
+    selectedCityIndexRef.current = selectedCityIndex
+    
+    // Auto-scroll the selected city item into view
+    if (selectedCityIndex >= 0 && cityDropdownRef.current) {
+      const dropdown = cityDropdownRef.current
+      const selectedButton = dropdown.children[selectedCityIndex] as HTMLElement
+      if (selectedButton) {
+        selectedButton.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest'
+        })
+      }
+    }
+  }, [selectedCityIndex])
 
   // Check for authenticated user or redirect to sign in
   useEffect(() => {
@@ -144,6 +169,60 @@ export default function CreatePackPage() {
 
     loadPinsFromStorage()
   }, [])
+
+  // Load pack details from localStorage when component mounts
+  useEffect(() => {
+    const loadPackDetailsFromStorage = () => {
+      try {
+        const savedPackDetails = localStorage.getItem('pinpacks_create_pack_details')
+        if (savedPackDetails) {
+          const details = JSON.parse(savedPackDetails)
+          
+          // Load pack details
+          if (details.packTitle) setPackTitle(details.packTitle)
+          if (details.packDescription) setPackDescription(details.packDescription)
+          if (details.price) setPrice(details.price)
+          if (details.country) {
+            setCountry(details.country)
+            // Load cities for the saved country
+            const cities = getCitiesForCountry(details.country)
+            setAvailableCities(cities)
+            setFilteredCities(cities)
+          }
+          if (details.city) setCity(details.city)
+          
+          console.log('✅ Loaded pack details from localStorage:', details)
+        } else {
+          console.log('ℹ️ No saved pack details found in localStorage')
+        }
+      } catch (error) {
+        console.error('❌ Error loading pack details from localStorage:', error)
+      }
+    }
+
+    loadPackDetailsFromStorage()
+  }, [])
+
+  // Save pack details to localStorage whenever they change
+  useEffect(() => {
+    const packDetails = {
+      packTitle,
+      packDescription,
+      city,
+      country,
+      price
+    }
+    
+    // Only save if at least one field has content
+    if (packTitle.trim() || packDescription.trim() || city.trim() || country.trim() || price.trim()) {
+      try {
+        localStorage.setItem('pinpacks_create_pack_details', JSON.stringify(packDetails))
+        console.log('💾 Saved pack details to localStorage')
+      } catch (error) {
+        console.error('❌ Error saving pack details to localStorage:', error)
+      }
+    }
+  }, [packTitle, packDescription, city, country, price])
 
   // Enhanced function to import places from Google Maps URLs using Places API
   const importFromGoogleMapsList = async () => {
@@ -648,7 +727,7 @@ export default function CreatePackPage() {
         reviews: pin.reviews || null,
         needs_manual_edit: pin.needs_manual_edit || false,
         
-        // Include photos array
+        // Include photos array (now supported by database)
         photos: pin.photos || [],
         
         created_at: new Date().toISOString(),
@@ -697,6 +776,15 @@ export default function CreatePackPage() {
       setPrice('')
       setPins([])
       
+      // Clear localStorage to start fresh for next pack
+      try {
+        localStorage.removeItem('pinpacks_create_pack_details')
+        localStorage.removeItem('pinpacks_create_pins')
+        console.log('🧹 Cleared localStorage after successful pack creation')
+      } catch (error) {
+        console.error('❌ Error clearing localStorage:', error)
+      }
+      
       // Redirect to manage page
       window.location.href = '/manage'
       
@@ -709,215 +797,173 @@ export default function CreatePackPage() {
     }
   }
 
-  // Test function to check Google Maps API configuration
-  const testGoogleMapsAPI = async () => {
-    try {
-      console.log('Testing Google Maps API configuration...')
-      
-      // Check if API key is available
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      console.log('API Key available:', !!apiKey)
-      
-      if (!apiKey) {
-        alert('❌ Google Maps API key is not configured.\n\nPlease add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your .env.local file.')
-        return
-      }
-      
-      // Test with a simple URL
-      const testUrl = 'https://www.google.com/maps/place/Eiffel+Tower/@48.8583701,2.2922926,17z'
-      const result = await importSinglePlace(testUrl)
-      
-      console.log('Test result:', result)
-      alert(`✅ Google Maps API is working!\n\nTest result:\n• Title: ${result.title}\n• Category: ${result.category}\n• Rating: ${result.rating || 'N/A'}\n• Address: ${result.address || 'N/A'}`)
-      
-    } catch (error) {
-      console.error('Google Maps API test failed:', error)
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      alert(`❌ Google Maps API test failed.\n\nError: ${errorMessage}\n\nPlease check:\n• API key is valid\n• Places API is enabled\n• Billing is set up`)
-    }
-  }
-
-  // Debug function to test place ID extraction
-  const debugPlaceId = () => {
-    const testUrl = prompt('Enter a Google Maps URL to test place ID extraction:')
-    if (!testUrl) return
-    
-    console.log('=== DEBUGGING PLACE ID EXTRACTION ===')
-    console.log('Test URL:', testUrl)
-    
-    // Test the extraction function from googleMaps.ts
-    try {
-      const placeId = extractPlaceId ? extractPlaceId(testUrl) : 'extractPlaceId function not available'
-      console.log('Extracted Place ID:', placeId)
-      
-      const coords = extractCoordinates(testUrl)
-      console.log('Extracted Coordinates:', coords)
-      
-      // Show results in alert
-      alert(
-        `Debug Results:\n\n` +
-        `URL: ${testUrl}\n\n` +
-        `Place ID: ${placeId || 'None found'}\n\n` +
-        `Coordinates: ${coords.latitude}, ${coords.longitude}\n\n` +
-        `Check console for detailed logs.`
-      )
-    } catch (error) {
-      console.error('Debug error:', error)
-      alert(`Debug error: ${error}`)
-    }
-  }
-
-  // Function to generate city suggestions
-  const generateCitySuggestions = (query: string) => {
-    if (!query.trim() || query.length < 1) {
-      setCitySuggestions([])
-      setShowCitySuggestions(false)
-      setSelectedCityIndex(-1)
-      return
-    }
-
-    const searchQuery = query.toLowerCase()
-    const suggestions = popularCities
-      .filter(city => city.toLowerCase().includes(searchQuery))
-      .slice(0, 6)
-    
-    setCitySuggestions(suggestions)
-    setShowCitySuggestions(suggestions.length > 0)
-    setSelectedCityIndex(-1) // Reset selection when generating new suggestions
-  }
-
-  // Function to generate country suggestions
-  const generateCountrySuggestions = (query: string) => {
-    if (!query.trim() || query.length < 1) {
-      setCountrySuggestions([])
-      setShowCountrySuggestions(false)
-      setSelectedCountryIndex(-1)
-      return
-    }
-
-    const searchQuery = query.toLowerCase()
-    const suggestions = popularCountries
-      .filter(country => country.toLowerCase().includes(searchQuery))
-      .slice(0, 6)
-    
-    setCountrySuggestions(suggestions)
-    setShowCountrySuggestions(suggestions.length > 0)
-    setSelectedCountryIndex(-1) // Reset selection when generating new suggestions
-  }
-
-  // Handle city input change
-  const handleCityInputChange = (value: string) => {
-    setCity(value)
-    setSelectedCityIndex(-1) // Reset selection when typing
-    generateCitySuggestions(value)
-  }
-
-  // Handle country input change
-  const handleCountryInputChange = (value: string) => {
-    setCountry(value)
+    // Handle country search/filter
+  const handleCountrySearch = (searchTerm: string) => {
+    setCountrySearchTerm(searchTerm)
     setSelectedCountryIndex(-1) // Reset selection when typing
-    generateCountrySuggestions(value)
+    
+    // If user starts typing, clear the selected country to allow editing
+    if (country && searchTerm !== country) {
+      setCountry('')
+      setCity('') // Also clear city when country changes
+      setCitySearchTerm('')
+      setAvailableCities([])
+      setFilteredCities([])
+    }
+    
+    // If user clears the field completely, reset everything
+    if (!searchTerm.trim()) {
+      setFilteredCountries(availableCountries)
+      if (country) {
+        setCountry('')
+        setCity('')
+        setCitySearchTerm('')
+        setAvailableCities([])
+        setFilteredCities([])
+      }
+    } else {
+      const filtered = availableCountries.filter(country =>
+        country.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      setFilteredCountries(filtered)
+    }
+    
+    if (!showCountryDropdown) {
+      setShowCountryDropdown(true)
+    }
   }
 
-  // Handle city keyboard navigation
-  const handleCityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) {
-      e.preventDefault()
-      
-      const suggestionsCount = citySuggestions.length
-      
-      if (e.key === 'ArrowDown') {
-        if (showCitySuggestions && suggestionsCount > 0) {
-          const currentIndex = selectedCityIndexRef.current === -1 ? -1 : selectedCityIndexRef.current
-          const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
-          setSelectedCityIndex(newIndex)
-        }
-      } else if (e.key === 'ArrowUp') {
-        if (showCitySuggestions && suggestionsCount > 0) {
-          const currentIndex = selectedCityIndexRef.current === -1 ? suggestionsCount : selectedCityIndexRef.current
-          const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
-          setSelectedCityIndex(newIndex)
-        }
-      } else if (e.key === 'Enter') {
-        if (showCitySuggestions && suggestionsCount > 0 && selectedCityIndexRef.current >= 0) {
-          const selectedSuggestion = citySuggestions[selectedCityIndexRef.current]
-          handleCitySuggestionClick(selectedSuggestion)
-        }
-      } else if (e.key === 'Escape') {
-        setShowCitySuggestions(false)
-        setSelectedCityIndex(-1)
-        cityInputRef.current?.blur()
-      }
+  // Handle city search/filter
+  const handleCitySearch = (searchTerm: string) => {
+    setCitySearchTerm(searchTerm)
+    setSelectedCityIndex(-1) // Reset selection when typing
+    
+    // If user starts typing, clear the selected city to allow editing
+    if (city && searchTerm !== city) {
+      setCity('')
     }
+    
+    // If user clears the field completely, reset city
+    if (!searchTerm.trim()) {
+      setFilteredCities(availableCities)
+      if (city) {
+        setCity('')
+      }
+    } else {
+      const filtered = availableCities.filter(city =>
+        city.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      setFilteredCities(filtered)
+    }
+    
+    if (!showCityDropdown && availableCities.length > 0) {
+      setShowCityDropdown(true)
+    }
+  }
+
+  // Handle country selection and update available cities
+  const handleCountrySelect = (selectedCountry: string) => {
+    setCountry(selectedCountry)
+    setCountrySearchTerm('') // Clear search term
+    setSelectedCountryIndex(-1) // Reset selection
+    setCity('') // Reset city when country changes  
+    setCitySearchTerm('') // Clear city search term
+    setSelectedCityIndex(-1) // Reset city selection
+    setShowCountryDropdown(false)
+    
+    // Load cities for the selected country
+    const cities = getCitiesForCountry(selectedCountry)
+    setAvailableCities(cities)
+    setFilteredCities(cities)
+  }
+
+  // Handle city selection
+  const handleCitySelect = (selectedCity: string) => {
+    setCity(selectedCity)
+    setCitySearchTerm('') // Clear search term
+    setSelectedCityIndex(-1) // Reset selection
+    setShowCityDropdown(false)
   }
 
   // Handle country keyboard navigation
   const handleCountryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) {
+    const isDropdownVisible = showCountryDropdown
+    const suggestionsCount = filteredCountries.length
+
+    if (e.key === 'ArrowDown') {
       e.preventDefault()
-      
-      const suggestionsCount = countrySuggestions.length
-      
-      if (e.key === 'ArrowDown') {
-        if (showCountrySuggestions && suggestionsCount > 0) {
-          const currentIndex = selectedCountryIndexRef.current === -1 ? -1 : selectedCountryIndexRef.current
-          const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
-          setSelectedCountryIndex(newIndex)
-        }
-      } else if (e.key === 'ArrowUp') {
-        if (showCountrySuggestions && suggestionsCount > 0) {
-          const currentIndex = selectedCountryIndexRef.current === -1 ? suggestionsCount : selectedCountryIndexRef.current
-          const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
-          setSelectedCountryIndex(newIndex)
-        }
-      } else if (e.key === 'Enter') {
-        if (showCountrySuggestions && suggestionsCount > 0 && selectedCountryIndexRef.current >= 0) {
-          const selectedSuggestion = countrySuggestions[selectedCountryIndexRef.current]
-          handleCountrySuggestionClick(selectedSuggestion)
-        }
-      } else if (e.key === 'Escape') {
-        setShowCountrySuggestions(false)
-        setSelectedCountryIndex(-1)
-        countryInputRef.current?.blur()
+      if (isDropdownVisible && suggestionsCount > 0) {
+        const currentIndex = selectedCountryIndexRef.current === -1 ? -1 : selectedCountryIndexRef.current
+        const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
+        setSelectedCountryIndex(newIndex)
       }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (isDropdownVisible && suggestionsCount > 0) {
+        const currentIndex = selectedCountryIndexRef.current === -1 ? suggestionsCount : selectedCountryIndexRef.current
+        const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
+        setSelectedCountryIndex(newIndex)
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (isDropdownVisible && suggestionsCount > 0 && selectedCountryIndexRef.current >= 0) {
+        const selectedCountry = filteredCountries[selectedCountryIndexRef.current]
+        handleCountrySelect(selectedCountry)
+      }
+    } else if (e.key === 'Escape') {
+      setShowCountryDropdown(false)
+      setSelectedCountryIndex(-1)
     }
   }
 
-  // Handle city suggestion click
-  const handleCitySuggestionClick = (suggestion: string) => {
-    setCity(suggestion)
-    setShowCitySuggestions(false)
-    setSelectedCityIndex(-1)
-    cityInputRef.current?.blur()
+  // Handle city keyboard navigation
+  const handleCityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const isDropdownVisible = showCityDropdown
+    const suggestionsCount = filteredCities.length
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (isDropdownVisible && suggestionsCount > 0) {
+        const currentIndex = selectedCityIndexRef.current === -1 ? -1 : selectedCityIndexRef.current
+        const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
+        setSelectedCityIndex(newIndex)
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (isDropdownVisible && suggestionsCount > 0) {
+        const currentIndex = selectedCityIndexRef.current === -1 ? suggestionsCount : selectedCityIndexRef.current
+        const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
+        setSelectedCityIndex(newIndex)
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (isDropdownVisible && suggestionsCount > 0 && selectedCityIndexRef.current >= 0) {
+        const selectedCity = filteredCities[selectedCityIndexRef.current]
+        handleCitySelect(selectedCity)
+      }
+    } else if (e.key === 'Escape') {
+      setShowCityDropdown(false)
+      setSelectedCityIndex(-1)
+    }
   }
 
-  // Handle country suggestion click
-  const handleCountrySuggestionClick = (suggestion: string) => {
-    setCountry(suggestion)
-    setShowCountrySuggestions(false)
-    setSelectedCountryIndex(-1)
-    countryInputRef.current?.blur()
-  }
-
-  // Sync refs with state for keyboard navigation
-  useEffect(() => {
-    selectedCityIndexRef.current = selectedCityIndex
-  }, [selectedCityIndex])
-
-  useEffect(() => {
-    selectedCountryIndexRef.current = selectedCountryIndex
-  }, [selectedCountryIndex])
-
-  // Close suggestions when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (cityInputRef.current && !cityInputRef.current.contains(event.target as Node)) {
-        setShowCitySuggestions(false)
-        setSelectedCityIndex(-1)
+      const target = event.target as Element
+      if (!target.closest('.country-dropdown')) {
+        setShowCountryDropdown(false)
+        setSelectedCountryIndex(-1) // Reset selection
+        if (!country) {
+          setCountrySearchTerm('') // Clear search if no country selected
+        }
       }
-      if (countryInputRef.current && !countryInputRef.current.contains(event.target as Node)) {
-        setShowCountrySuggestions(false)
-        setSelectedCountryIndex(-1)
+      if (!target.closest('.city-dropdown')) {
+        setShowCityDropdown(false)
+        setSelectedCityIndex(-1) // Reset selection
+        if (!city) {
+          setCitySearchTerm('') // Clear search if no city selected
+        }
       }
     }
 
@@ -925,7 +971,7 @@ export default function CreatePackPage() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [])
+  }, [country, city])
 
   return (
     <div className="min-h-screen bg-gray-25">
@@ -941,43 +987,7 @@ export default function CreatePackPage() {
           <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
             Share your favorite local spots with travelers around the world
           </p>
-          
-          {/* Debug: Test Google Maps API */}
-          <div className="flex gap-2 justify-center">
-            <button
-              onClick={testGoogleMapsAPI}
-              className="btn-secondary text-sm"
-            >
-              🔧 Test Google Maps API
-            </button>
-            <button
-              onClick={debugPlaceId}
-              className="btn-secondary text-sm"
-            >
-              🔍 Debug Place ID
-            </button>
-            <button
-              onClick={() => {
-                try {
-                  const savedPins = localStorage.getItem('pinpacks_create_pins')
-                  if (savedPins) {
-                    const pins = JSON.parse(savedPins)
-                    console.log('🔍 DEBUG: Current localStorage contents:', pins)
-                    alert(`Found ${pins.length} pins in localStorage. Check console for details.`)
-                  } else {
-                    console.log('🔍 DEBUG: No pins found in localStorage')
-                    alert('No pins found in localStorage')
-                  }
-                } catch (error) {
-                  console.error('❌ Error reading localStorage:', error)
-                  alert('Error reading localStorage - check console')
-                }
-              }}
-              className="btn-secondary text-sm"
-            >
-              🔍 Debug Storage
-            </button>
-          </div>
+
         </div>
 
         {/* Main Form */}
@@ -1037,36 +1047,46 @@ export default function CreatePackPage() {
                 <p className="text-xs text-gray-500 mt-1">Maximum price is €10</p>
               </div>
 
-              {/* City with autocompletion */}
-              <div className="relative" ref={cityInputRef}>
+              {/* Country dropdown with search */}
+              <div className="relative country-dropdown">
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  City *
+                  Country *
                 </label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => handleCityInputChange(e.target.value)}
-                  onKeyDown={handleCityKeyDown}
-                  onFocus={() => city.length > 0 && generateCitySuggestions(city)}
-                  placeholder="Barcelona"
-                  className="input-airbnb w-full"
-                />
-                {/* City suggestions dropdown */}
-                {showCitySuggestions && citySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                    {citySuggestions.map((suggestion, index) => (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={countrySearchTerm || country}
+                    onChange={(e) => handleCountrySearch(e.target.value)}
+                    onKeyDown={handleCountryKeyDown}
+                    onFocus={() => {
+                      setShowCountryDropdown(true)
+                      // Always show all countries when focusing, regardless of current state
+                      setFilteredCountries(availableCountries)
+                    }}
+                    placeholder="Start typing to search countries..."
+                    className="input-airbnb w-full pr-10"
+                  />
+                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
+                </div>
+                {/* Country dropdown list */}
+                {showCountryDropdown && filteredCountries.length > 0 && (
+                  <div 
+                    ref={countryDropdownRef}
+                    className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"
+                  >
+                    {filteredCountries.map((countryOption, index) => (
                       <button
                         key={index}
-                        onClick={() => handleCitySuggestionClick(suggestion)}
-                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl transition-colors ${
-                          selectedCityIndex === index 
-                            ? 'bg-gray-100 shadow-sm' 
-                            : 'hover:bg-gray-50'
+                        onClick={() => handleCountrySelect(countryOption)}
+                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl border-l-4 transition-all duration-200 ${
+                          selectedCountryIndex === index 
+                            ? 'bg-coral-50 border-coral-500 text-coral-900' 
+                            : 'hover:bg-gray-100 hover:text-gray-900 border-transparent'
                         }`}
                       >
                         <div className="flex items-center">
-                          <MapPin className="h-4 w-4 text-gray-400 mr-3" />
-                          <span className="text-gray-900">{suggestion}</span>
+                          <Globe className="h-4 w-4 text-gray-400 mr-3" />
+                          <span className="text-gray-900">{countryOption}</span>
                         </div>
                       </button>
                     ))}
@@ -1074,36 +1094,49 @@ export default function CreatePackPage() {
                 )}
               </div>
 
-              {/* Country with autocompletion */}
-              <div className="relative" ref={countryInputRef}>
+              {/* City dropdown with search */}
+              <div className="relative city-dropdown">
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Country *
+                  City *
                 </label>
-                <input
-                  type="text"
-                  value={country}
-                  onChange={(e) => handleCountryInputChange(e.target.value)}
-                  onKeyDown={handleCountryKeyDown}
-                  onFocus={() => country.length > 0 && generateCountrySuggestions(country)}
-                  placeholder="Spain"
-                  className="input-airbnb w-full"
-                />
-                {/* Country suggestions dropdown */}
-                {showCountrySuggestions && countrySuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                    {countrySuggestions.map((suggestion, index) => (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={citySearchTerm || city}
+                    onChange={(e) => handleCitySearch(e.target.value)}
+                    onKeyDown={handleCityKeyDown}
+                    onFocus={() => {
+                      if (availableCities.length > 0) {
+                        setShowCityDropdown(true)
+                        // Always show all cities when focusing, regardless of current state
+                        setFilteredCities(availableCities)
+                      }
+                    }}
+                    disabled={!country}
+                    placeholder={country ? "Start typing to search cities..." : "Select a country first"}
+                    className="input-airbnb w-full pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 transition-transform ${showCityDropdown ? 'rotate-180' : ''}`} />
+                </div>
+                {/* City dropdown list */}
+                {showCityDropdown && filteredCities.length > 0 && (
+                  <div 
+                    ref={cityDropdownRef}
+                    className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"
+                  >
+                    {filteredCities.map((cityOption, index) => (
                       <button
                         key={index}
-                        onClick={() => handleCountrySuggestionClick(suggestion)}
-                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl transition-colors ${
-                          selectedCountryIndex === index 
-                            ? 'bg-gray-100 shadow-sm' 
-                            : 'hover:bg-gray-50'
+                        onClick={() => handleCitySelect(cityOption)}
+                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl border-l-4 transition-all duration-200 ${
+                          selectedCityIndex === index 
+                            ? 'bg-coral-50 border-coral-500 text-coral-900' 
+                            : 'hover:bg-gray-100 hover:text-gray-900 border-transparent'
                         }`}
                       >
                         <div className="flex items-center">
-                          <Globe className="h-4 w-4 text-gray-400 mr-3" />
-                          <span className="text-gray-900">{suggestion}</span>
+                          <MapPin className="h-4 w-4 text-gray-400 mr-3" />
+                          <span className="text-gray-900">{cityOption}</span>
                         </div>
                       </button>
                     ))}
@@ -1129,7 +1162,7 @@ export default function CreatePackPage() {
             {/* Add Place Section - Now integrated here */}
             <div className="mt-6">
               <div className="flex items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Add Places</h3>
+                <h3 className="text-sm font-semibold text-gray-900">Add Places</h3>
               </div>
               
               <div className="space-y-3">

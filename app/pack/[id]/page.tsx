@@ -8,6 +8,7 @@ import type { PinPack } from '@/lib/supabase'
 import { exportToGoogleMyMaps } from '@/lib/googleMaps'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
+import GalleryModal from '@/components/GalleryModal'
 
 export default function PackDetailPage() {
   const params = useParams()
@@ -44,6 +45,9 @@ export default function PackDetailPage() {
   
   // Image gallery state for navigating through pack photos
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  // Image gallery modal state
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryStartIndex, setGalleryStartIndex] = useState(0)
   
   // Function to get the first available photo from any pin in the pack
   const getPackDisplayImage = () => {
@@ -202,7 +206,23 @@ export default function PackDetailPage() {
             category,
             latitude,
             longitude,
-            created_at
+            created_at,
+            address,
+            city,
+            country,
+            zip_code,
+            business_type,
+            phone,
+            website,
+            rating,
+            rating_count,
+            business_status,
+            current_opening_hours,
+            reviews,
+            place_id,
+            needs_manual_edit,
+            updated_at,
+            photos
           )
         `)
         .eq('pin_pack_id', packId)
@@ -225,7 +245,22 @@ export default function PackDetailPage() {
           latitude: item.pins.latitude,
           longitude: item.pins.longitude,
           created_at: item.pins.created_at,
-          address: null // Address is not in the schema, so we'll use the city
+          address: item.pins.address,
+          city: item.pins.city,
+          country: item.pins.country,
+          zip_code: item.pins.zip_code,
+          business_type: item.pins.business_type,
+          phone: item.pins.phone,
+          website: item.pins.website,
+          rating: item.pins.rating,
+          rating_count: item.pins.rating_count,
+          business_status: item.pins.business_status,
+          current_opening_hours: item.pins.current_opening_hours,
+          reviews: item.pins.reviews,
+          place_id: item.pins.place_id,
+          needs_manual_edit: item.pins.needs_manual_edit,
+          updated_at: item.pins.updated_at,
+          photos: item.pins.photos || [] // Include photos array
         })) || []
         
         setPins(pinsData)
@@ -432,12 +467,12 @@ export default function PackDetailPage() {
             cartItems: [{
               id: pack.id,
               title: pack.title,
-              price: parseFloat(pack.price),
+              price: pack.price,
               city: pack.city,
               country: pack.country,
               pin_count: pins.length
             }],
-            totalAmount: parseFloat(pack.price),
+            totalAmount: pack.price,
             processingFee: 0.50,
             userLocation: 'Unknown',
             userIp: 'Unknown'
@@ -667,6 +702,9 @@ export default function PackDetailPage() {
     )
   }
 
+  // Get all photos from all pins in the pack (flat array)
+  const allPhotos: string[] = getAllPackPhotos()
+
   return (
     <div className="min-h-screen bg-gray-25">
       {/* Header with back navigation button */}
@@ -688,65 +726,58 @@ export default function PackDetailPage() {
           {/* Main Content Area - Takes up 2/3 of the space on large screens */}
           <div className="lg:col-span-2 space-y-8">
             
-            {/* Pack Image Display Section */}
-            <div className="relative">
-              <div className="aspect-[4/3] bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-2xl overflow-hidden relative">
-                {/* Display actual photos if available, otherwise show placeholder */}
-                {getPackDisplayImage() ? (
-                  <img 
-                    src={getPackDisplayImage()!}
-                    alt={pack.title}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ) : (
-                  /* Fallback to gradient pattern if no photos */
-                  <div 
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e0e0e0' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #4facfe 100%)`,
-                      backgroundSize: '60px 60px, cover',
-                      backgroundPosition: 'center, center'
-                    }}
-                  >
-                    {/* Add some map-like elements for visual interest when no photos */}
-                    <div className="absolute inset-0">
-                      <div className="absolute top-1/3 left-0 right-0 h-1 bg-white/30 transform -rotate-12"></div>
-                      <div className="absolute top-2/3 left-0 right-0 h-1 bg-white/30 transform rotate-12"></div>
-                      <div className="absolute left-1/4 top-0 bottom-0 w-1 bg-white/30 transform rotate-6"></div>
-                      <div className="absolute right-1/3 top-0 bottom-0 w-1 bg-white/30 transform -rotate-6"></div>
-                      <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
-                      <div className="absolute top-3/5 right-1/4 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
-                      <div className="absolute bottom-1/4 left-2/3 w-3 h-3 bg-coral-500 rounded-full shadow-lg"></div>
-                    </div>
+            {/* Pack Image Display Section - Gallery Style */}
+            <div className="relative mb-8">
+              {allPhotos.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {/* Main photo (2/3 width on desktop) */}
+                  <div className="lg:col-span-2 aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer relative group" onClick={() => { setGalleryStartIndex(0); setGalleryOpen(true); }}>
+                    <img
+                      src={`${allPhotos[0]}`}
+                      alt={pack.title}
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                    />
+                    {/* Overlay for click-to-enlarge */}
+                    <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-40 transition-opacity"></div>
                   </div>
-                )}
-                
-                {/* Dark overlay for better text readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
-
-                {/* Overlay content */}
-                <div className="absolute inset-0 flex flex-col justify-between p-6">
-                  {/* Top right info */}
-                  <div className="flex justify-end">
-                    <div className="bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg text-sm font-medium text-gray-800 flex items-center">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {pack.city}, {pack.country}
-                    </div>
-                  </div>
-
-                  {/* Bottom left info */}
-                  <div className="text-white">
-                    <div className="flex items-center space-x-2 text-sm mb-2">
-                      <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                      <span className="font-medium">4.8 • {pack.download_count || 0} downloads</span>
-                    </div>
-                    <div className="bg-coral-500 text-white px-3 py-1 rounded-lg text-sm font-medium inline-flex items-center">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {pins.length} amazing places
-                    </div>
+                  {/* Grid of up to 3 more photos (1/3 width) */}
+                  <div className="flex flex-col gap-4">
+                    {allPhotos.slice(1, 4).map((photo, idx) => (
+                      <div
+                        key={idx}
+                        className="aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer relative group"
+                        onClick={() => { setGalleryStartIndex(idx + 1); setGalleryOpen(true); }}
+                      >
+                        <img
+                          src={`${photo}`}
+                          alt={`Gallery photo ${idx + 2}`}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                        {/* Overlay for click-to-enlarge */}
+                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-40 transition-opacity"></div>
+                        {/* +N overlay if this is the last cell and there are more photos */}
+                        {idx === 2 && allPhotos.length > 4 && (
+                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <span className="text-white text-2xl font-bold">+{allPhotos.length - 4}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              ) : (
+                // Fallback if no photos
+                <div className="aspect-[4/3] bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-2xl overflow-hidden relative">
+                  {/* ... existing fallback ... */}
+                </div>
+              )}
+              {/* Gallery Modal */}
+              <GalleryModal
+                images={allPhotos}
+                startIndex={galleryStartIndex}
+                isOpen={galleryOpen}
+                onClose={() => setGalleryOpen(false)}
+              />
             </div>
 
             {/* Main Pack Information Section */}

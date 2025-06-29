@@ -186,14 +186,26 @@ export default function CartPage() {
                     <div className="flex items-center space-x-4">
                       {/* Image placeholder - Google Maps style background */}
                       <div className="w-24 h-24 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg flex-shrink-0 relative overflow-hidden">
-                        {/* Inner container that scales - maintains boundaries */}
                         <div className="absolute inset-0 group-hover:scale-105 transition-transform duration-300 ease-out">
-                          {/* Google Maps background */}
-                          <img 
-                            src="/google-maps-bg.svg"
-                            alt="Map background"
-                            className="absolute inset-0 w-full h-full object-cover rounded-lg"
-                          />
+                          {/* Display actual photo if available, otherwise Google Maps background */}
+                          {item.coverPhoto ? (
+                            <img 
+                              src={item.coverPhoto}
+                              alt={`${item.title} cover`}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              style={{ aspectRatio: '4/3' }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                              }}
+                            />
+                          ) : (
+                            <img 
+                              src="/google-maps-bg.svg"
+                              alt="Map background"
+                              className="absolute inset-0 w-full h-full object-cover"
+                              style={{ aspectRatio: '4/3' }}
+                            />
+                          )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent rounded-lg"></div>
                         </div>
                         <div className="absolute bottom-1 right-1 z-10">

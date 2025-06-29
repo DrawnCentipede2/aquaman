@@ -107,14 +107,26 @@ export default function WishlistPage() {
                 >
                   {/* Image placeholder - Google Maps style background */}
                   <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
-                    {/* Inner container that scales - maintains boundaries */}
                     <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
-                      {/* Google Maps background */}
-                      <img 
-                        src="/google-maps-bg.svg"
-                        alt="Map background"
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
+                      {/* Display actual photo if available, otherwise Google Maps background */}
+                      {pack.coverPhoto ? (
+                        <img 
+                          src={pack.coverPhoto}
+                          alt={`${pack.title} cover`}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ aspectRatio: '4/3' }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                          }}
+                        />
+                      ) : (
+                        <img 
+                          src="/google-maps-bg.svg"
+                          alt="Map background"
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ aspectRatio: '4/3' }}
+                        />
+                      )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                     </div>
                     
