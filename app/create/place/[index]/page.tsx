@@ -52,6 +52,10 @@ export default function IndividualPlacePage() {
   // Photo upload state
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Photo reordering state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
   // Load the place data from localStorage on component mount
   useEffect(() => {
@@ -297,6 +301,48 @@ export default function IndividualPlacePage() {
 
   const triggerPhotoUpload = () => {
     fileInputRef.current?.click()
+  }
+
+  // Photo reordering functions
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverIndex(index)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+    
+    if (draggedIndex === null || !pin?.photos) return
+    
+    const newPhotos = [...pin.photos]
+    const draggedPhoto = newPhotos[draggedIndex]
+    
+    // Remove the dragged photo
+    newPhotos.splice(draggedIndex, 1)
+    
+    // Insert it at the new position
+    newPhotos.splice(dropIndex, 0, draggedPhoto)
+    
+    updatePin({ photos: newPhotos })
+    
+    // Reset drag state
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+    setDragOverIndex(null)
   }
 
   if (isLoading) {
@@ -586,10 +632,43 @@ export default function IndividualPlacePage() {
             {/* Photo grid or upload area */}
             {pin.photos && pin.photos.length > 0 ? (
               <div className="space-y-4">
-                {/* Existing photos grid */}
+                {/* Photo ordering instructions */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-semibold">💡 Photo Ordering:</span> The first photo will be the main image in your pack gallery. 
+                    Drag and drop to reorder photos.
+                  </p>
+                </div>
+                
+                {/* Existing photos grid with drag and drop */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {pin.photos.map((photo, index) => (
-                    <div key={index} className="relative group">
+                    <div 
+                      key={index} 
+                      className={`relative group cursor-move ${
+                        draggedIndex === index ? 'opacity-50' : ''
+                      } ${
+                        dragOverIndex === index ? 'ring-2 ring-coral-400 ring-offset-2' : ''
+                      }`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, index)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      {/* Photo position indicator */}
+                      <div className="absolute top-2 left-2 w-6 h-6 bg-coral-500 text-white rounded-full flex items-center justify-center text-xs font-semibold z-10">
+                        {index + 1}
+                      </div>
+                      
+                      {/* Main photo label */}
+                      {index === 0 && (
+                        <div className="absolute bottom-2 left-2 bg-coral-500 text-white text-xs px-2 py-1 rounded font-medium">
+                          Main Photo
+                        </div>
+                      )}
+                      
                       <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                         <img
                           src={photo}
@@ -597,6 +676,7 @@ export default function IndividualPlacePage() {
                           className="w-full h-full object-cover"
                         />
                       </div>
+                      
                       {/* Remove button */}
                       <button
                         onClick={() => removePhoto(index)}

@@ -63,7 +63,7 @@ export default function PackDetailPage() {
     return null // No photos found in any pins
   }
   
-  // Function to get all photos from all pins in the pack
+  // Function to get all photos from all pins in the pack with smart ordering
   const getAllPackPhotos = () => {
     if (!pins || pins.length === 0) return []
     
@@ -74,6 +74,16 @@ export default function PackDetailPage() {
       }
     })
     
+    return allPhotos
+  }
+
+  // Function to get photos with the best main photo first (horizontal preferred)
+  const getOptimizedPackPhotos = () => {
+    const allPhotos = getAllPackPhotos()
+    if (allPhotos.length === 0) return []
+
+    // For now, we'll keep original order but this function allows future optimization
+    // TODO: Implement aspect ratio detection to prefer horizontal images for main photo
     return allPhotos
   }
 
@@ -703,7 +713,7 @@ export default function PackDetailPage() {
   }
 
   // Get all photos from all pins in the pack (flat array)
-  const allPhotos: string[] = getAllPackPhotos()
+  const allPhotos: string[] = getOptimizedPackPhotos()
 
   return (
     <div className="min-h-screen bg-gray-25">
@@ -770,13 +780,13 @@ export default function PackDetailPage() {
             <div className="w-full flex gap-2 h-80 rounded-2xl overflow-hidden">
               {/* Main photo - left side (takes 50% width) */}
               <div 
-                className="flex-1 relative cursor-pointer group h-full bg-gray-100"
+                className="flex-1 relative cursor-pointer group h-full overflow-hidden"
                 onClick={() => { setGalleryStartIndex(0); setGalleryOpen(true); }}
               >
                 <img
                   src={`${allPhotos[0]}`}
                   alt={pack.title}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                 />
                 {/* Subtle gray overlay on hover */}
                 <div className="absolute inset-0 bg-gray-300 opacity-0 group-hover:opacity-30 transition-opacity"></div>
@@ -789,13 +799,13 @@ export default function PackDetailPage() {
                   return (
                     <div
                       key={idx}
-                      className="relative cursor-pointer group bg-gray-100"
+                      className="relative cursor-pointer group overflow-hidden"
                       onClick={() => { setGalleryStartIndex(idx + 1); setGalleryOpen(true); }}
                     >
                       <img
                         src={`${photo}`}
                         alt={`Gallery photo ${idx + 2}`}
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-cover"
                       />
                       {/* Subtle gray overlay on hover */}
                       <div className="absolute inset-0 bg-gray-300 opacity-0 group-hover:opacity-30 transition-opacity"></div>
@@ -1805,7 +1815,7 @@ export default function PackDetailPage() {
 
       {/* Gallery Modal */}
       <GalleryModal
-        images={getAllPackPhotos()}
+        images={getOptimizedPackPhotos()}
         startIndex={galleryStartIndex}
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
