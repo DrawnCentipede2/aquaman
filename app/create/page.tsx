@@ -1184,6 +1184,11 @@ export default function CreatePackPage() {
                 </div>
               </div>
             </div>
+
+            {/* Photo upload section */}
+            <div className="mb-2 text-sm text-gray-500">
+              Photos will be shown in the order you add them.
+            </div>
           </div>
 
           {/* Pins Section */}

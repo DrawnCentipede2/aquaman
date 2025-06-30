@@ -96,34 +96,25 @@ const GalleryModal: React.FC<GalleryModalProps> = ({ images, startIndex, isOpen,
             </svg>
           </button>
         )}
-        {/* Image carousel */}
-        <div
-          className="w-full h-full flex items-center justify-center bg-black rounded-xl overflow-hidden"
-          style={{ aspectRatio: '4/3' }}
+        {/* Single image display */}
+        <div 
+          className="w-full h-full bg-black rounded-xl overflow-hidden"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           <img
-            src={`${images[current]}`}
-            alt={`Gallery image ${current + 1}`}
-            className="w-full h-full object-cover select-none"
-            draggable={false}
+            src={images[current]}
+            alt={`Gallery image ${current + 1} of ${images.length}`}
+            className="w-full h-full object-contain"
           />
         </div>
-        {/* Dots indicator */}
-        {images.length > 1 && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-            {images.map((_, i) => (
-              <span
-                key={i}
-                className={`w-2 h-2 rounded-full ${i === current ? 'bg-white' : 'bg-white/50'} transition-colors`}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+        
+        {/* Image counter */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-3 py-1 rounded-full text-sm">
+          {current + 1} / {images.length}
+        </div>
+</div>
+</div>
+)
 }
-
-export default GalleryModal 
+export default GalleryModal

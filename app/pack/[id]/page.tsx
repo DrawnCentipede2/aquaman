@@ -707,131 +707,131 @@ export default function PackDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-25">
-      {/* Header with back navigation button */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <button
-            onClick={() => router.back()}
-            className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5 mr-2" />
-            Keep exploring
-          </button>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Top Section with Title and Action Buttons */}
+        <div className="flex items-start justify-between mb-8">
+          <div className="flex-1">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              {pack.title}
+            </h1>
+            <div className="flex items-center space-x-4 mb-4">
+              {/* Star rating and reviews */}
+              <div className="flex items-center">
+                <div className="flex items-center">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
+                  ))}
+                </div>
+                <span className="ml-2 text-sm font-medium text-gray-900">4.7</span>
+              </div>
+              <div className="flex items-center">
+                <User className="h-4 w-4 mr-1" />
+                Created by {getCreatorName(pack.creator_id)}
+              </div>
+            </div>
+            <div className="flex items-center space-x-4 text-sm text-gray-500">
+          </div>
+        </div>
+          
+          {/* Action buttons for wishlist and sharing in top right */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => {
+                if (isAuthenticated) {
+                  toggleWishlist(pack)
+                } else {
+                  setShowLoginModal(true)
+                }
+              }}
+              className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+            >
+              <Heart 
+                className={`h-5 w-5 transition-colors ${
+                  isAuthenticated && wishlistItems.includes(pack.id) 
+                    ? 'text-coral-500 fill-current' 
+                    : 'text-gray-600'
+                }`} 
+              />
+            </button>
+            
+            <button
+              onClick={sharePackage}
+              className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+            >
+              <Share2 className="h-5 w-5 text-gray-600" />
+            </button>
+          </div>
+        </div>
+
+        {/* Gallery Section - Airbnb Style */}
+        <div className="relative mb-10">
+          {allPhotos.length > 0 ? (
+            <div className="w-full flex gap-2 h-80 rounded-2xl overflow-hidden">
+              {/* Main photo - left side (takes 50% width) */}
+              <div 
+                className="flex-1 relative cursor-pointer group h-full bg-gray-100"
+                onClick={() => { setGalleryStartIndex(0); setGalleryOpen(true); }}
+              >
+                <img
+                  src={`${allPhotos[0]}`}
+                  alt={pack.title}
+                  className="w-full h-full object-contain"
+                />
+                {/* Subtle gray overlay on hover */}
+                <div className="absolute inset-0 bg-gray-300 opacity-0 group-hover:opacity-30 transition-opacity"></div>
+              </div>
+              
+              {/* Right side - 2x2 grid of smaller photos (50% width) */}
+              <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-2 h-full">
+                {allPhotos.slice(1, 5).map((photo, idx) => {
+                  const isLast = idx === 3 && allPhotos.length > 5;
+                  return (
+                    <div
+                      key={idx}
+                      className="relative cursor-pointer group bg-gray-100"
+                      onClick={() => { setGalleryStartIndex(idx + 1); setGalleryOpen(true); }}
+                    >
+                      <img
+                        src={`${photo}`}
+                        alt={`Gallery photo ${idx + 2}`}
+                        className="w-full h-full object-contain"
+                      />
+                      {/* Subtle gray overlay on hover */}
+                      <div className="absolute inset-0 bg-gray-300 opacity-0 group-hover:opacity-30 transition-opacity"></div>
+                      {/* Show more pill on last image if there are more photos */}
+                      {isLast && (
+                        <button 
+                          className="absolute bottom-2 right-2 bg-white/90 text-gray-800 px-3 py-1 rounded-full font-medium text-xs flex items-center space-x-1 shadow hover:bg-gray-100"
+                          onClick={e => { e.stopPropagation(); setGalleryStartIndex(0); setGalleryOpen(true); }}
+                        >
+                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x='3' y='3' width='18' height='18' rx='2' ry='2'/>
+                            <circle cx='8.5' cy='8.5' r='1.5'/>
+                            <polyline points='21,15 16,10 5,21'/>
+                          </svg>
+                          <span>+{allPhotos.length - 5} more</span>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+                {/* Fill remaining slots if less than 4 additional photos */}
+                {Array.from({ length: Math.max(0, 4 - (allPhotos.length - 1)) }, (_, idx) => (
+                  <div key={`empty-${idx}`} className="bg-gray-100"></div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Main Content Area - Takes up 2/3 of the space on large screens */}
           <div className="lg:col-span-2 space-y-8">
-            
-            {/* Pack Image Display Section - Gallery Style */}
-            <div className="relative mb-8">
-              {allPhotos.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {/* Main photo (2/3 width on desktop) */}
-                  <div className="lg:col-span-2 aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer relative group" onClick={() => { setGalleryStartIndex(0); setGalleryOpen(true); }}>
-                    <img
-                      src={`${allPhotos[0]}`}
-                      alt={pack.title}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    {/* Overlay for click-to-enlarge */}
-                    <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-40 transition-opacity"></div>
-                  </div>
-                  {/* Grid of up to 3 more photos (1/3 width) */}
-                  <div className="flex flex-col gap-4">
-                    {allPhotos.slice(1, 4).map((photo, idx) => (
-                      <div
-                        key={idx}
-                        className="aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer relative group"
-                        onClick={() => { setGalleryStartIndex(idx + 1); setGalleryOpen(true); }}
-                      >
-                        <img
-                          src={`${photo}`}
-                          alt={`Gallery photo ${idx + 2}`}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        />
-                        {/* Overlay for click-to-enlarge */}
-                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-40 transition-opacity"></div>
-                        {/* +N overlay if this is the last cell and there are more photos */}
-                        {idx === 2 && allPhotos.length > 4 && (
-                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                            <span className="text-white text-2xl font-bold">+{allPhotos.length - 4}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                // Fallback if no photos
-                <div className="aspect-[4/3] bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-2xl overflow-hidden relative">
-                  {/* ... existing fallback ... */}
-                </div>
-              )}
-              {/* Gallery Modal */}
-              <GalleryModal
-                images={allPhotos}
-                startIndex={galleryStartIndex}
-                isOpen={galleryOpen}
-                onClose={() => setGalleryOpen(false)}
-              />
-            </div>
 
             {/* Main Pack Information Section */}
             <div className="bg-white rounded-2xl p-8 shadow-sm">
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex-1">
-                  <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                    {pack.title}
-                  </h1>
-                  <div className="flex items-center text-gray-600 mb-4">
-                    <MapPin className="h-5 w-5 mr-2" />
-                    <span className="text-lg">{pack.city}, {pack.country}</span>
-                  </div>
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      Created {new Date(pack.created_at).toLocaleDateString()}
-                    </div>
-                    <div className="flex items-center">
-                      <Clock className="h-4 w-4 mr-1" />
-                      2-3 hours to explore
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Action buttons for wishlist and sharing */}
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => {
-                      if (isAuthenticated) {
-                        toggleWishlist(pack)
-                      } else {
-                        setShowLoginModal(true)
-                      }
-                    }}
-                    className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
-                  >
-                    <Heart 
-                      className={`h-5 w-5 transition-colors ${
-                        isAuthenticated && wishlistItems.includes(pack.id) 
-                          ? 'text-coral-500 fill-current' 
-                          : 'text-gray-600'
-                      }`} 
-                    />
-                  </button>
-                  
-                  <button
-                    onClick={sharePackage}
-                    className="w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
-                  >
-                    <Share2 className="h-5 w-5 text-gray-600" />
-                  </button>
-                </div>
-              </div>
 
               {/* Detailed description of the pack */}
               <div className="prose prose-lg max-w-none text-gray-700 leading-relaxed">
@@ -1802,6 +1802,14 @@ export default function PackDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Gallery Modal */}
+      <GalleryModal
+        images={getAllPackPhotos()}
+        startIndex={galleryStartIndex}
+        isOpen={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+      />
     </div>
   )
 } 
