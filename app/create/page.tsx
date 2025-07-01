@@ -55,9 +55,17 @@ export default function CreatePackPage() {
   
   // State for Google Maps list import
   const [googleMapsListUrl, setGoogleMapsListUrl] = useState('')
+  const [singlePlaceUrl, setSinglePlaceUrl] = useState('')
   const [importedPlaces, setImportedPlaces] = useState<any[]>([])
   const [isImporting, setIsImporting] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  
+  // State for storing the maps list reference for buyers
+  const [mapsListReference, setMapsListReference] = useState<{
+    original_url: string
+    expanded_url: string
+    title: string
+  } | null>(null)
   
   // State for form submission
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -191,6 +199,11 @@ export default function CreatePackPage() {
           }
           if (details.city) setCity(details.city)
           
+          // Load maps list reference if it exists
+          if (details.mapsListReference) {
+            setMapsListReference(details.mapsListReference)
+          }
+          
           console.log('✅ Loaded pack details from localStorage:', details)
         } else {
           console.log('ℹ️ No saved pack details found in localStorage')
@@ -205,225 +218,195 @@ export default function CreatePackPage() {
 
   // Save pack details to localStorage whenever they change
   useEffect(() => {
-    const packDetails = {
-      packTitle,
-      packDescription,
-      city,
-      country,
-      price
-    }
-    
-    // Only save if at least one field has content
-    if (packTitle.trim() || packDescription.trim() || city.trim() || country.trim() || price.trim()) {
+    const savePackDetailsToStorage = () => {
       try {
+        const packDetails = {
+          packTitle,
+          packDescription,
+          price,
+          country,
+          city,
+          mapsListReference
+        }
+        
         localStorage.setItem('pinpacks_create_pack_details', JSON.stringify(packDetails))
         console.log('💾 Saved pack details to localStorage')
       } catch (error) {
         console.error('❌ Error saving pack details to localStorage:', error)
       }
     }
-  }, [packTitle, packDescription, city, country, price])
 
-  // Enhanced function to import places from Google Maps URLs using Places API
-  const importFromGoogleMapsList = async () => {
-    if (!googleMapsListUrl) {
+    // Only save if we have some meaningful data
+    if (packTitle || packDescription || price || country || city || mapsListReference) {
+      savePackDetailsToStorage()
+    }
+  }, [packTitle, packDescription, price, country, city, mapsListReference])
+
+  // Function to import a single place from Google Maps URL
+  const addSinglePlace = async () => {
+    if (!singlePlaceUrl) {
       alert('Please enter a Google Maps place URL')
       return
     }
 
     setIsImporting(true)
     
-    // Debug information for URL validation
-    console.log('=== Google Maps Import Debug ===')
-    console.log('Input URL:', googleMapsListUrl)
-    console.log('URL length:', googleMapsListUrl.length)
-    
     try {
       // Check if it's a valid Google Maps URL
-      // Support multiple Google Maps URL formats that users commonly encounter
       const isValidGoogleMapsUrl = 
-        googleMapsListUrl.includes('maps.google.com') ||     // Standard Google Maps
-        googleMapsListUrl.includes('goo.gl') ||              // Shortened URLs
-        googleMapsListUrl.includes('maps.app.goo.gl') ||     // New shortened format
-        googleMapsListUrl.includes('google.com/maps') ||     // Alternative format (US)
-        googleMapsListUrl.includes('maps.google.') ||        // International domains (maps.google.es, etc.)
-        googleMapsListUrl.includes('plus.codes') ||          // Plus codes
-        (googleMapsListUrl.includes('@') && googleMapsListUrl.includes('google.')) || // URLs with coordinates (any Google domain)
-        googleMapsListUrl.includes('/maps/place/') ||        // Place URLs on any Google domain
-        googleMapsListUrl.includes('/maps?') ||              // Map search URLs
-        (googleMapsListUrl.includes('google.') && googleMapsListUrl.includes('/maps')) // Any Google domain with maps
-      
-      // Debug: Show which validation conditions match
-      const validationTests = {
-        'maps.google.com': googleMapsListUrl.includes('maps.google.com'),
-        'goo.gl': googleMapsListUrl.includes('goo.gl'),
-        'maps.app.goo.gl': googleMapsListUrl.includes('maps.app.goo.gl'),
-        'google.com/maps': googleMapsListUrl.includes('google.com/maps'),
-        'maps.google.*': googleMapsListUrl.includes('maps.google.'),
-        'plus.codes': googleMapsListUrl.includes('plus.codes'),
-        'coordinates (@)': googleMapsListUrl.includes('@') && googleMapsListUrl.includes('google.'),
-        '/maps/place/': googleMapsListUrl.includes('/maps/place/'),
-        '/maps?': googleMapsListUrl.includes('/maps?'),
-        'google.* with /maps': googleMapsListUrl.includes('google.') && googleMapsListUrl.includes('/maps')
-      }
-      
-      console.log('URL validation tests:', validationTests)
-      console.log('URL validation result:', isValidGoogleMapsUrl)
+        singlePlaceUrl.includes('maps.google.com') ||
+        singlePlaceUrl.includes('goo.gl') ||
+        singlePlaceUrl.includes('maps.app.goo.gl') ||
+        singlePlaceUrl.includes('google.com/maps') ||
+        singlePlaceUrl.includes('maps.google.') ||
+        singlePlaceUrl.includes('plus.codes') ||
+        (singlePlaceUrl.includes('@') && singlePlaceUrl.includes('google.')) ||
+        singlePlaceUrl.includes('/maps/place/') ||
+        singlePlaceUrl.includes('/maps?') ||
+        (singlePlaceUrl.includes('google.') && singlePlaceUrl.includes('/maps'))
 
       if (!isValidGoogleMapsUrl) {
-        // Enhanced error message to help users understand what URLs are supported
-        throw new Error(
-          'Please enter a valid Google Maps URL.\n\n' +
-          'Supported formats:\n' +
-          '• https://maps.google.com/... (or any Google domain)\n' +
-          '• https://www.google.com/maps/... (or .de, .es, .fr, etc.)\n' +
-          '• https://goo.gl/maps/...\n' +
-          '• https://maps.app.goo.gl/...\n' +
-          '• URLs with coordinates (containing @)\n' +
-          '• URLs with /maps/place/\n' +
-          '• Plus codes (plus.codes)\n\n' +
-          'Current URL: ' + googleMapsListUrl
-        )
+        throw new Error('Please enter a valid Google Maps place URL')
       }
 
-      // Handle different types of URLs
-      const isListUrl = googleMapsListUrl.includes('/lists/') || googleMapsListUrl.includes('list/')
-
-      if (isListUrl) {
-        // For list URLs, show guidance on extracting individual places
-        alert(
-          '📋 Google Maps List Detected!\n\n' +
-          'Unfortunately, Google doesn\'t allow direct import from lists.\n\n' +
-          'To import places from your list:\n' +
-          '1. Open your Google Maps list\n' +
-          '2. Click on each place in the list\n' +
-          '3. Copy each place URL (from the address bar)\n' +
-          '4. Come back and paste each URL here (one at a time)\n\n' +
-          'The API will automatically fetch all place details!'
-        )
-      } else {
-        // Import single place using the enhanced API integration
-        try {
-          const importedPlace = await importSinglePlace(googleMapsListUrl)
-          
-          // Check for duplicates before adding
-          const isDuplicate = pins.some(existingPin => {
-            // Check by Google Maps URL (most reliable)
-            if (existingPin.google_maps_url === importedPlace.google_maps_url) {
-              return true
-            }
-            
-            // Check by coordinates (in case URLs are different but same place)
-            const coordsMatch = Math.abs(existingPin.latitude - importedPlace.latitude) < 0.0001 && 
-                               Math.abs(existingPin.longitude - importedPlace.longitude) < 0.0001
-            
-            // Check by title and address (as additional fallback)
-            const titleMatch = existingPin.title.toLowerCase().trim() === importedPlace.title.toLowerCase().trim()
-            const addressMatch = existingPin.address && importedPlace.address && 
-                                 existingPin.address.toLowerCase().trim() === importedPlace.address.toLowerCase().trim()
-            
-            return coordsMatch || (titleMatch && addressMatch)
-          })
-          
-          if (isDuplicate) {
-            alert(
-              `🚫 Duplicate Place Detected!\n\n` +
-              `"${importedPlace.title}" is already in your pack.\n\n` +
-              `Each place can only be added once to maintain the quality and uniqueness of your pin pack.`
-            )
-            return // Don't add the duplicate
+      // Import single place using the enhanced API integration
+      try {
+        const importedPlace = await importSinglePlace(singlePlaceUrl)
+        
+        // Check for duplicates before adding
+        const isDuplicate = pins.some(existingPin => {
+          // Check by Google Maps URL (most reliable)
+          if (existingPin.google_maps_url === importedPlace.google_maps_url) {
+            return true
           }
           
-          // Map the imported place to our Pin interface
-          const newPin: Pin = {
-            title: importedPlace.title,
-            description: importedPlace.description,
-            google_maps_url: importedPlace.google_maps_url,
-            category: importedPlace.category,
-            latitude: importedPlace.latitude,
-            longitude: importedPlace.longitude,
-            rating: importedPlace.rating,
-            rating_count: importedPlace.rating_count,
-            business_type: importedPlace.business_type,
-            place_city: importedPlace.city,
-            place_country: importedPlace.country,
-            zip_code: importedPlace.zip_code,
-            address: importedPlace.address,
-            phone: importedPlace.phone,
-            website: importedPlace.website,
-            current_opening_hours: importedPlace.current_opening_hours,
-            business_status: importedPlace.business_status,
-            reviews: importedPlace.reviews,
-            needs_manual_edit: importedPlace.needs_manual_edit
-          }
+          // Check by coordinates (in case URLs are different but same place)
+          const coordsMatch = Math.abs(existingPin.latitude - importedPlace.latitude) < 0.0001 && 
+                             Math.abs(existingPin.longitude - importedPlace.longitude) < 0.0001
           
-          // Add the imported place to our pins
-          setPins(currentPins => [...currentPins, newPin])
-          
-          // Store the imported place for display
-          setImportedPlaces([importedPlace])
-          
-          alert(
-            `Successfully imported "${importedPlace.title}"! ✅\n\n` +
-            `📍 Location: ${importedPlace.address || 'Coordinates detected'}\n` +
-            `📂 Category: ${importedPlace.category}\n` +
-            `${importedPlace.rating ? `⭐ Rating: ${importedPlace.rating}/5 (${importedPlace.rating_count || 0} reviews)` : ''}\n` +
-            `${importedPlace.business_status ? `📊 Status: ${importedPlace.business_status}` : ''}\n\n` +
-            `Check the detailed information below and edit if needed!`
-          )
-        } catch (apiError) {
-          console.warn('API import failed, falling back to basic method:', apiError)
-          // Fallback to the basic coordinate extraction method
-          const coords = extractCoordinates(googleMapsListUrl)
-          
-          // Check for duplicates before adding (basic method)
-          const isDuplicateBasic = pins.some(existingPin => {
-            // Check by Google Maps URL
-            if (existingPin.google_maps_url === googleMapsListUrl) {
-              return true
-            }
-            
-            // Check by coordinates
-            const coordsMatch = Math.abs(existingPin.latitude - coords.latitude) < 0.0001 && 
-                               Math.abs(existingPin.longitude - coords.longitude) < 0.0001
-            
-            return coordsMatch
-          })
-          
-          if (isDuplicateBasic) {
-            alert(
-              `🚫 Duplicate Place Detected!\n\n` +
-              `This place is already in your pack.\n\n` +
-              `Each place can only be added once to maintain the quality and uniqueness of your pin pack.`
-            )
-            return // Don't add the duplicate
-          }
-          
-          const basicPin: Pin = {
-            title: 'Imported Place',
-            description: '', // Leave empty for user input
-            google_maps_url: googleMapsListUrl,
-            category: 'other',
-            latitude: coords.latitude,
-            longitude: coords.longitude
-          }
-          
-          setPins(currentPins => [...currentPins, basicPin])
-          
-          alert(
-            `Place imported with basic details!\n\n` +
-            `Please edit the place name, category, and description to add your personal touch.\n\n` +
-            `Tip: Make sure your Google Maps API key is configured for enhanced features.`
-          )
+          return coordsMatch
+        })
+        
+        if (isDuplicate) {
+          alert(`"${importedPlace.title}" is already in your pack.`)
+          return
         }
+        
+        // Map the imported place to our Pin interface
+        const newPin: Pin = {
+          title: importedPlace.title,
+          description: importedPlace.description,
+          google_maps_url: importedPlace.google_maps_url,
+          category: importedPlace.category,
+          latitude: importedPlace.latitude,
+          longitude: importedPlace.longitude,
+          rating: importedPlace.rating,
+          rating_count: importedPlace.rating_count,
+          business_type: importedPlace.business_type,
+          place_city: importedPlace.city,
+          place_country: importedPlace.country,
+          zip_code: importedPlace.zip_code,
+          address: importedPlace.address,
+          phone: importedPlace.phone,
+          website: importedPlace.website,
+          current_opening_hours: importedPlace.current_opening_hours,
+          business_status: importedPlace.business_status,
+          reviews: importedPlace.reviews,
+          needs_manual_edit: importedPlace.needs_manual_edit
+        }
+        
+        // Add the imported place to our pins
+        setPins(currentPins => [...currentPins, newPin])
+        
+        alert(`Successfully imported "${importedPlace.title}"! ✅`)
+      } catch (apiError) {
+        console.warn('API import failed, falling back to basic method:', apiError)
+        
+        // Fallback to basic coordinate extraction
+        const coords = extractCoordinates(singlePlaceUrl)
+        
+        const basicPin: Pin = {
+          title: 'Imported Place',
+          description: '',
+          google_maps_url: singlePlaceUrl,
+          category: 'other',
+          latitude: coords.latitude,
+          longitude: coords.longitude
+        }
+        
+        setPins(currentPins => [...currentPins, basicPin])
+        alert('Place imported with basic details! Please edit the place details.')
       }
+      
+      // Clear the URL field
+      setSinglePlaceUrl('')
+      
+    } catch (err) {
+      alert('Could not import from this URL. Please make sure it\'s a valid Google Maps place URL.')
+      console.error('Import error:', err)
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  // Enhanced function to import maps list URLs as references for buyers
+  const importFromGoogleMapsList = async () => {
+    if (!googleMapsListUrl) {
+      alert('Please enter a Google Maps list URL')
+      return
+    }
+
+    setIsImporting(true)
+    
+    try {
+      // Validate that it's a Google Maps URL
+      const isValidGoogleMapsUrl = 
+        googleMapsListUrl.includes('maps.google.com') ||
+        googleMapsListUrl.includes('goo.gl') ||
+        googleMapsListUrl.includes('maps.app.goo.gl') ||
+        googleMapsListUrl.includes('google.com/maps') ||
+        googleMapsListUrl.includes('maps.google.') ||
+        (googleMapsListUrl.includes('google.') && googleMapsListUrl.includes('/maps'))
+
+      if (!isValidGoogleMapsUrl) {
+        throw new Error('Please enter a valid Google Maps URL')
+      }
+
+      // Validate and check if it's a maps list
+      const validation = await validateMapsListUrl(googleMapsListUrl)
+      
+      if (!validation.is_list) {
+        alert(
+          '❌ Not a Maps List\n\n' +
+          'This URL doesn\'t appear to be a Google Maps list.\n\n' +
+          'For individual places, please use the "Single Place URL" field below.\n\n' +
+          'For maps lists, make sure you\'re copying the URL of a saved Google Maps list.'
+        )
+        return
+      }
+
+      // Store the maps list reference
+      setMapsListReference({
+        original_url: googleMapsListUrl,
+        expanded_url: validation.expanded_url,
+        title: validation.title
+      })
+
+      alert(
+        '✅ Maps List Added Successfully!\n\n' +
+        `📋 List: ${validation.title}\n\n` +
+        'This maps list will be included with your pin pack as a reference.\n' +
+        'Buyers will be able to click the link to view your original Google Maps list.\n\n' +
+        '💡 You can still add individual places using the "Single Place URL" field below for detailed information.'
+      )
       
       // Clear the URL field
       setGoogleMapsListUrl('')
       
     } catch (err) {
-      alert('Could not import from this URL. Please make sure it\'s a valid Google Maps URL.')
-      console.error('Import error:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Could not process this URL'
+      alert(`❌ ${errorMessage}\n\nPlease make sure you're using a valid Google Maps list URL.`)
+      console.error('Maps list import error:', err)
     } finally {
       setIsImporting(false)
     }
@@ -684,6 +667,7 @@ export default function CreatePackPage() {
         price: price === '' ? 0 : Number(price),
         creator_id: userId,
         pin_count: pins.length,
+        maps_list_reference: mapsListReference ? JSON.stringify(mapsListReference) : null,
         created_at: new Date().toISOString()
       }
 
@@ -775,6 +759,7 @@ export default function CreatePackPage() {
       setCountry('')
       setPrice('')
       setPins([])
+      setMapsListReference(null)
       
       // Clear localStorage to start fresh for next pack
       try {
@@ -973,6 +958,82 @@ export default function CreatePackPage() {
     }
   }, [country, city])
 
+  // Function to validate maps list URLs (simplified approach)
+  const validateMapsListUrl = async (url: string): Promise<{expanded_url: string, is_list: boolean, title: string}> => {
+    try {
+      // First, check if it's a full URL that clearly contains list indicators
+      const isFullListUrl = url.includes('/lists/') || 
+                           url.includes('list/') ||
+                           url.includes('/maps/list/')
+      
+      if (isFullListUrl) {
+        // For full list URLs, we can be confident it's a list
+        let title = 'Google Maps List'
+        const listMatch = url.match(/lists\/([^\/\?&]+)/)
+        if (listMatch) {
+          title = `Maps List ${listMatch[1].substring(0, 10)}...`
+        }
+        
+        return {
+          expanded_url: url,
+          is_list: true,
+          title: title
+        }
+      }
+      
+      // Check for Google Maps URLs with encoded data (potential lists/collections)
+      const hasEncodedData = url.includes('google.') && 
+                             url.includes('/maps') && 
+                             url.includes('data=!') &&
+                             (url.includes('!2s') || url.includes('!4m')) // Common patterns in list URLs
+      
+      if (hasEncodedData) {
+        // This might be a Google Maps list/collection with encoded data
+        return {
+          expanded_url: url,
+          is_list: true,
+          title: 'Google Maps Collection (Encoded)'
+        }
+      }
+      
+      // For shortened URLs, we'll use a client-side redirect check
+      const isShortenedGoogleMaps = (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) &&
+                                   (url.includes('google') || url.includes('maps'))
+      
+      if (isShortenedGoogleMaps) {
+        // Try to check if it redirects to a list by making a fetch request
+        // This might work in some cases, but we'll handle failures gracefully
+        try {
+          const response = await fetch(url, { 
+            method: 'HEAD', 
+            mode: 'no-cors' // This avoids CORS but limits what we can see
+          })
+          
+          // Even with no-cors, we can't access the response, but if it doesn't throw, it's valid
+          return {
+            expanded_url: url, // Keep original URL since we can't see the redirect
+            is_list: true, // Assume shortened Google Maps URLs could be lists
+            title: 'Google Maps List (Shortened)'
+          }
+        } catch (fetchError) {
+          // If fetch fails, still allow it but with a note
+          return {
+            expanded_url: url,
+            is_list: true, // Assume it's valid
+            title: 'Google Maps List (Shortened)'
+          }
+        }
+      }
+      
+      // If it's not recognizable as a Google Maps URL, reject it
+      throw new Error('Not a valid Google Maps list URL')
+      
+    } catch (error) {
+      console.error('Error validating URL:', error)
+      throw error
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-25">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -1165,30 +1226,92 @@ export default function CreatePackPage() {
                 <h3 className="text-sm font-semibold text-gray-900">Add Places</h3>
               </div>
               
-              <div className="space-y-3">
-                <div className="flex gap-3">
-                  <input
-                    type="url"
-                    value={googleMapsListUrl}
-                    onChange={(e) => setGoogleMapsListUrl(e.target.value)}
-                    placeholder="https://maps.google.com/place/..."
-                    className="input-airbnb flex-1"
-                  />
-                  <button
-                    onClick={importFromGoogleMapsList}
-                    disabled={!googleMapsListUrl.trim() || isImporting}
-                    className="btn-primary px-6 disabled:opacity-50"
-                  >
-                    {isImporting ? 'Importing...' : 'Add Place'}
-                  </button>
+              <div className="space-y-4">
+                {/* Maps List URL Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Google Maps List URL (Add as reference for buyers)
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="url"
+                      value={googleMapsListUrl}
+                      onChange={(e) => setGoogleMapsListUrl(e.target.value)}
+                      placeholder="https://maps.google.com/maps/lists/... or https://maps.app.goo.gl/..."
+                      className="input-airbnb flex-1"
+                    />
+                    <button
+                      onClick={importFromGoogleMapsList}
+                      disabled={!googleMapsListUrl.trim() || isImporting}
+                      className="btn-primary px-6 disabled:opacity-50"
+                    >
+                      {isImporting ? 'Adding...' : 'Add List'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Add your Google Maps list as a reference that buyers can access alongside your individual places
+                  </p>
+                </div>
+
+                {/* Single Place URL Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Single Place URL (Add one place)
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="url"
+                      value={singlePlaceUrl}
+                      onChange={(e) => setSinglePlaceUrl(e.target.value)}
+                      placeholder="https://maps.google.com/place/..."
+                      className="input-airbnb flex-1"
+                    />
+                    <button
+                      onClick={addSinglePlace}
+                      disabled={!singlePlaceUrl.trim() || isImporting}
+                      className="btn-primary px-6 disabled:opacity-50"
+                    >
+                      {isImporting ? 'Adding...' : 'Add Place'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Paste a single Google Maps place URL to add it to your pack
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Photo upload section */}
-            <div className="mb-2 text-sm text-gray-500">
-              Photos will be shown in the order you add them.
-            </div>
+            {/* Maps List Reference Display */}
+            {mapsListReference && (
+              <div className="mt-6 p-4 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center">
+                    <h4 className="text-sm font-semibold text-gray-900">Maps List Reference</h4>
+                  </div>
+                  <button
+                    onClick={() => setMapsListReference(null)}
+                    className="text-red-500 hover:text-red-700 transition-colors p-1"
+                    title="Remove maps list reference"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-800 font-medium">{mapsListReference.title}</p>
+                  <a 
+                    href={mapsListReference.original_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 underline"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    View Maps List
+                  </a>
+        
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Pins Section */}

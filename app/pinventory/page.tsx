@@ -284,9 +284,27 @@ export default function PinventoryPage() {
     }
   }
 
-  // Open pack in Google Maps (if we have a direct Google Maps list URL)
+  // Open pack in Google Maps (prioritize maps list reference if available)
   const openInGoogleMaps = (pack: PinPack) => {
-    // For now, we'll construct a search URL with all places
+    // First, check if pack has a maps list reference
+    if (pack.maps_list_reference) {
+      try {
+        const mapsListData = typeof pack.maps_list_reference === 'string' 
+          ? JSON.parse(pack.maps_list_reference)
+          : pack.maps_list_reference
+        
+        if (mapsListData?.original_url) {
+          // Redirect to the original Google Maps list
+          window.open(mapsListData.original_url, '_blank')
+          return
+        }
+      } catch (error) {
+        console.error('Error parsing maps list reference:', error)
+        // Fall through to default behavior
+      }
+    }
+    
+    // Fallback to the original behavior if no maps list reference
     const pins = packPinsData[pack.id] || []
     if (pins.length > 0) {
       const placesQuery = pins
@@ -571,6 +589,17 @@ export default function PinventoryPage() {
                             onClick={() => openInGoogleMaps(pack)}
                             className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg hover:border-coral-200 transition-all duration-200 cursor-pointer group relative"
                           >
+                            {/* Maps List Badge */}
+                            {pack.maps_list_reference && (
+                              <div 
+                                className="absolute top-4 left-4 z-30 bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center"
+                                title="This pack will open the original Google Maps list"
+                              >
+                                <Globe className="h-3 w-3 mr-1" />
+                                Maps List
+                              </div>
+                            )}
+
                             {/* Big hover pin */}
                             <div className="absolute top-4 right-4 pointer-events-none z-10">
                               <MapPin className="w-12 h-12 text-coral-500 opacity-0 group-hover:opacity-40 transition-opacity duration-300" />

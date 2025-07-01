@@ -33,6 +33,7 @@ export interface PinPack {
   created_at: string
   creator_location: string
   pin_count: number
+  maps_list_reference?: any // JSON field containing original_url, expanded_url, and title
   // Optional analytics fields (may not be present in all queries)
   creator_id?: string
   download_count?: number
