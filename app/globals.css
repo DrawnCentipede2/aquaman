@@ -24,7 +24,7 @@
 @layer components {
   /* Enhanced button styles with Airbnb aesthetics */
   .btn-primary {
-    @apply bg-coral-500 hover:bg-coral-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] active:scale-[0.98];
+    @apply bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 shadow-card hover:shadow-card-hover transform hover:scale-[1.02] active:scale-[0.98];
   }
   
   .btn-secondary {
@@ -32,7 +32,7 @@
   }
   
   .btn-outline {
-    @apply bg-transparent border-2 border-coral-500 text-coral-500 hover:bg-coral-500 hover:text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98];
+    @apply bg-transparent border-2 border-primary-500 text-primary-500 hover:bg-primary-500 hover:text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98];
   }
   
   /* Airbnb-style cards */
@@ -49,7 +49,7 @@
   
   /* Enhanced form inputs with Airbnb styling */
   .input-airbnb {
-    @apply border border-gray-300 rounded-xl px-4 py-4 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-coral-500 focus:border-transparent bg-white hover:border-gray-400 transition-all duration-200 font-medium text-base;
+    @apply border border-gray-300 rounded-xl px-4 py-4 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white hover:border-gray-400 transition-all duration-200 font-medium text-base;
   }
   
   /* Search bar styling */
@@ -59,11 +59,11 @@
   
   /* Gradient backgrounds */
   .gradient-coral {
-    @apply bg-gradient-to-r from-coral-500 to-primary-500;
+    @apply bg-gradient-to-r from-primary-400 to-primary-600;
   }
   
   .gradient-hero {
-    @apply bg-gradient-to-br from-coral-50 via-primary-50 to-gray-50;
+    @apply bg-gradient-to-br from-primary-50 via-coral-50 to-gray-50;
   }
 }
 
@@ -183,7 +183,7 @@
     left: 50%;
     width: 0;
     height: 2px;
-    background-color: #ff5a5f; /* coral-500 */
+    background-color: #0ea5e9; /* primary-500 sky blue */
     transform: translateX(-50%);
     transition: width 0.3s ease-in-out;
   }

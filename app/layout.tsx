@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import Navigation from '@/components/Navigation'
-import { MapPin } from 'lucide-react'
+import PinCloudLogo from '@/components/PinCloudLogo'
 
 export const metadata: Metadata = {
-  title: 'PinPacks - Local Travel Pins by Locals',
+  title: 'PinCloud - Local Travel Pins by Locals',
   description: 'Discover authentic travel spots through curated pin packs created by locals',
 }
 
@@ -26,15 +26,15 @@ export default function RootLayout({
                 <div className="flex items-center">
                   <a 
                     href="/" 
-                    className="flex items-center space-x-2 text-coral-500 hover:text-coral-600 transition-colors duration-200 cursor-pointer group"
+                    className="flex items-center space-x-2 text-primary-500 hover:text-primary-600 transition-colors duration-200 cursor-pointer group"
                     title="Go to home page"
                   >
                     <div>
-                      {/* Single pin icon */}
-                      <MapPin className="h-8 w-8" />
+                      {/* PinCloud logo with pins raining from cloud */}
+                      <PinCloudLogo className="h-8 w-8" animate={false} />
                     </div>
                     <span className="text-2xl font-bold tracking-tight">
-                      PinPacks
+                      PinCloud
                     </span>
                   </a>
                   <span 
@@ -117,7 +117,7 @@ export default function RootLayout({
               {/* Footer bottom */}
               <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center">
                 <div className="text-sm text-gray-600 mb-4 md:mb-0">
-                  &copy; 2024 PinPacks. Connecting travelers with local insights.
+                  &copy; 2024 PinCloud. Connecting travelers with local insights.
                 </div>
                 <div className="flex space-x-6 text-sm text-gray-600">
                   <a href="#" className="hover:text-gray-900 transition-colors">Privacy</a>

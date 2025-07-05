@@ -43,14 +43,14 @@ export default function SignUpPage() {
       }
 
       // Save to localStorage
-      localStorage.setItem('pinpacks_user_profile', JSON.stringify(userProfile))
-      localStorage.setItem('pinpacks_user_id', userProfile.userId)
-      localStorage.setItem('pinpacks_user_email', userProfile.email)
-      localStorage.setItem('pinpacks_user_ip', userProfile.ip)
-      localStorage.setItem('pinpacks_user_location', userProfile.location)
+      localStorage.setItem('PinCloud_user_profile', JSON.stringify(userProfile))
+      localStorage.setItem('PinCloud_user_id', userProfile.userId)
+      localStorage.setItem('PinCloud_user_email', userProfile.email)
+      localStorage.setItem('PinCloud_user_ip', userProfile.ip)
+      localStorage.setItem('PinCloud_user_location', userProfile.location)
       
       // Also save the profile with email as key for signin to find
-      localStorage.setItem(`pinpacks_profile_${userProfile.email}`, JSON.stringify(userProfile))
+      localStorage.setItem(`PinCloud_profile_${userProfile.email}`, JSON.stringify(userProfile))
 
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
@@ -78,7 +78,7 @@ export default function SignUpPage() {
             Create your profile
           </h1>
           <p className="text-gray-600">
-            Join PinPacks and start sharing or discovering amazing places
+            Join PinCloud and start sharing or discovering amazing places
           </p>
         </div>
 
@@ -148,7 +148,7 @@ export default function SignUpPage() {
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
             Already have an account?{' '}
-            <a href="/auth" className="text-coral-500 hover:text-coral-600 font-medium">
+            <a href="/auth" className="text-primary-500 hover:text-primary-600 font-medium">
               Sign in here
             </a>
           </p>

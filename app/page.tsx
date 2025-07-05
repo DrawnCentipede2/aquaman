@@ -44,7 +44,7 @@ export default function LandingPage() {
             <h1 className="text-5xl md:text-7xl font-bold text-gray-900 leading-tight">
               Find amazing places
               <br />
-              <span className="text-coral-500">created by locals</span>
+              <span className="text-primary-500">created by locals</span>
             </h1>
             
             <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
@@ -93,15 +93,15 @@ export default function LandingPage() {
             {/* Quick stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 max-w-3xl mx-auto">
               <div className="text-center">
-                <div className="text-3xl font-bold text-coral-500 mb-1">50+</div>
+                <div className="text-3xl font-bold text-primary-500 mb-1">50+</div>
                 <div className="text-gray-600 font-medium">Pin Packs</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-coral-500 mb-1">100%</div>
+                <div className="text-3xl font-bold text-primary-500 mb-1">100%</div>
                 <div className="text-gray-600 font-medium">Made by locals</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-coral-500 mb-1">Free</div>
+                <div className="text-3xl font-bold text-primary-500 mb-1">Free</div>
                 <div className="text-gray-600 font-medium">During Beta</div>
               </div>
             </div>
@@ -114,7 +114,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              How PinPacks works
+              How PinCloud works
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Simple, authentic, and created by the people who know best.
@@ -123,8 +123,8 @@ export default function LandingPage() {
 
           <div className="grid md:grid-cols-3 gap-12">
             <div className="text-center group">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-100 mb-6 group-hover:bg-coral-200 transition-colors">
-                <Users className="h-10 w-10 text-coral-500" />
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary-100 mb-6 group-hover:bg-primary-200 transition-colors">
+                <Users className="h-10 w-10 text-primary-500" />
               </div>
               <h3 className="text-2xl font-semibold text-gray-900 mb-4">Locals create</h3>
               <p className="text-gray-600 leading-relaxed">
@@ -133,8 +133,8 @@ export default function LandingPage() {
             </div>
 
             <div className="text-center group">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-100 mb-6 group-hover:bg-coral-200 transition-colors">
-                <Shield className="h-10 w-10 text-coral-500" />
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary-100 mb-6 group-hover:bg-primary-200 transition-colors">
+                <Shield className="h-10 w-10 text-primary-500" />
               </div>
               <h3 className="text-2xl font-semibold text-gray-900 mb-4">We verify</h3>
               <p className="text-gray-600 leading-relaxed">
@@ -143,8 +143,8 @@ export default function LandingPage() {
             </div>
 
             <div className="text-center group">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-coral-100 mb-6 group-hover:bg-coral-200 transition-colors">
-                <Globe className="h-10 w-10 text-coral-500" />
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary-100 mb-6 group-hover:bg-primary-200 transition-colors">
+                <Globe className="h-10 w-10 text-primary-500" />
               </div>
               <h3 className="text-2xl font-semibold text-gray-900 mb-4">You explore</h3>
               <p className="text-gray-600 leading-relaxed">
@@ -204,20 +204,20 @@ export default function LandingPage() {
           </p>
           
           <div className="flex flex-col sm:flex-row justify-center gap-6">
-            <a href="/browse" className="btn-secondary bg-white text-coral-500 hover:bg-gray-50 inline-flex items-center text-lg px-8 py-4">
+                            <a href="/browse" className="btn-secondary bg-white text-primary-500 hover:bg-gray-50 inline-flex items-center text-lg px-8 py-4">
               <Globe className="h-5 w-5 mr-2" />
               Browse destinations
             </a>
             <a 
               href="/create" 
               onClick={(e) => {
-                const userProfile = localStorage.getItem('pinpacks_user_profile')
+                const userProfile = localStorage.getItem('PinCloud_user_profile')
                 if (!userProfile) {
                   e.preventDefault()
                   window.location.href = '/signup'
                 }
               }}
-              className="btn-outline border-white text-white hover:bg-white hover:text-coral-500 inline-flex items-center text-lg px-8 py-4"
+                              className="btn-outline border-white text-white hover:bg-white hover:text-primary-500 inline-flex items-center text-lg px-8 py-4"
             >
               <Heart className="h-5 w-5 mr-2" />
               Create Pack

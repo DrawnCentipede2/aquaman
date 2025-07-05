@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Switch } from '@/components/ui/switch'
 import { useState } from 'react'
-import { MapPin, Home, Compass, User, Settings, LogOut } from 'lucide-react'
+import { Home, Compass, User, Settings, LogOut, Package } from 'lucide-react'
+import PinCloudLogo from '@/components/PinCloudLogo'
 
 interface NavbarProps {
   userRole: 'buyer' | 'seller'
@@ -24,7 +25,7 @@ export default function Navbar({ userRole: initialRole }: NavbarProps) {
 
   const sellerNavItems = [
     { href: '/dashboard', label: 'Dashboard', icon: Home },
-    { href: '/manage', label: 'Manage Packs', icon: MapPin },
+    { href: '/manage', label: 'Manage Packs', icon: Package },
     { href: '/profile', label: 'Profile', icon: User },
   ]
 
@@ -36,9 +37,9 @@ export default function Navbar({ userRole: initialRole }: NavbarProps) {
         <div className="flex justify-between items-center h-16">
           {/* Logo and Brand */}
           <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
-              <MapPin className="h-8 w-8 text-primary-600" />
-              <span className="text-xl font-bold text-gray-900">Pin Packs</span>
+            <Link href="/" className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 transition-colors">
+              <PinCloudLogo className="h-8 w-8" />
+              <span className="text-xl font-bold">PinCloud</span>
             </Link>
           </div>
 

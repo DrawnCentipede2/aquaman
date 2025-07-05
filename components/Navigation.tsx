@@ -10,7 +10,7 @@ const getInitialAuthState = () => {
   if (typeof window === 'undefined') return { isAuthenticated: false, userProfile: null }
   
   try {
-    const userProfileData = localStorage.getItem('pinpacks_user_profile')
+    const userProfileData = localStorage.getItem('PinCloud_user_profile')
     if (userProfileData) {
       const parsedProfile = JSON.parse(userProfileData)
       return { isAuthenticated: true, userProfile: parsedProfile }
@@ -18,7 +18,7 @@ const getInitialAuthState = () => {
   } catch (error) {
     console.warn('Error parsing initial auth state:', error)
     // Clean up corrupted data
-    localStorage.removeItem('pinpacks_user_profile')
+    localStorage.removeItem('PinCloud_user_profile')
   }
   
   return { isAuthenticated: false, userProfile: null }
@@ -88,11 +88,11 @@ export default function Navigation() {
     
     // Load saved preferences if user is authenticated
     if (initialAuthState.isAuthenticated) {
-      const savedCurrency = localStorage.getItem('pinpacks_currency') || 'USD'
-      const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
-      const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
-      const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
-      const isCreatorRegistered = localStorage.getItem('pinpacks_is_registered_creator') === 'true'
+      const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
+      const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
+      const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
+      const hasCreatedPacks = localStorage.getItem('PinCloud_has_created_packs') === 'true'
+      const isCreatorRegistered = localStorage.getItem('PinCloud_is_registered_creator') === 'true'
       
       setSelectedCurrency(savedCurrency)
       setSelectedLanguage(savedLanguage)
@@ -103,7 +103,7 @@ export default function Navigation() {
     
     // Listen for storage changes (when user signs in/out in another tab)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'pinpacks_user_profile' || e.key === 'pinpacks_is_registered_creator' || e.key === 'pinpacks_has_created_packs') {
+      if (e.key === 'PinCloud_user_profile' || e.key === 'PinCloud_is_registered_creator' || e.key === 'PinCloud_has_created_packs') {
         console.log('User profile or creator status storage changed, updating auth state')
         const newAuthState = getInitialAuthState()
         setIsAuthenticated(newAuthState.isAuthenticated)
@@ -111,11 +111,11 @@ export default function Navigation() {
         
         // Load preferences if newly authenticated
         if (newAuthState.isAuthenticated) {
-          const savedCurrency = localStorage.getItem('pinpacks_currency') || 'USD'
-          const savedLanguage = localStorage.getItem('pinpacks_language') || 'English'
-          const savedRegion = localStorage.getItem('pinpacks_region') || 'United States'
-          const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
-          const isCreatorRegistered = localStorage.getItem('pinpacks_is_registered_creator') === 'true'
+          const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
+          const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
+          const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
+          const hasCreatedPacks = localStorage.getItem('PinCloud_has_created_packs') === 'true'
+          const isCreatorRegistered = localStorage.getItem('PinCloud_is_registered_creator') === 'true'
           
           setSelectedCurrency(savedCurrency)
           setSelectedLanguage(savedLanguage)
@@ -133,8 +133,8 @@ export default function Navigation() {
     // Also listen for custom storage events (triggered manually)
     const handleCustomStorageEvent = () => {
       if (isAuthenticated) {
-        const hasCreatedPacks = localStorage.getItem('pinpacks_has_created_packs') === 'true'
-        const isCreatorRegistered = localStorage.getItem('pinpacks_is_registered_creator') === 'true'
+        const hasCreatedPacks = localStorage.getItem('PinCloud_has_created_packs') === 'true'
+        const isCreatorRegistered = localStorage.getItem('PinCloud_is_registered_creator') === 'true'
         setIsCreatorEligible(hasCreatedPacks)
         setIsRegisteredCreator(isCreatorRegistered)
       }
@@ -211,13 +211,13 @@ export default function Navigation() {
 
   // Handle logout function
   const handleLogout = () => {
-    localStorage.removeItem('pinpacks_user_profile')
-    localStorage.removeItem('pinpacks_user_id')
-    localStorage.removeItem('pinpacks_user_email')
-    localStorage.removeItem('pinpacks_user_ip')
-    localStorage.removeItem('pinpacks_user_location')
-    localStorage.removeItem('pinpacks_has_created_packs')
-    localStorage.removeItem('pinpacks_is_registered_creator')
+    localStorage.removeItem('PinCloud_user_profile')
+    localStorage.removeItem('PinCloud_user_id')
+    localStorage.removeItem('PinCloud_user_email')
+    localStorage.removeItem('PinCloud_user_ip')
+    localStorage.removeItem('PinCloud_user_location')
+    localStorage.removeItem('PinCloud_has_created_packs')
+    localStorage.removeItem('PinCloud_is_registered_creator')
     setUserProfile(null)
     setIsAuthenticated(false)
     setIsDropdownOpen(false)
@@ -244,7 +244,7 @@ export default function Navigation() {
   // Handle currency selection
   const handleCurrencySelect = (currency: any) => {
     setSelectedCurrency(currency.code)
-    localStorage.setItem('pinpacks_currency', currency.code)
+    localStorage.setItem('PinCloud_currency', currency.code)
     setShowCurrencyModal(false)
     // You could also trigger a global event here to update prices throughout the app
     window.dispatchEvent(new CustomEvent('currencyChanged', { detail: currency }))
@@ -254,8 +254,8 @@ export default function Navigation() {
   const handleLanguageSelect = (language: any, region: string) => {
     setSelectedLanguage(language.name)
     setSelectedRegion(region)
-    localStorage.setItem('pinpacks_language', language.name)
-    localStorage.setItem('pinpacks_region', region)
+    localStorage.setItem('PinCloud_language', language.name)
+    localStorage.setItem('PinCloud_region', region)
     setShowLanguageModal(false)
     // You could also trigger a global event here to update language throughout the app
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language, region } }))
@@ -357,7 +357,7 @@ export default function Navigation() {
                   width: '2rem',
                   height: '2rem',
                   borderRadius: '50%',
-                  backgroundColor: '#ef4444', // Same red color
+                  backgroundColor: '#0ea5e9', // Sky blue color
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -467,7 +467,7 @@ export default function Navigation() {
                   width: '2rem',
                   height: '2rem',
                   borderRadius: '50%',
-                  backgroundColor: '#ef4444', // Red color instead of orange
+                  backgroundColor: '#0ea5e9', // Sky blue color
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -506,11 +506,11 @@ export default function Navigation() {
                   <>
                     {/* Not authenticated - Show login options */}
                     <div className="px-4 py-3 border-b border-gray-100 text-center">
-                      <div className="w-12 h-12 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <User className="h-6 w-6 text-coral-600" />
+                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <User className="h-6 w-6 text-primary-600" />
                       </div>
                       <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                        Join PinPacks
+                        Join PinCloud
                       </h3>
                       <p className="text-xs text-gray-600">
                         Sign in to access your account
@@ -530,9 +530,9 @@ export default function Navigation() {
                       <a
                         href="/signup"
                         onClick={() => setIsDropdownOpen(false)}
-                        className="flex items-center w-full px-4 py-3 text-sm font-medium text-coral-600 hover:bg-coral-50 transition-colors"
+                        className="flex items-center w-full px-4 py-3 text-sm font-medium text-primary-600 hover:bg-primary-50 transition-colors"
                       >
-                        <Plus className="h-4 w-4 mr-3 text-coral-500" />
+                        <Plus className="h-4 w-4 mr-3 text-primary-500" />
                         Create Account
                       </a>
                     </div>
@@ -1005,7 +1005,7 @@ export default function Navigation() {
                   <User className="h-8 w-8 text-coral-600" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Join PinPacks to continue
+                  Join PinCloud to continue
                 </h3>
                 <p className="text-gray-600 mb-6">
                   Sign in to access your wishlist, cart, and start collecting amazing local experiences.
