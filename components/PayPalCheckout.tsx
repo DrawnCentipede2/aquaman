@@ -3,6 +3,7 @@
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { useState } from 'react'
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
 
 // PayPal checkout component interface
 interface PayPalCheckoutProps {
@@ -32,8 +33,7 @@ function PayPalButtonsComponent({
       {isProcessing && (
         <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-coral-500 mx-auto mb-2" />
-            <p className="text-gray-600">Processing your payment...</p>
+            <CloudLoader size="md" text="Processing your payment..." />
           </div>
         </div>
       )}

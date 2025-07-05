@@ -3,8 +3,14 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation, Shield, Globe, User, MessageCircle, Package } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+
+// Extended PinPack type to include cover photo (same as browse page)
+interface PinPackWithPhoto extends PinPack {
+  coverPhoto?: string | null
+}
 import { exportToGoogleMyMaps } from '@/lib/googleMaps'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
@@ -18,7 +24,7 @@ export default function PackDetailPage() {
   // State management for the pack detail page
   const [pack, setPack] = useState<PinPack | null>(null)
   const [pins, setPins] = useState<any[]>([])
-  const [similarPacks, setSimilarPacks] = useState<PinPack[]>([])
+  const [similarPacks, setSimilarPacks] = useState<PinPackWithPhoto[]>([])
   const [reviews, setReviews] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -288,7 +294,49 @@ export default function PackDetailPage() {
         console.warn('Error loading similar packs:', similarError)
         setSimilarPacks([])
       } else {
-        setSimilarPacks(similarData || [])
+        // Load cover photos for similar packs (same logic as browse page)
+        const similarPacksWithPhotos = await Promise.all(
+          (similarData || []).map(async (similarPack) => {
+            try {
+              // Get pins for this similar pack to find photos
+              const { data: similarPackPins, error: similarPinsError } = await supabase
+                .from('pin_pack_pins')
+                .select(`
+                  pins (
+                    id,
+                    photos
+                  )
+                `)
+                .eq('pin_pack_id', similarPack.id)
+                .limit(10) // Get up to 10 pins to check for photos
+
+              if (!similarPinsError && similarPackPins && similarPackPins.length > 0) {
+                // Find first pin with photos
+                const pinWithPhoto = similarPackPins.find(packPin => {
+                  const pin = packPin.pins as any
+                  return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
+                })
+                
+                if (pinWithPhoto) {
+                  const pin = pinWithPhoto.pins as any
+                  return {
+                    ...similarPack,
+                    coverPhoto: pin.photos[0] // Add first photo as cover
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn('Error loading photos for similar pack:', similarPack.id, error)
+            }
+            
+            return {
+              ...similarPack,
+              coverPhoto: null // No photos found
+            }
+          })
+        )
+        
+        setSimilarPacks(similarPacksWithPhotos)
       }
 
       // Mock reviews data since we don't have a reviews table yet
@@ -682,10 +730,7 @@ export default function PackDetailPage() {
     return (
       <div className="min-h-screen bg-gray-25 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
-          </div>
-          <p className="text-gray-600 text-lg">Loading pack details...</p>
+                  <CloudLoader size="lg" text="Loading pack details..." />
         </div>
       </div>
     )
@@ -1221,12 +1266,23 @@ export default function PackDetailPage() {
                   >
                     {/* Similar pack image with overlays */}
                     <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative overflow-hidden">
-                      {/* Google Maps background - no zoom to avoid blurry rectangle */}
-                      <img 
-                        src="/google-maps-bg.svg"
-                        alt="Map background"
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
+                      {/* Display actual photo if available, otherwise Google Maps background */}
+                      {similarPack.coverPhoto ? (
+                        <img 
+                          src={`${similarPack.coverPhoto}`}
+                          alt={`${similarPack.title} cover`}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                          }}
+                        />
+                      ) : (
+                        <img 
+                          src="/google-maps-bg.svg"
+                          alt="Map background"
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                       
                       {/* Heart icon for adding to wishlist */}

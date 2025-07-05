@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Plus, Package, Settings, TrendingUp, DollarSign, Users, Eye, Star, MapPin, Calendar, BarChart3, Edit3, Trash2, ArrowLeft } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
 import Link from 'next/link'
 
 export default function CreatorDashboard() {
@@ -59,10 +60,9 @@ export default function CreatorDashboard() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-25 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-coral-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your creator dashboard...</p>
-        </div>
+              <div className="text-center">
+        <CloudLoader size="xl" text="Loading your creator dashboard..." />
+      </div>
       </div>
     )
   }

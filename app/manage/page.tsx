@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { BarChart3, Download, Edit, Eye, MapPin, Star, Trash2, TrendingUp, Users, Calendar, Package, DollarSign } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 
 // Interface for pin pack with analytics
@@ -271,10 +272,7 @@ export default function ManagePage() {
     return (
       <div className="min-h-screen bg-gray-25 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
-          </div>
-          <p className="text-gray-600 text-lg">Loading your pin packs...</p>
+                  <CloudLoader size="lg" text="Loading your pin packs..." />
         </div>
       </div>
     )

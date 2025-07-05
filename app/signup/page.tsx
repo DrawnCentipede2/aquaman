@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { User, Mail, ArrowRight } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
 
 export default function SignUpPage() {
   const [formData, setFormData] = useState({
@@ -130,8 +131,8 @@ export default function SignUpPage() {
               >
                 {isLoading ? (
                   <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Creating profile...
+                    <CloudLoader size="sm" className="mr-2" />
+                    <span>Creating profile...</span>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { User, MapPin, ShoppingBag, Store, Heart, Download, Eye, Settings, Plus } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
 
 export default function DashboardPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
@@ -35,10 +36,9 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading your dashboard...</p>
-          </div>
+                <div className="text-center">
+        <CloudLoader size="xl" text="Loading your dashboard..." />
+      </div>
         </div>
       </div>
     )

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { User, Mail, MapPin, ShoppingBag, Store, Settings, LogOut, Save } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
 
 export default function ProfilePage() {
   const [userProfile, setUserProfile] = useState<any>(null)
@@ -99,8 +100,7 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading your profile...</p>
+            <CloudLoader size="xl" text="Loading your profile..." />
           </div>
         </div>
       </div>
@@ -215,8 +215,8 @@ export default function ProfilePage() {
               >
                 {isSaving ? (
                   <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Saving...
+                    <CloudLoader size="sm" className="mr-2" />
+                    <span>Saving...</span>
                   </>
                 ) : (
                   <>
