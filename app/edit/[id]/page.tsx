@@ -6,6 +6,7 @@ import { MapPin, Save, ArrowLeft, Trash2, Plus, Upload, DollarSign, FileText, Im
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+import { getPackDisplayImage } from '@/lib/utils'
 
 export default function EditPackPage() {
   const params = useParams()
@@ -18,6 +19,7 @@ export default function EditPackPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [packImage, setPackImage] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -61,6 +63,10 @@ export default function EditPackPage() {
         country: packData.country || '',
         creator_location: packData.creator_location || ''
       })
+
+      // Load pack image
+      const imageUrl = await getPackDisplayImage(packId)
+      setPackImage(imageUrl)
 
       // Load pins for this pack
       const { data: packPinsData, error: pinsError } = await supabase
@@ -401,7 +407,7 @@ export default function EditPackPage() {
               <div className="border border-gray-200 rounded-xl overflow-hidden">
                 <div className="h-32 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative">
                   <img 
-                    src="/google-maps-bg.svg"
+                    src={packImage || "/google-maps-bg.svg"}
                     alt="Map background"
                     className="absolute inset-0 w-full h-full object-cover"
                   />

@@ -6,6 +6,7 @@ import { MapPin, Download, Star, Calendar, Package, ExternalLink, X, CheckCircle
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+import { getPackDisplayImage } from '@/lib/utils'
 
 export default function PinventoryPage() {
   const router = useRouter()
@@ -19,6 +20,7 @@ export default function PinventoryPage() {
   const [groupedPacks, setGroupedPacks] = useState<{[key: string]: PinPack[]}>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [packImages, setPackImages] = useState<{[key: string]: string}>({})
   
   // Country expansion state
   const [expandedCountries, setExpandedCountries] = useState<{[key: string]: boolean}>({})
@@ -87,6 +89,24 @@ export default function PinventoryPage() {
     groupPacksByCountry()
   }, [purchasedPacks])
 
+  // Load pack images when packs change
+  useEffect(() => {
+    const loadPackImages = async () => {
+      const images: {[key: string]: string} = {}
+      for (const pack of purchasedPacks) {
+        const imageUrl = await getPackDisplayImage(pack.id)
+        if (imageUrl) {
+          images[pack.id] = imageUrl
+        }
+      }
+      setPackImages(images)
+    }
+    
+    if (purchasedPacks.length > 0) {
+      loadPackImages()
+    }
+  }, [purchasedPacks])
+
   // Load purchased packs from database orders and localStorage (for backward compatibility)
   const loadPurchasedPacks = async () => {
     try {
@@ -100,20 +120,82 @@ export default function PinventoryPage() {
       const userEmail = userProfile?.email
       let databasePackIds: string[] = []
       
+      console.log('🔍 Loading purchased packs for user email:', userEmail)
+      
       if (userEmail) {
-        const { data: orderItems, error: orderError } = await supabase
-          .from('order_items')
-          .select(`
-            pin_pack_id,
-            orders!inner(status, customer_email)
-          `)
-          .eq('orders.status', 'completed')
-          .eq('orders.customer_email', userEmail)
+        console.log('🔍 Querying database for orders with email:', userEmail)
         
-        if (!orderError && orderItems) {
-          databasePackIds = orderItems.map(item => item.pin_pack_id)
-        } else if (orderError) {
-          console.error('Error fetching user orders:', orderError)
+        try {
+          // First try to find orders by user_email (PinCloud email)
+          const { data: orderItems, error: orderError } = await supabase
+            .from('order_items')
+            .select(`
+              pin_pack_id,
+              orders!inner(status, user_email)
+            `)
+            .eq('orders.status', 'completed')
+            .eq('orders.user_email', userEmail)
+          
+          console.log('🔍 Database query result (user_email):', { orderItems, orderError })
+          
+          if (!orderError && orderItems) {
+            databasePackIds = orderItems.map(item => item.pin_pack_id)
+            console.log('🔍 Found database pack IDs (user_email):', databasePackIds)
+          } else if (orderError) {
+            console.error('Error fetching user orders by user_email:', orderError)
+            
+            // Fallback: try customer_email (PayPal email) if user_email doesn't work
+            console.log('🔍 Trying fallback query with customer_email...')
+            
+            const { data: fallbackOrderItems, error: fallbackError } = await supabase
+              .from('order_items')
+              .select(`
+                pin_pack_id,
+                orders!inner(status, customer_email)
+              `)
+              .eq('orders.status', 'completed')
+              .eq('orders.customer_email', userEmail)
+            
+            console.log('🔍 Fallback query result (customer_email):', { fallbackOrderItems, fallbackError })
+            
+            if (!fallbackError && fallbackOrderItems) {
+              databasePackIds = fallbackOrderItems.map(item => item.pin_pack_id)
+              console.log('🔍 Found database pack IDs (customer_email fallback):', databasePackIds)
+            } else if (fallbackError) {
+              console.error('Error fetching user orders by customer_email:', fallbackError)
+              
+              // If both queries fail, try direct orders query
+              if (fallbackError.message.includes('relation') || fallbackError.message.includes('does not exist')) {
+                console.log('🔍 Orders table might not exist, trying direct orders query...')
+                
+                const { data: directOrders, error: directError } = await supabase
+                  .from('orders')
+                  .select('id, customer_email, user_email, status')
+                  .or(`user_email.eq.${userEmail},customer_email.eq.${userEmail}`)
+                  .eq('status', 'completed')
+                
+                console.log('🔍 Direct orders query result:', { directOrders, directError })
+                
+                if (!directError && directOrders && directOrders.length > 0) {
+                  // Get order items for these orders
+                  const orderIds = directOrders.map(o => o.id)
+                  const { data: directOrderItems, error: directItemsError } = await supabase
+                    .from('order_items')
+                    .select('pin_pack_id')
+                    .in('order_id', orderIds)
+                  
+                  console.log('🔍 Direct order items result:', { directOrderItems, directItemsError })
+                  
+                  if (!directItemsError && directOrderItems) {
+                    databasePackIds = directOrderItems.map(item => item.pin_pack_id)
+                    console.log('🔍 Found database pack IDs (direct query):', databasePackIds)
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('🔍 Error in database query:', error)
         }
       } else {
         console.log('No user email found - skipping database orders')
@@ -123,6 +205,7 @@ export default function PinventoryPage() {
       
       // 2. Get from localStorage (old purchases and free packs)
       const localStorageIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+      console.log('🔍 Found localStorage pack IDs:', localStorageIds)
       
       // Clean up invalid UUIDs from localStorage
       const validLocalIds = localStorageIds.filter((id: string) => {
@@ -132,6 +215,7 @@ export default function PinventoryPage() {
       
       // Merge both sources and remove duplicates
       purchasedPackIds = Array.from(new Set([...purchasedPackIds, ...validLocalIds]))
+      console.log('🔍 Final combined pack IDs:', purchasedPackIds)
       
       // Update localStorage if we found invalid UUIDs
       if (validLocalIds.length !== localStorageIds.length) {
@@ -140,6 +224,7 @@ export default function PinventoryPage() {
       }
       
       if (purchasedPackIds.length === 0) {
+        console.log('🔍 No purchased pack IDs found')
         setPurchasedPacks([])
         setGroupedPacks({})
         setLoading(false)
@@ -147,10 +232,13 @@ export default function PinventoryPage() {
       }
 
       // Fetch pack details from database
+      console.log('🔍 Fetching pack details for IDs:', purchasedPackIds)
       const { data: packsData, error: packsError } = await supabase
         .from('pin_packs')
         .select('*')
         .in('id', purchasedPackIds)
+
+      console.log('🔍 Pack details result:', { packsData, packsError })
 
       if (packsError) throw packsError
 
@@ -451,6 +539,201 @@ export default function PinventoryPage() {
     }
   }
 
+  // Debug function to create a test order in the database
+  const createTestOrder = async () => {
+    try {
+      // Get user email
+      const userEmail = userProfile?.email
+      if (!userEmail) {
+        alert('No user email found. Please sign in first.')
+        return
+      }
+
+      // Get a test pack
+      const { data: packs, error } = await supabase
+        .from('pin_packs')
+        .select('id, title, price')
+        .limit(1)
+
+      if (error) throw error
+
+      if (packs && packs.length > 0) {
+        const testPack = packs[0]
+        
+        // Create order
+        const createOrderResponse = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cartItems: [{
+              id: testPack.id,
+              title: testPack.title,
+              price: testPack.price,
+              city: 'Test City',
+              country: 'Test Country',
+              pin_count: 5
+            }],
+            totalAmount: testPack.price,
+            processingFee: 0.50,
+            userLocation: 'Test Location',
+            userIp: '127.0.0.1',
+            customerEmail: userEmail
+          })
+        })
+
+        if (createOrderResponse.ok) {
+          const { order } = await createOrderResponse.json()
+          
+          // Complete the order
+          const completeOrderResponse = await fetch('/api/orders/complete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              orderId: order.id,
+              paypalOrderId: 'test-order-' + Date.now(),
+              paypalPayerId: 'test-payer-' + Date.now(),
+              paypalPaymentId: 'test-payment-' + Date.now(),
+              customerEmail: userEmail,
+              customerName: 'Test User',
+              paymentDetails: { test: true }
+            })
+          })
+
+          if (completeOrderResponse.ok) {
+            alert(`Test order created successfully! Order ID: ${order.id}`)
+            // Reload purchased packs
+            loadPurchasedPacks()
+          } else {
+            alert('Failed to complete test order')
+          }
+        } else {
+          alert('Failed to create test order')
+        }
+      } else {
+        alert('No packs found in database')
+      }
+    } catch (error) {
+      console.error('Error creating test order:', error)
+      alert('Error creating test order: ' + error)
+    }
+  }
+
+  // Debug function to check database directly
+  const checkDatabase = async () => {
+    try {
+      const userEmail = userProfile?.email
+      if (!userEmail) {
+        alert('No user email found. Please sign in first.')
+        return
+      }
+
+      console.log('🔍 Checking database for user email:', userEmail)
+
+      // Check if orders table exists and has data
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .or(`user_email.eq.${userEmail},customer_email.eq.${userEmail}`)
+
+      console.log('🔍 Orders for user:', { orders, ordersError })
+
+      if (ordersError) {
+        alert('Error checking orders: ' + ordersError.message)
+        return
+      }
+
+      if (orders && orders.length > 0) {
+        // Check order items for these orders
+        const orderIds = orders.map(o => o.id)
+        const { data: orderItems, error: itemsError } = await supabase
+          .from('order_items')
+          .select('*')
+          .in('order_id', orderIds)
+
+        console.log('🔍 Order items:', { orderItems, itemsError })
+
+        if (itemsError) {
+          alert('Error checking order items: ' + itemsError.message)
+          return
+        }
+
+        const packIds = orderItems?.map(item => item.pin_pack_id) || []
+        console.log('🔍 Pack IDs from orders:', packIds)
+
+        if (packIds.length > 0) {
+          const { data: packs, error: packsError } = await supabase
+            .from('pin_packs')
+            .select('id, title')
+            .in('id', packIds)
+
+          console.log('🔍 Packs found:', { packs, packsError })
+          alert(`Found ${orders.length} orders, ${orderItems?.length || 0} items, ${packs?.length || 0} packs`)
+        } else {
+          alert(`Found ${orders.length} orders but no order items`)
+        }
+      } else {
+        alert('No orders found for this user')
+      }
+    } catch (error) {
+      console.error('Error checking database:', error)
+      alert('Error checking database: ' + error)
+    }
+  }
+
+  // Debug function to link existing orders to PinCloud email
+  const linkExistingOrders = async () => {
+    try {
+      const userEmail = userProfile?.email
+      if (!userEmail) {
+        alert('No user email found. Please sign in first.')
+        return
+      }
+
+      console.log('🔗 Linking existing orders to PinCloud email:', userEmail)
+
+      // Find orders that have customer_email but no user_email
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id, customer_email, user_email')
+        .is('user_email', null)
+        .not('customer_email', 'is', null)
+
+      console.log('🔗 Orders to link:', { orders, ordersError })
+
+      if (ordersError) {
+        alert('Error finding orders to link: ' + ordersError.message)
+        return
+      }
+
+      if (orders && orders.length > 0) {
+        // Update these orders to set user_email
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update({ user_email: userEmail })
+          .is('user_email', null)
+
+        if (updateError) {
+          alert('Error updating orders: ' + updateError.message)
+          return
+        }
+
+        alert(`Successfully linked ${orders.length} orders to your PinCloud email!`)
+        
+        // Reload purchased packs
+        loadPurchasedPacks()
+      } else {
+        alert('No orders found that need linking')
+      }
+    } catch (error) {
+      console.error('Error linking orders:', error)
+      alert('Error linking orders: ' + error)
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
@@ -551,6 +834,24 @@ export default function PinventoryPage() {
               >
                 Add Test Pack (Debug)
               </button>
+              <button
+                onClick={createTestOrder}
+                className="btn-secondary"
+              >
+                Create Test Order (Debug)
+              </button>
+              <button
+                onClick={checkDatabase}
+                className="btn-secondary"
+              >
+                Check Database (Debug)
+              </button>
+              <button
+                onClick={linkExistingOrders}
+                className="btn-secondary"
+              >
+                Link Existing Orders (Debug)
+              </button>
             </div>
           </div>
         ) : (
@@ -610,7 +911,7 @@ export default function PinventoryPage() {
                                 {/* Thumbnail */}
                                 <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
                                   <img 
-                                    src="/google-maps-bg.svg"
+                                    src={packImages[pack.id] || "/google-maps-bg.svg"}
                                     alt="Pack thumbnail"
                                     className="w-full h-full object-cover"
                                   />

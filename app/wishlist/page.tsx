@@ -119,7 +119,8 @@ export default function WishlistPage() {
                         />
                       ) : (
                         <img 
-                          src="/google-maps-bg.svg"
+                                                            src={pack.coverPhoto && pack.coverPhoto !== '' ? pack.coverPhoto : "/google-maps-bg.svg"}
+
                           alt="Map background"
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ aspectRatio: '4/3' }}

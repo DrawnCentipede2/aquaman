@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { MapPin, Star, Users, Heart, Calendar, Globe, MessageCircle, Shield, ArrowLeft, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+import { getPackDisplayImage } from '@/lib/utils'
 
 export default function CreatorProfilePage() {
   const params = useParams()
@@ -13,6 +14,7 @@ export default function CreatorProfilePage() {
   const [creatorPacks, setCreatorPacks] = useState<PinPack[]>([])
   const [loading, setLoading] = useState(true)
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
+  const [packImages, setPackImages] = useState<{[key: string]: string}>({})
 
   // Static stats to avoid hydration errors
   const [creatorStats, setCreatorStats] = useState({
@@ -74,6 +76,16 @@ My packs are carefully crafted based on years of exploration and conversations w
       if (error) throw error
       
       setCreatorPacks(packsData || [])
+      
+      // Load pack images
+      const images: {[key: string]: string} = {}
+      for (const pack of packsData || []) {
+        const imageUrl = await getPackDisplayImage(pack.id)
+        if (imageUrl) {
+          images[pack.id] = imageUrl
+        }
+      }
+      setPackImages(images)
       
     } catch (error) {
       console.error('Error loading creator packs:', error)
@@ -354,7 +366,7 @@ My packs are carefully crafted based on years of exploration and conversations w
                   <div className="relative h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
                     <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
                       <img 
-                        src="/google-maps-bg.svg"
+                        src={packImages[pack.id] || "/google-maps-bg.svg"}
                         alt="Map background"
                         className="absolute inset-0 w-full h-full object-cover"
                       />

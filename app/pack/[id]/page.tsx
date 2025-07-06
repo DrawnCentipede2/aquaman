@@ -454,7 +454,8 @@ export default function PackDetailPage() {
               console.warn('Could not parse referrer URL:', error)
             }
           }
-          
+          // Get the best available image for the pack
+          const displayImage = getPackDisplayImage() || ''
           // Redirect to browse page with cart success parameters
           const browseUrl = new URL('/browse', window.location.origin)
           if (searchQuery) {
@@ -462,12 +463,6 @@ export default function PackDetailPage() {
           }
           browseUrl.searchParams.set('cart_success', 'true')
           browseUrl.searchParams.set('added_pack_id', pack.id)
-          browseUrl.searchParams.set('added_pack_title', pack.title)
-          browseUrl.searchParams.set('added_pack_price', pack.price.toString())
-          browseUrl.searchParams.set('added_pack_city', pack.city)
-          browseUrl.searchParams.set('added_pack_country', pack.country)
-          browseUrl.searchParams.set('added_pack_pin_count', (pins.length || pack.pin_count || 0).toString())
-          
           window.location.href = browseUrl.toString()
         }
       } catch (error) {
@@ -515,6 +510,12 @@ export default function PackDetailPage() {
       console.log('PayPal payment successful:', orderData)
       
       if (pack) {
+        // Get user email from profile
+        const userProfileData = localStorage.getItem('pinpacks_user_profile')
+        const userEmail = userProfileData ? JSON.parse(userProfileData).email : null
+        
+        console.log('🔍 Creating order with user email:', userEmail)
+
         // Create order in database (same API call as cart page)
         const createOrderResponse = await fetch('/api/orders/create', {
           method: 'POST',
@@ -533,12 +534,17 @@ export default function PackDetailPage() {
             totalAmount: pack.price,
             processingFee: 0.50,
             userLocation: 'Unknown',
-            userIp: 'Unknown'
+            userIp: 'Unknown',
+            customerEmail: orderData.details?.payer?.email_address || userEmail, // PayPal email
+            userEmail: userEmail // PinCloud user email
           })
         })
 
+        console.log('🔍 Create order response:', createOrderResponse.status)
+
         if (createOrderResponse.ok) {
           const { order } = await createOrderResponse.json()
+          console.log('🔍 Order created successfully:', order)
 
           // Complete the order with PayPal details
           const completeOrderResponse = await fetch('/api/orders/complete', {
@@ -558,12 +564,17 @@ export default function PackDetailPage() {
             })
           })
 
+          console.log('🔍 Complete order response:', completeOrderResponse.status)
+
           if (completeOrderResponse.ok) {
+            console.log('🔍 Order completed successfully')
+            
             // Add pack to purchased list
             const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
             if (!existingPurchases.includes(pack.id)) {
               existingPurchases.push(pack.id)
               localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
+              console.log('🔍 Added pack to localStorage purchased list:', pack.id)
               
               // Remove from cart if it was there
               const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
@@ -579,7 +590,11 @@ export default function PackDetailPage() {
             setShowPayPalModal(false)
             setPurchasedPacksCount(1)
             setShowSuccessModal(true)
+          } else {
+            console.error('🔍 Failed to complete order:', completeOrderResponse.status)
           }
+        } else {
+          console.error('🔍 Failed to create order:', createOrderResponse.status)
         }
       }
     } catch (error) {
@@ -1278,7 +1293,7 @@ export default function PackDetailPage() {
                         />
                       ) : (
                         <img 
-                          src="/google-maps-bg.svg"
+                          src={similarPack.coverPhoto && similarPack.coverPhoto !== '' ? similarPack.coverPhoto : "/google-maps-bg.svg"}
                           alt="Map background"
                           className="absolute inset-0 w-full h-full object-cover"
                         />
@@ -1757,7 +1772,7 @@ export default function PackDetailPage() {
                 {/* Pack thumbnail */}
                 <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
                   <img 
-                    src="/google-maps-bg.svg"
+                    src={getPackDisplayImage() || "/google-maps-bg.svg"}
                     alt="Pack thumbnail"
                     className="w-full h-full object-cover"
                   />

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders, CheckCircle, ShoppingCart, CreditCard, Package, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+import { getPackDisplayImage } from '@/lib/utils'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 
@@ -63,6 +64,7 @@ export default function BrowsePage() {
     pin_count: string
   } | null>(null)
   const [countdownTime, setCountdownTime] = useState('24:00')
+  const [addedPackImage, setAddedPackImage] = useState<string | null>(null)
   
   // Payment success state for falling pins modal
   const [showPayPalModal, setShowPayPalModal] = useState(false)
@@ -158,8 +160,7 @@ export default function BrowsePage() {
   useEffect(() => {
     checkAuthentication()
     loadPinPacks()
-    
-    // Check for search parameter in URL
+    // Only handle search param on mount
     const urlParams = new URLSearchParams(window.location.search)
     const searchParam = urlParams.get('search')
     if (searchParam) {
@@ -167,43 +168,46 @@ export default function BrowsePage() {
       setActiveSearchTerm(searchParam) // Set the active search term for filtering
       setHasSearched(true)
     }
-    
-    // Check for cart success parameters
+  }, [])
+
+  // Handle cart success logic when pinPacks changes
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
     const cartSuccessParam = urlParams.get('cart_success')
     if (cartSuccessParam === 'true') {
       const packId = urlParams.get('added_pack_id')
-      const packTitle = urlParams.get('added_pack_title')
-      const packPrice = urlParams.get('added_pack_price')
-      const packCity = urlParams.get('added_pack_city')
-      const packCountry = urlParams.get('added_pack_country')
-      const packPinCount = urlParams.get('added_pack_pin_count')
-      
-      if (packId && packTitle) {
-        setCartSuccess(true)
-        setAddedPack({
-          id: packId,
-          title: packTitle,
-          price: packPrice || '0',
-          city: packCity || '',
-          country: packCountry || '',
-          pin_count: packPinCount || '0'
-        })
-        
-        // Clean up URL by removing cart success parameters
-        const cleanUrl = new URL(window.location.href)
-        cleanUrl.searchParams.delete('cart_success')
-        cleanUrl.searchParams.delete('added_pack_id')
-        cleanUrl.searchParams.delete('added_pack_title')
-        cleanUrl.searchParams.delete('added_pack_price')
-        cleanUrl.searchParams.delete('added_pack_city')
-        cleanUrl.searchParams.delete('added_pack_country')
-        cleanUrl.searchParams.delete('added_pack_pin_count')
-        
-        // Update URL without reloading the page
-        window.history.replaceState({}, '', cleanUrl.toString())
+      if (packId) {
+        // Wait for pinPacks to load, then find the pack by id
+        const setPackFromId = async () => {
+          const foundPack = pinPacks.find(p => p.id === packId)
+          if (foundPack) {
+            setCartSuccess(true)
+            setAddedPack({
+              id: foundPack.id,
+              title: foundPack.title,
+              price: foundPack.price?.toString() || '0',
+              city: foundPack.city || '',
+              country: foundPack.country || '',
+              pin_count: (foundPack.pin_count || 0).toString(),
+            })
+            
+            // Load the pack image
+            const imageUrl = await getPackDisplayImage(foundPack.id)
+            setAddedPackImage(imageUrl)
+            // Clean up URL by removing cart success parameters
+            const cleanUrl = new URL(window.location.href)
+            cleanUrl.searchParams.delete('cart_success')
+            cleanUrl.searchParams.delete('added_pack_id')
+            window.history.replaceState({}, '', cleanUrl.toString())
+          } else {
+            // If not found yet, try again after a short delay
+            setTimeout(setPackFromId, 100)
+          }
+        }
+        setPackFromId()
       }
     }
-  }, [])
+  }, [pinPacks])
 
   // Load wishlist when authentication status changes
   useEffect(() => {
@@ -918,6 +922,10 @@ export default function BrowsePage() {
       console.log('PayPal payment successful:', orderData)
       
       if (addedPack) {
+        // Get user email from profile
+        const userProfileData = localStorage.getItem('pinpacks_user_profile')
+        const userEmail = userProfileData ? JSON.parse(userProfileData).email : null
+
         // Create order in database (same API call as cart page)
         const createOrderResponse = await fetch('/api/orders/create', {
           method: 'POST',
@@ -936,7 +944,8 @@ export default function BrowsePage() {
             totalAmount: parseFloat(addedPack.price),
             processingFee: 0.50,
             userLocation: 'Unknown',
-            userIp: 'Unknown'
+            userIp: 'Unknown',
+            customerEmail: userEmail // Add user email to order creation
           })
         })
 
@@ -1319,7 +1328,7 @@ export default function BrowsePage() {
                   <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
                     {/* Map-style background like pack cards but smaller */}
                     <img 
-                      src="/google-maps-bg.svg"
+                      src={addedPackImage || "/google-maps-bg.svg"}
                       alt="Pack thumbnail"
                       className="w-full h-full object-cover"
                     />
@@ -1493,7 +1502,7 @@ export default function BrowsePage() {
                       />
                     ) : (
                       <img 
-                        src="/google-maps-bg.svg"
+                        src={pack.coverPhoto && pack.coverPhoto !== '' ? pack.coverPhoto : "/google-maps-bg.svg"}
                         alt="Map background"
                         className="absolute inset-0 w-full h-full object-cover"
                         style={{ aspectRatio: '4/3' }}
@@ -1517,8 +1526,8 @@ export default function BrowsePage() {
                     <Heart 
                       className={`h-4 w-4 transition-colors ${
                         isAuthenticated && wishlistItems.includes(pack.id) 
-                          ? 'text-coral-500 fill-current' 
-                          : 'text-gray-700 group-hover:text-coral-500'
+                          ? 'text-red-500 fill-current' // CHANGED from text-coral-500
+                          : 'text-gray-700 group-hover:text-red-500'
                       }`} 
                     />
                   </button>
@@ -1598,7 +1607,7 @@ export default function BrowsePage() {
                 {/* Pack thumbnail */}
                 <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
                   <img 
-                    src="/google-maps-bg.svg"
+                    src={addedPackImage || "/google-maps-bg.svg"}
                     alt="Pack thumbnail"
                     className="w-full h-full object-cover"
                   />

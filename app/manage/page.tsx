@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { BarChart3, Download, Edit, Eye, MapPin, Star, Trash2, TrendingUp, Users, Calendar, Package, DollarSign } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
+import { getPackDisplayImage } from '@/lib/utils'
 
 // Interface for pin pack with analytics
 interface PinPackWithAnalytics {
@@ -29,6 +30,7 @@ export default function ManagePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string>('')
+  const [packImages, setPackImages] = useState<{[key: string]: string}>({})
 
   // Check for authenticated user and use email-based system
   useEffect(() => {
@@ -167,6 +169,17 @@ export default function ManagePage() {
       }
 
       setUserPacks(packsWithAnalytics)
+      
+      // Load pack images
+      const images: {[key: string]: string} = {}
+      for (const pack of packsWithAnalytics) {
+        const imageUrl = await getPackDisplayImage(pack.id)
+        if (imageUrl) {
+          images[pack.id] = imageUrl
+        }
+      }
+      setPackImages(images)
+      
     } catch (error) {
       setError('Failed to load your pin packs')
       console.error('Error loading user packs:', error)
@@ -408,7 +421,7 @@ export default function ManagePage() {
                 <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative overflow-hidden">
                   <div className="absolute inset-0 group-hover:scale-105 transition-transform duration-300">
                     <img 
-                      src="/google-maps-bg.svg"
+                      src={packImages[pack.id] || "/google-maps-bg.svg"}
                       alt="Map background"
                       className="absolute inset-0 w-full h-full object-cover"
                     />

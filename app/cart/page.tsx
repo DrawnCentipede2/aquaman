@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Check, AlertCircle, ShoppingBag } from 'lucide-react'
 import PayPalCheckout from '@/components/PayPalCheckout'
+import { getPackDisplayImage } from '@/lib/utils'
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<any[]>([])
@@ -13,6 +14,7 @@ export default function CartPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [showModalContent, setShowModalContent] = useState(false)
   const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
+  const [packImages, setPackImages] = useState<{[key: string]: string}>({})
 
   useEffect(() => {
     // Load cart from localStorage
@@ -22,6 +24,24 @@ export default function CartPage() {
     }
     setLoading(false)
   }, [])
+
+  // Load pack images when cart items change
+  useEffect(() => {
+    const loadPackImages = async () => {
+      const images: {[key: string]: string} = {}
+      for (const item of cartItems) {
+        const imageUrl = await getPackDisplayImage(item.id)
+        if (imageUrl) {
+          images[item.id] = imageUrl
+        }
+      }
+      setPackImages(images)
+    }
+    
+    if (cartItems.length > 0) {
+      loadPackImages()
+    }
+  }, [cartItems])
 
   const removeFromCart = (itemId: string) => {
     const updatedCart = cartItems.filter(item => item.id !== itemId)
@@ -39,6 +59,10 @@ export default function CartPage() {
       setPaymentStatus('processing')
       setPaymentMessage('Processing your payment...')
 
+      // Get user email from profile
+      const userProfileData = localStorage.getItem('pinpacks_user_profile')
+      const userEmail = userProfileData ? JSON.parse(userProfileData).email : null
+
       // First create the order in our database
       const createOrderResponse = await fetch('/api/orders/create', {
         method: 'POST',
@@ -50,7 +74,9 @@ export default function CartPage() {
           totalAmount: getTotal(),
           processingFee: 0.99,
           userLocation: 'Unknown', // You can get this from browser if needed
-          userIp: 'Unknown' // You can get this from server if needed
+          userIp: 'Unknown', // You can get this from server if needed
+          customerEmail: userEmail, // Add user email to order creation
+          userEmail: userEmail // PinCloud user email
         })
       })
 
@@ -187,25 +213,15 @@ export default function CartPage() {
                       {/* Image placeholder - Google Maps style background */}
                       <div className="w-24 h-24 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg flex-shrink-0 relative overflow-hidden">
                         <div className="absolute inset-0 group-hover:scale-105 transition-transform duration-300 ease-out">
-                          {/* Display actual photo if available, otherwise Google Maps background */}
-                          {item.coverPhoto ? (
-                            <img 
-                              src={item.coverPhoto}
-                              alt={`${item.title} cover`}
-                              className="absolute inset-0 w-full h-full object-cover"
-                              style={{ aspectRatio: '4/3' }}
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
-                              }}
-                            />
-                          ) : (
-                            <img 
-                              src="/google-maps-bg.svg"
-                              alt="Map background"
-                              className="absolute inset-0 w-full h-full object-cover"
-                              style={{ aspectRatio: '4/3' }}
-                            />
-                          )}
+                          <img 
+                            src={packImages[item.id] || "/google-maps-bg.svg"}
+                            alt={`${item.title} cover`}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            style={{ aspectRatio: '4/3' }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                            }}
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent rounded-lg"></div>
                         </div>
                         <div className="absolute bottom-1 right-1 z-10">

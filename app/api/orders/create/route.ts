@@ -6,7 +6,7 @@ import { cookies } from 'next/headers'
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body
-    const { cartItems, totalAmount, processingFee, userLocation, userIp } = await request.json()
+    const { cartItems, totalAmount, processingFee, userLocation, userIp, customerEmail, userEmail } = await request.json()
     
     // Validate required fields
     if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
@@ -36,7 +36,9 @@ export async function POST(request: NextRequest) {
         currency: 'USD',
         status: 'pending',
         user_location: userLocation,
-        user_ip: userIp
+        user_ip: userIp,
+        customer_email: customerEmail, // PayPal email for payment verification
+        user_email: userEmail // PinCloud user email for account linking
       })
       .select()
       .single()
