@@ -53,9 +53,7 @@ export default function IndividualPlacePage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  // Photo reordering state
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
 
   // Load the place data from localStorage on component mount
   useEffect(() => {
@@ -243,46 +241,40 @@ export default function IndividualPlacePage() {
     const files = event.target.files
     if (!files || files.length === 0) return
 
+    // Check if user already has a photo
+    if (pin?.photos && pin.photos.length >= 1) {
+      alert('You can only upload 1 photo per place. Please remove the existing photo first.')
+      return
+    }
+
     setIsUploadingPhoto(true)
     
     try {
-      const newPhotos: string[] = []
+      const file = files[0] // Only take the first file
       
-      // Process each selected file
-      for (let i = 0; i < Math.min(files.length, 5); i++) { // Limit to 5 photos
-        const file = files[i]
-        
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-          alert(`File "${file.name}" is not an image. Please select only image files.`)
-          continue
-        }
-        
-        // Validate file size (max 10MB before compression)
-        if (file.size > 10 * 1024 * 1024) {
-          alert(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
-          continue
-        }
-        
-        // Compress image to reduce payload size
-        const compressedBase64 = await compressImage(file, 600, 0.7)
-        newPhotos.push(compressedBase64)
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert(`File "${file.name}" is not an image. Please select only image files.`)
+        return
       }
       
-      if (newPhotos.length > 0) {
-        const currentPhotos = pin?.photos || []
-        const updatedPhotos = [...currentPhotos, ...newPhotos].slice(0, 5) // Max 5 photos total
-        updatePin({ photos: updatedPhotos })
-        
-        if (newPhotos.length === 1) {
-          alert(`✅ Photo uploaded and compressed successfully!`)
-        } else {
-          alert(`✅ ${newPhotos.length} photos uploaded and compressed successfully!`)
-        }
+      // Validate file size (max 10MB before compression)
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
+        return
       }
+      
+      // Compress image to reduce payload size
+      const compressedBase64 = await compressImage(file, 600, 0.7)
+      
+      // Replace any existing photos with the new one
+      updatePin({ photos: [compressedBase64] })
+      
+      alert(`✅ Photo uploaded and compressed successfully!`)
+      
     } catch (error) {
-      console.error('Error uploading photos:', error)
-      alert('Error uploading photos. Please try again.')
+      console.error('Error uploading photo:', error)
+      alert('Error uploading photo. Please try again.')
     } finally {
       setIsUploadingPhoto(false)
       // Reset file input
@@ -301,48 +293,6 @@ export default function IndividualPlacePage() {
 
   const triggerPhotoUpload = () => {
     fileInputRef.current?.click()
-  }
-
-  // Photo reordering functions
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverIndex(index)
-  }
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null)
-  }
-
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault()
-    
-    if (draggedIndex === null || !pin?.photos) return
-    
-    const newPhotos = [...pin.photos]
-    const draggedPhoto = newPhotos[draggedIndex]
-    
-    // Remove the dragged photo
-    newPhotos.splice(draggedIndex, 1)
-    
-    // Insert it at the new position
-    newPhotos.splice(dropIndex, 0, draggedPhoto)
-    
-    updatePin({ photos: newPhotos })
-    
-    // Reset drag state
-    setDraggedIndex(null)
-    setDragOverIndex(null)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null)
-    setDragOverIndex(null)
   }
 
   if (isLoading) {
@@ -611,10 +561,10 @@ export default function IndividualPlacePage() {
           {/* Photos Section */}
           <div className="card-airbnb p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Photos</h2>
+              <h2 className="text-xl font-bold text-gray-900">Photo</h2>
               {pin.photos && pin.photos.length > 0 && (
                 <span className="text-sm text-gray-500">
-                  {pin.photos.length}/5 photos
+                  1/1 photo
                 </span>
               )}
             </div>
@@ -624,93 +574,54 @@ export default function IndividualPlacePage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              multiple
               onChange={handlePhotoUpload}
               className="hidden"
             />
             
-            {/* Photo grid or upload area */}
+            {/* Photo display or upload area */}
             {pin.photos && pin.photos.length > 0 ? (
               <div className="space-y-4">
-                {/* Photo ordering instructions */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
-                    <span className="font-semibold">💡 Photo Ordering:</span> The first photo will be the main image in your pack gallery. 
-                    Drag and drop to reorder photos.
-                  </p>
-                </div>
-                
-                {/* Existing photos grid with drag and drop */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {pin.photos.map((photo, index) => (
-                    <div 
-                      key={index} 
-                      className={`relative group cursor-move ${
-                        draggedIndex === index ? 'opacity-50' : ''
-                      } ${
-                        dragOverIndex === index ? 'ring-2 ring-coral-400 ring-offset-2' : ''
-                      }`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, index)}
-                      onDragEnd={handleDragEnd}
-                    >
-                      {/* Photo position indicator */}
-                      <div className="absolute top-2 left-2 w-6 h-6 bg-coral-500 text-white rounded-full flex items-center justify-center text-xs font-semibold z-10">
-                        {index + 1}
-                      </div>
-                      
-                      {/* Main photo label */}
-                      {index === 0 && (
-                        <div className="absolute bottom-2 left-2 bg-coral-500 text-white text-xs px-2 py-1 rounded font-medium">
-                          Main Photo
-                        </div>
-                      )}
-                      
-                      <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                        <img
-                          src={photo}
-                          alt={`Photo ${index + 1} of ${pin.title}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      
-                      {/* Remove button */}
-                      <button
-                        onClick={() => removePhoto(index)}
-                        className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 flex items-center justify-center"
-                        title="Remove photo"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                {/* Single photo display */}
+                <div className="flex justify-center">
+                  <div className="relative group max-w-md">
+                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                      <img
+                        src={pin.photos[0]}
+                        alt={`Photo of ${pin.title}`}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                  ))}
-                  
-                  {/* Add more photos button (if less than 5) */}
-                  {pin.photos.length < 5 && (
+                    
+                    {/* Remove button */}
+                    <button
+                      onClick={() => removePhoto(0)}
+                      className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 flex items-center justify-center"
+                      title="Remove photo"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    
+                    {/* Replace photo button */}
                     <button
                       onClick={triggerPhotoUpload}
                       disabled={isUploadingPhoto}
-                      className="aspect-square border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 hover:border-coral-400 transition-colors flex flex-col items-center justify-center group disabled:opacity-50"
+                      className="absolute bottom-2 left-2 bg-coral-500 text-white text-sm px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-coral-600 flex items-center"
+                      title="Replace photo"
                     >
                       {isUploadingPhoto ? (
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-coral-500"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-1"></div>
                       ) : (
-                        <>
-                          <Plus className="h-6 w-6 text-gray-400 group-hover:text-coral-500 mb-1" />
-                          <span className="text-xs text-gray-500 group-hover:text-coral-600">Add Photo</span>
-                        </>
+                        <Upload className="h-4 w-4 mr-1" />
                       )}
+                      Replace
                     </button>
-                  )}
+                  </div>
                 </div>
                 
                 {/* Upload instructions */}
                 <div className="text-center">
                   <p className="text-sm text-gray-500">
-                    💡 Add your own photos to help travelers see what to expect. Max 5 photos, 5MB each.
+                    Add your own photo to help travelers see what to expect. Max 1 photo, 10MB.
                   </p>
                 </div>
               </div>
@@ -723,22 +634,22 @@ export default function IndividualPlacePage() {
                 {isUploadingPhoto ? (
                   <div className="flex flex-col items-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-coral-500 mb-4"></div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Uploading Photos...</h3>
-                    <p className="text-gray-600">Please wait while we process your images</p>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Uploading Photo...</h3>
+                    <p className="text-gray-600">Please wait while we process your image</p>
                   </div>
                 ) : (
                   <>
                     <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Your Photos</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Your Photo</h3>
                     <p className="text-gray-600 mb-4">
-                      Share your own photos of this place to help travelers know what to expect
+                      Share your own photo of this place to help travelers know what to expect
                     </p>
                     <div className="btn-secondary inline-flex items-center">
                       <Upload className="h-4 w-4 mr-2" />
-                      Choose Photos
+                      Choose Photo
                     </div>
                     <p className="text-xs text-gray-500 mt-4">
-                      Supports JPG, PNG, WebP • Max 5 photos • 5MB per photo
+                      Supports JPG, PNG, WebP • Max 1 photo • 10MB
                     </p>
                   </>
                 )}

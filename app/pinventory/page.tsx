@@ -884,21 +884,10 @@ export default function PinventoryPage() {
                       {groupedPacks[country].map((pack) => {
                         return (
                           <div 
-                            key={pack.id} 
-                            onClick={() => openInGoogleMaps(pack)}
-                            className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg hover:border-coral-200 transition-all duration-200 cursor-pointer group relative"
+                            key={pack.id}
+                            className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-200 group relative"
                           >
-                            {/* Maps List Badge */}
-                            {pack.maps_list_reference && (
-                              <div 
-                                className="absolute top-4 left-4 z-30 bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center"
-                                title="This pack will open the original Google Maps list"
-                              >
-                                <Globe className="h-3 w-3 mr-1" />
-                                Maps List
-                              </div>
-                            )}
-
+                            
                             {/* Big hover pin */}
                             <div className="absolute top-4 right-4 pointer-events-none z-10">
                               <MapPin className="w-12 h-12 text-coral-500 opacity-0 group-hover:opacity-40 transition-opacity duration-300" />
@@ -932,50 +921,35 @@ export default function PinventoryPage() {
                                     <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
                                     <span className="text-sm">{pack.city}, {pack.country} • {pack.pin_count} places</span>
                                   </div>
-                                  
-                                  {/* Star rating */}
-                                  <div className="flex items-center text-xs text-gray-600 mb-1">
-                                    <div className="flex items-center mr-3">
-                                      {[...Array(5)].map((_, i) => (
-                                        <Star 
-                                          key={i}
-                                          className={`h-3 w-3 ${
-                                            i < Math.floor(pack.average_rating || 0) 
-                                              ? 'text-yellow-400 fill-current' 
-                                              : 'text-gray-300'
-                                          }`}
-                                        />
-                                      ))}
-                                      <span className="ml-1 font-medium">
-                                        {(pack.average_rating || 0).toFixed(1)}
-                                      </span>
-                                    </div>
-                                    <span className="text-gray-500">
-                                      ({pack.rating_count || 0} {pack.rating_count === 1 ? 'review' : 'reviews'})
-                                    </span>
-                                  </div>
-                                  
                                   <div className="flex items-center text-xs text-gray-500 mb-1">
                                     <Calendar className="h-3 w-3 mr-1" />
                                     Added {new Date(pack.created_at).toLocaleDateString()}
                                   </div>
-                                  
-                                  {/* Creator info */}
-                                  {pack.creator_id && (
-                                    <div className="flex items-center text-xs text-gray-500">
-                                      <span className="mr-1">Created by</span>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation() // Prevent opening maps when clicking creator
-                                          window.location.href = `/creator/${pack.creator_id}`
-                                        }}
-                                        className="text-coral-500 hover:text-coral-600 hover:underline transition-colors"
-                                      >
-                                        {pack.creator_id.substring(0, 8)}...
-                                      </button>
-                                    </div>
-                                  )}
                                 </div>
+                              </div>
+
+                              {/* Action buttons */}
+                              <div className="mt-4 flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openInGoogleMaps(pack)
+                                  }}
+                                  className="flex-1 btn-secondary text-xs py-2 flex items-center justify-center"
+                                >
+                                  <MapPin className="h-3 w-3 mr-1" />
+                                  Maps
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    window.location.href = `/pinventory/${pack.id}`
+                                  }}
+                                  className="flex-1 btn-primary text-xs py-2 flex items-center justify-center"
+                                >
+                                  <Package className="h-3 w-3 mr-1" />
+                                  Details
+                                </button>
                               </div>
                             </div>
                           </div>

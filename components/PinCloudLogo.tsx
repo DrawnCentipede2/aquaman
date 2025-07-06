@@ -22,66 +22,15 @@ export default function PinCloudLogo({ className = "h-8 w-8", animate = false }:
         className="opacity-80"
       />
       
-      {/* Pins falling from cloud */}
+      {/* Google Maps–style pin on top of the cloud */}
       <g className={animate ? "animate-bounce" : ""}>
-        {/* Pin 1 */}
-        <circle
-          cx="30"
-          cy="55"
-          r="3"
-          fill="currentColor"
-          className="opacity-90"
-        />
+        {/* Pin head */}
+        <circle cx="50" cy="28" r="7" fill="currentColor" />
+        {/* Pin body */}
         <path
-          d="M30 58 L30 68 L32 66 L30 68 L28 66 L30 68"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="opacity-90"
-        />
-        
-        {/* Pin 2 */}
-        <circle
-          cx="50"
-          cy="65"
-          r="3"
+          d="M50 35 C47 40 44 46 50 55 C56 46 53 40 50 35 Z"
           fill="currentColor"
-          className="opacity-90"
         />
-        <path
-          d="M50 68 L50 78 L52 76 L50 78 L48 76 L50 78"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="opacity-90"
-        />
-        
-        {/* Pin 3 */}
-        <circle
-          cx="70"
-          cy="55"
-          r="3"
-          fill="currentColor"
-          className="opacity-90"
-        />
-        <path
-          d="M70 58 L70 68 L72 66 L70 68 L68 66 L70 68"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="opacity-90"
-        />
-      </g>
-      
-      {/* Additional small pins for dynamic effect */}
-      <g className={animate ? "animate-pulse" : ""}>
-        <circle cx="40" cy="60" r="1.5" fill="currentColor" className="opacity-70" />
-        <circle cx="60" cy="58" r="1.5" fill="currentColor" className="opacity-70" />
-        <circle cx="35" cy="70" r="1.5" fill="currentColor" className="opacity-60" />
-        <circle cx="65" cy="70" r="1.5" fill="currentColor" className="opacity-60" />
       </g>
     </svg>
   )

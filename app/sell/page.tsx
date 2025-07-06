@@ -172,7 +172,8 @@ const AnimatedStat = ({
 
 // Function to get initial user location to prevent hydration mismatch
 const getInitialLocation = () => {
-  if (typeof window === 'undefined') return 'your city'
+  // Return empty string during SSR to avoid mismatches; we’ll fill it client-side
+  if (typeof window === 'undefined') return ''
   
   try {
     const userProfile = localStorage.getItem('pinpacks_user_profile')
@@ -184,7 +185,7 @@ const getInitialLocation = () => {
     console.warn('Error parsing user profile for location:', error)
   }
   
-  return 'your city'
+  return ''
 }
 
 export default function SellPage() {
@@ -330,7 +331,7 @@ export default function SellPage() {
               Turn your local knowledge into income
             </h1>
             <p className="text-xl md:text-2xl mb-8 opacity-90 max-w-3xl mx-auto">
-              Share the places you love in {userLocation} and earn money helping travelers discover authentic experiences
+              Share the places you love in <span suppressHydrationWarning>{userLocation || 'your city'}</span> and earn money helping travelers discover authentic experiences
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
               <button className="bg-white text-coral-500 hover:bg-gray-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center transform hover:scale-105">
@@ -383,7 +384,7 @@ export default function SellPage() {
           <AnimatedSection delay={100}>
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-                How much could you earn in {userLocation}?
+                How much could you earn in <span suppressHydrationWarning>{userLocation || 'your city'}</span>?
               </h2>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
                 Your earning potential depends on your city's tourism, your pack quality, and how active you are

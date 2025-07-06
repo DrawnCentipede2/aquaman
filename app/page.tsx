@@ -211,7 +211,7 @@ export default function LandingPage() {
             <a 
               href="/create" 
               onClick={(e) => {
-                const userProfile = localStorage.getItem('PinCloud_user_profile')
+                const userProfile = localStorage.getItem('pinpacks_user_profile')
                 if (!userProfile) {
                   e.preventDefault()
                   window.location.href = '/signup'

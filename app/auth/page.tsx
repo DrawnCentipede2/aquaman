@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { User, Mail, ArrowRight } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [userProfile, setUserProfile] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [attempts, setAttempts] = useState(0)
 
   // Check if user is already logged in
   useEffect(() => {
@@ -46,30 +48,76 @@ export default function AuthPage() {
 
     setIsLoading(true)
     try {
-      // For now, we'll simulate checking if user exists
-      // In a real app, you'd check against a database
-      const existingProfile = localStorage.getItem(`pinpacks_profile_${email.trim().toLowerCase()}`)
-      
-      if (existingProfile) {
-        // User exists, sign them in
-        const profile = JSON.parse(existingProfile)
-        profile.lastLogin = new Date().toISOString()
-        
+      // For now, we'll attempt to fetch user from Supabase
+      const { data: userRow, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email.trim().toLowerCase())
+        .single()
+
+      if (userError && userError.code !== 'PGRST116') {
+        console.error('Supabase select error:', userError)
+        throw userError
+      }
+
+      if (userRow) {
+        // Update last_login timestamp
+        await supabase
+          .from('users')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', userRow.id)
+
+        const profile = {
+          name: userRow.name || 'User',
+          email: userRow.email,
+          userId: userRow.id,
+          location: userRow.location,
+          ip: userRow.ip,
+          created: userRow.created_at,
+          lastLogin: new Date().toISOString()
+        }
+
         localStorage.setItem('pinpacks_user_profile', JSON.stringify(profile))
         localStorage.setItem('pinpacks_user_id', profile.userId)
         localStorage.setItem('pinpacks_user_email', profile.email)
-        
+        localStorage.setItem('pinpacks_user_location', profile.location || '')
+        localStorage.setItem('pinpacks_user_ip', profile.ip || '')
+
         setUserProfile(profile)
         window.dispatchEvent(new Event('storage'))
-        
-        // Redirect to browse page after successful sign in
         window.location.href = '/browse'
-      } else {
-        // User doesn't exist, redirect to signup
-        alert('No account found with this email. Please create a new account.')
-        window.location.href = '/signup'
         return
       }
+
+      // Fallback to old localStorage profile (legacy)
+      const existingProfile = localStorage.getItem(`pinpacks_profile_${email.trim().toLowerCase()}`)
+      if (existingProfile) {
+        const profile = JSON.parse(existingProfile)
+        profile.lastLogin = new Date().toISOString()
+        localStorage.setItem('pinpacks_user_profile', JSON.stringify(profile))
+        localStorage.setItem('pinpacks_user_id', profile.userId)
+        localStorage.setItem('pinpacks_user_email', profile.email)
+        setUserProfile(profile)
+        window.dispatchEvent(new Event('storage'))
+        window.location.href = '/browse'
+        return
+      }
+      
+      // If we reached here, user not found in DB or legacy storage
+      const newAttempts = attempts + 1
+      setAttempts(newAttempts)
+
+      if (newAttempts >= 3) {
+        if (confirm('We still could not find an account with that email.\n\nWould you like to create a new account?')) {
+          window.location.href = '/signup'
+        } else {
+          setEmail('')
+        }
+      } else {
+        alert('No account found with that email. Please double-check the address and try again.')
+        setEmail('')
+      }
+      return
       
     } catch (err) {
       alert('Failed to sign in. Please try again.')

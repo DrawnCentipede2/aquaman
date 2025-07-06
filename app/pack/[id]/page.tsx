@@ -819,8 +819,8 @@ export default function PackDetailPage() {
               <Heart 
                 className={`h-5 w-5 transition-colors ${
                   isAuthenticated && wishlistItems.includes(pack.id) 
-                    ? 'text-coral-500 fill-current' 
-                    : 'text-gray-600'
+                    ? 'text-red-500 fill-current' 
+                    : 'text-red-600'
                 }`} 
               />
             </button>

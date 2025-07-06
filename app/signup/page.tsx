@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { User, Mail, ArrowRight } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
+import { supabase } from '@/lib/supabase'
 
 export default function SignUpPage() {
   const [formData, setFormData] = useState({
@@ -32,26 +33,66 @@ export default function SignUpPage() {
       const response = await fetch('https://ipapi.co/json/')
       const locationData = await response.json()
       
-      // Create user profile
+      // Create user profile in Supabase (upsert by email)
+      const { data: existingUser, error: userSelectError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', formData.email.trim().toLowerCase())
+        .single()
+
+      if (userSelectError && userSelectError.code !== 'PGRST116') {
+        console.error('Supabase select error:', userSelectError)
+        throw userSelectError
+      }
+
+      let userId: string | undefined = existingUser?.id as string | undefined
+
+      if (!existingUser) {
+        // Insert new user
+        const { data: insertData, error: insertError } = await supabase
+          .from('users')
+          .insert({
+            name: formData.name.trim(),
+            email: formData.email.trim().toLowerCase(),
+            location: `${locationData.city}, ${locationData.country_name}` || 'Unknown',
+            ip: locationData.ip || 'unknown'
+          })
+          .select()
+          .single()
+        if (insertError) {
+          console.error('Supabase insert error:', insertError)
+          throw insertError
+        }
+        userId = insertData?.id
+      }
+
+      if (!userId) {
+        throw new Error('Failed to retrieve user ID after signup')
+      }
+
+      // Update last_login
+      await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', userId)
+
+      // Create user profile object for client side
       const userProfile = {
         name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
-        userId: formData.email.trim().toLowerCase(),
+        userId,
         ip: locationData.ip || 'unknown',
         location: `${locationData.city}, ${locationData.country_name}` || 'Unknown',
-        created: new Date().toISOString(),
+        created: existingUser?.created_at || new Date().toISOString(),
         lastLogin: new Date().toISOString()
       }
 
-      // Save to localStorage
-      localStorage.setItem('PinCloud_user_profile', JSON.stringify(userProfile))
-      localStorage.setItem('PinCloud_user_id', userProfile.userId)
-      localStorage.setItem('PinCloud_user_email', userProfile.email)
-      localStorage.setItem('PinCloud_user_ip', userProfile.ip)
-      localStorage.setItem('PinCloud_user_location', userProfile.location)
+      // Save to localStorage with consistent "pinpacks_" keys (matches auth & browse pages)
+      localStorage.setItem('pinpacks_user_profile', JSON.stringify(userProfile))
+      localStorage.setItem('pinpacks_user_id', userProfile.userId)
+      localStorage.setItem('pinpacks_user_email', userProfile.email)
+      localStorage.setItem('pinpacks_user_ip', userProfile.ip)
+      localStorage.setItem('pinpacks_user_location', userProfile.location)
       
-      // Also save the profile with email as key for signin to find
-      localStorage.setItem(`PinCloud_profile_${userProfile.email}`, JSON.stringify(userProfile))
+      // Also save the profile under the email key for sign-in lookup
+      localStorage.setItem(`pinpacks_profile_${userProfile.email}`, JSON.stringify(userProfile))
 
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))

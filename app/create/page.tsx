@@ -242,7 +242,108 @@ export default function CreatePackPage() {
     }
   }, [packTitle, packDescription, price, country, city, mapsListReference])
 
-  // Function to import a single place from Google Maps URL
+  // Function to validate single place URLs and provide helpful guidance
+  const validateSinglePlaceUrl = (url: string): { isValid: boolean; errorMessage?: string; guidance?: string; warning?: string } => {
+    // Check if it's a Google Maps list URL (which we don't want for single places)
+    const isListUrl = url.includes('/lists/') || 
+                     url.includes('list/') ||
+                     url.includes('/maps/list/')
+    
+    if (isListUrl) {
+      return {
+        isValid: false,
+        errorMessage: '❌ This is a Google Maps List URL',
+        guidance: `This URL appears to be a Google Maps list or collection, not a single place.
+
+🔍 How to get the correct URL:
+1. Go to Google Maps
+2. Search for the specific place you want
+3. Click on the place name/listing (not a list)
+4. Click "Share" and copy the link
+5. The URL should look like: https://maps.app.goo.gl/... or https://maps.google.com/maps?cid=...
+
+💡 For Google Maps lists, use the "Google Maps List URL" field above instead.`
+      }
+    }
+    
+    // Check if it's a valid Google Maps place URL
+    const isValidGoogleMapsUrl = 
+      url.includes('maps.google.com') ||
+      url.includes('goo.gl') ||
+      url.includes('maps.app.goo.gl') ||
+      url.includes('google.com/maps') ||
+      url.includes('maps.google.') ||
+      url.includes('plus.codes') ||
+      (url.includes('@') && url.includes('google.')) ||
+      url.includes('/maps/place/') ||
+      url.includes('/maps?') ||
+      (url.includes('google.') && url.includes('/maps'))
+
+    if (!isValidGoogleMapsUrl) {
+      return {
+        isValid: false,
+        errorMessage: '❌ Not a valid Google Maps URL',
+        guidance: `This doesn't appear to be a Google Maps URL.
+
+🔍 How to get the correct URL:
+1. Go to Google Maps (maps.google.com)
+2. Search for the place you want to add
+3. Click on the place name/listing
+4. Click the "Share" button
+5. Click "Copy link"
+6. Paste the URL here
+
+💡 The URL should start with:
+• https://maps.app.goo.gl/ (recommended)
+• https://maps.google.com/
+• https://goo.gl/maps/
+• https://www.google.com/maps/`
+      }
+    }
+    
+    // Check for search URLs (which are not single places)
+    const isSearchUrl = url.includes('/maps/search/') || 
+                       url.includes('?q=') ||
+                       url.includes('search?')
+    
+    if (isSearchUrl) {
+      return {
+        isValid: false,
+        errorMessage: '❌ This is a search URL, not a specific place',
+        guidance: `This URL appears to be a search result, not a specific place.
+
+🔍 How to get the correct URL:
+1. In Google Maps, search for your place
+2. From the search results, click on the specific place name
+3. Make sure you're on the place's detail page (not search results)
+4. Click "Share" and copy the link
+5. The URL should show the place name, not search terms
+
+💡 You need to click on the actual place listing, not stay on the search page.`
+      }
+    }
+    
+    // Check if it's a browser URL with complex encoded data (less reliable)
+    const isBrowserUrl = url.includes('data=!') && url.includes('@') && url.includes(',')
+    
+    if (isBrowserUrl) {
+      return {
+        isValid: true,
+        warning: `⚠️ Browser URL detected
+
+This URL will work, but for better reliability, we recommend using the "Share" button instead:
+
+1. Click the "Share" button on the place page
+2. Click "Copy link"
+3. Use that cleaner URL instead
+
+The Share URL will give you more reliable results!`
+      }
+    }
+    
+    return { isValid: true }
+  }
+
   const addSinglePlace = async () => {
     if (!singlePlaceUrl) {
       alert('Please enter a Google Maps place URL')
@@ -252,21 +353,13 @@ export default function CreatePackPage() {
     setIsImporting(true)
     
     try {
-      // Check if it's a valid Google Maps URL
-      const isValidGoogleMapsUrl = 
-        singlePlaceUrl.includes('maps.google.com') ||
-        singlePlaceUrl.includes('goo.gl') ||
-        singlePlaceUrl.includes('maps.app.goo.gl') ||
-        singlePlaceUrl.includes('google.com/maps') ||
-        singlePlaceUrl.includes('maps.google.') ||
-        singlePlaceUrl.includes('plus.codes') ||
-        (singlePlaceUrl.includes('@') && singlePlaceUrl.includes('google.')) ||
-        singlePlaceUrl.includes('/maps/place/') ||
-        singlePlaceUrl.includes('/maps?') ||
-        (singlePlaceUrl.includes('google.') && singlePlaceUrl.includes('/maps'))
-
-      if (!isValidGoogleMapsUrl) {
-        throw new Error('Please enter a valid Google Maps place URL')
+      // Validate the URL first
+      const validation = validateSinglePlaceUrl(singlePlaceUrl)
+      
+      if (!validation.isValid) {
+        const fullMessage = `${validation.errorMessage}\n\n${validation.guidance}`
+        alert(fullMessage)
+        return
       }
 
       // Import single place using the enhanced API integration
@@ -393,11 +486,11 @@ export default function CreatePackPage() {
       })
 
       alert(
-        '✅ Maps List Added Successfully!\n\n' +
-        `📋 List: ${validation.title}\n\n` +
+        'Maps List Added Successfully!\n\n' +
+        `List: ${validation.title}\n\n` +
         'This maps list will be included with your pin pack as a reference.\n' +
         'Buyers will be able to click the link to view your original Google Maps list.\n\n' +
-        '💡 You can still add individual places using the "Single Place URL" field below for detailed information.'
+        'You can still add individual places using the "Single Place URL" field below for detailed information.'
       )
       
       // Clear the URL field
@@ -1263,7 +1356,7 @@ export default function CreatePackPage() {
                       type="url"
                       value={singlePlaceUrl}
                       onChange={(e) => setSinglePlaceUrl(e.target.value)}
-                      placeholder="https://maps.google.com/place/..."
+                      placeholder="https://maps.app.goo.gl/... (recommended)"
                       className="input-airbnb flex-1"
                     />
                     <button
@@ -1274,8 +1367,74 @@ export default function CreatePackPage() {
                       {isImporting ? 'Adding...' : 'Add Place'}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Paste a single Google Maps place URL to add it to your pack
+                  
+                  {/* URL validation feedback */}
+                  {singlePlaceUrl && (() => {
+                    const validation = validateSinglePlaceUrl(singlePlaceUrl)
+                    return (
+                      <div className="mt-3">
+                        {!validation.isValid && (
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0">
+                                <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center">
+                                  <span className="text-red-600 text-xs font-bold">!</span>
+                                </div>
+                              </div>
+                              <div className="ml-3">
+                                <h4 className="text-sm font-medium text-red-800">
+                                  {validation.errorMessage}
+                                </h4>
+                                {validation.guidance && (
+                                  <div className="mt-2 text-sm text-red-700 whitespace-pre-line">
+                                    {validation.guidance}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {validation.isValid && validation.warning && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0">
+                                <div className="w-5 h-5 bg-yellow-100 rounded-full flex items-center justify-center">
+                                  <span className="text-yellow-600 text-xs font-bold">!</span>
+                                </div>
+                              </div>
+                              <div className="ml-3">
+                                <h4 className="text-sm font-medium text-yellow-800">
+                                  {validation.warning}
+                                </h4>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {validation.isValid && !validation.warning && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0">
+                                <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center">
+                                  <span className="text-green-600 text-xs font-bold">✓</span>
+                                </div>
+                              </div>
+                              <div className="ml-2">
+                                <span className="text-sm text-green-700">
+                                  ✅ Valid single place URL
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                  
+                  {/* Help text */}
+                  <p className="mt-2 text-sm text-gray-500">
+                    💡 <strong>Recommended:</strong> Use the "Share" button on Google Maps for the most reliable results
                   </p>
                 </div>
               </div>

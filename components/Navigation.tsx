@@ -5,22 +5,52 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { User, Plus, Heart, ShoppingCart, Package, Settings, ChevronDown, Globe, DollarSign, Bell, HelpCircle, LogOut, X, Check, CreditCard, Shield, Lock } from 'lucide-react'
 
-// Function to check authentication status immediately
+// Function to get (and if necessary migrate) the user profile from localStorage
+const getStoredProfile = () => {
+  if (typeof window === 'undefined') return null
+
+  // Prefer new key
+  const newKey = 'pinpacks_user_profile'
+  const oldKey = 'PinCloud_user_profile'
+
+  let raw = localStorage.getItem(newKey)
+  if (raw) return { key: newKey, data: raw }
+
+  // Fallback to old key – if found, migrate to new naming for consistency
+  raw = localStorage.getItem(oldKey)
+  if (raw) {
+    try {
+      localStorage.setItem(newKey, raw)
+      // Also migrate associated helper keys (id, email, etc.) if present
+      const suffixes = ['user_id', 'user_email', 'user_ip', 'user_location']
+      suffixes.forEach(s => {
+        const oldK = `PinCloud_${s}`
+        const newK = `pinpacks_${s}`
+        const v = localStorage.getItem(oldK)
+        if (v) localStorage.setItem(newK, v)
+      })
+      return { key: newKey, data: raw }
+    } catch (e) {
+      console.warn('Migration error:', e)
+    }
+  }
+  return null
+}
+
+// Function to check authentication status immediately (updated)
 const getInitialAuthState = () => {
   if (typeof window === 'undefined') return { isAuthenticated: false, userProfile: null }
-  
+
   try {
-    const userProfileData = localStorage.getItem('PinCloud_user_profile')
-    if (userProfileData) {
-      const parsedProfile = JSON.parse(userProfileData)
-      return { isAuthenticated: true, userProfile: parsedProfile }
+    const stored = getStoredProfile()
+    if (stored) {
+      const parsed = JSON.parse(stored.data)
+      return { isAuthenticated: true, userProfile: parsed }
     }
   } catch (error) {
     console.warn('Error parsing initial auth state:', error)
-    // Clean up corrupted data
-    localStorage.removeItem('PinCloud_user_profile')
+    localStorage.removeItem('pinpacks_user_profile')
   }
-  
   return { isAuthenticated: false, userProfile: null }
 }
 
@@ -103,7 +133,14 @@ export default function Navigation() {
     
     // Listen for storage changes (when user signs in/out in another tab)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'PinCloud_user_profile' || e.key === 'PinCloud_is_registered_creator' || e.key === 'PinCloud_has_created_packs') {
+      if (
+        e.key === 'PinCloud_user_profile' ||
+        e.key === 'pinpacks_user_profile' ||
+        e.key === 'PinCloud_is_registered_creator' ||
+        e.key === 'PinCloud_has_created_packs' ||
+        e.key === 'pinpacks_is_registered_creator' ||
+        e.key === 'pinpacks_has_created_packs'
+      ) {
         console.log('User profile or creator status storage changed, updating auth state')
         const newAuthState = getInitialAuthState()
         setIsAuthenticated(newAuthState.isAuthenticated)
@@ -211,6 +248,12 @@ export default function Navigation() {
 
   // Handle logout function
   const handleLogout = () => {
+    localStorage.removeItem('pinpacks_user_profile')
+    localStorage.removeItem('pinpacks_user_id')
+    localStorage.removeItem('pinpacks_user_email')
+    localStorage.removeItem('pinpacks_user_ip')
+    localStorage.removeItem('pinpacks_user_location')
+    // legacy cleanup
     localStorage.removeItem('PinCloud_user_profile')
     localStorage.removeItem('PinCloud_user_id')
     localStorage.removeItem('PinCloud_user_email')
@@ -218,16 +261,9 @@ export default function Navigation() {
     localStorage.removeItem('PinCloud_user_location')
     localStorage.removeItem('PinCloud_has_created_packs')
     localStorage.removeItem('PinCloud_is_registered_creator')
-    setUserProfile(null)
-    setIsAuthenticated(false)
-    setIsDropdownOpen(false)
-    setIsCreatorEligible(false)
-    setIsRegisteredCreator(false)
-    
-    // Trigger storage event to update navigation
+    localStorage.removeItem('pinpacks_has_created_packs')
+    localStorage.removeItem('pinpacks_is_registered_creator')
     window.dispatchEvent(new Event('storage'))
-    
-    // Redirect to home page
     window.location.href = '/'
   }
 
