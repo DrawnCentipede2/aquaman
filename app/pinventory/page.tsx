@@ -789,15 +789,6 @@ export default function PinventoryPage() {
                   {Object.keys(groupedPacks).length === 1 ? 'country' : 'countries'} available
                 </div>
               </div>
-              <button
-                onClick={syncWithDatabase}
-                disabled={loading}
-                className="btn-secondary flex items-center text-sm px-4 py-2"
-                title="Clear cache and sync with database records only"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                {loading ? 'Syncing...' : 'Sync with DB'}
-              </button>
             </div>
           </div>
         </div>
@@ -818,39 +809,6 @@ export default function PinventoryPage() {
                 className="btn-primary"
               >
                 Browse Pin Packs
-              </button>
-              <button
-                onClick={syncWithDatabase}
-                disabled={loading}
-                className="btn-secondary"
-                title="Clear cache and reload only database purchases"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                {loading ? 'Syncing...' : 'Sync with Database'}
-              </button>
-              <button
-                onClick={addTestPack}
-                className="btn-secondary"
-              >
-                Add Test Pack (Debug)
-              </button>
-              <button
-                onClick={createTestOrder}
-                className="btn-secondary"
-              >
-                Create Test Order (Debug)
-              </button>
-              <button
-                onClick={checkDatabase}
-                className="btn-secondary"
-              >
-                Check Database (Debug)
-              </button>
-              <button
-                onClick={linkExistingOrders}
-                className="btn-secondary"
-              >
-                Link Existing Orders (Debug)
               </button>
             </div>
           </div>

@@ -13,7 +13,7 @@ export default function AboutPage() {
               About Google Pins
             </h1>
             <p className="text-xl text-gray-600 leading-relaxed">
-              Connecting travelers with authentic local experiences through curated pin collections that showcase the hidden gems only locals know about.
+              Connecting travelers with authentic local experiences through selected pin collections that showcase the hidden gems only locals know about.
             </p>
           </div>
         </div>
@@ -56,7 +56,7 @@ export default function AboutPage() {
                     <CheckCircle className="h-6 w-6 text-coral-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 text-lg mb-2">Curated Collections</h3>
+                    <h3 className="font-semibold text-gray-900 text-lg mb-2">selected Collections</h3>
                     <p className="text-gray-600">Thoughtfully organized pin packs for specific experiences, not random lists.</p>
                   </div>
                 </div>
@@ -123,23 +123,23 @@ export default function AboutPage() {
               <h3 className="text-2xl font-bold text-gray-900 mb-8">Our Solution</h3>
               <div className="space-y-6">
                 <div className="flex items-start">
-                  <div className="w-3 h-3 bg-red-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
-                  <p className="text-gray-600 text-lg text-left">Curated pin collections from verified locals</p>
+                  <div className="w-3 h-3 bg-gray-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
+                  <p className="text-gray-600 text-lg text-left">selected pin collections from verified locals</p>
                 </div>
                 <div className="flex items-start">
-                  <div className="w-3 h-3 bg-red-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
+                  <div className="w-3 h-3 bg-gray-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
                   <p className="text-gray-600 text-lg text-left">Authentic experiences that locals actually recommend</p>
                 </div>
                 <div className="flex items-start">
-                  <div className="w-3 h-3 bg-red-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
+                  <div className="w-3 h-3 bg-gray-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
                   <p className="text-gray-600 text-lg text-left">Instant access to organized, themed recommendations</p>
                 </div>
                 <div className="flex items-start">
-                  <div className="w-3 h-3 bg-red-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
+                  <div className="w-3 h-3 bg-gray-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
                   <p className="text-gray-600 text-lg text-left">Opportunity for locals to earn from their expertise</p>
                 </div>
                 <div className="flex items-start">
-                  <div className="w-3 h-3 bg-red-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
+                  <div className="w-3 h-3 bg-gray-400 rounded-full mt-2 mr-4 flex-shrink-0"></div>
                   <p className="text-gray-600 text-lg text-left">Direct integration with Google Maps for easy navigation</p>
                 </div>
               </div>
@@ -172,7 +172,7 @@ export default function AboutPage() {
               <h3 className="text-2xl font-bold text-gray-900 mb-6">For Travelers</h3>
               <div className="space-y-4 text-gray-600">
                 <p className="text-lg">Browse pin packs by city or theme</p>
-                <p className="text-lg">Purchase curated collections (many are free!)</p>
+                <p className="text-lg">Purchase selected collections (many are free!)</p>
                 <p className="text-lg">Instantly open in Google Maps</p>
                 <p className="text-lg">Navigate to authentic local spots</p>
               </div>

@@ -107,7 +107,7 @@ export default function VerticalCarousel() {
             
             {/* Tagline */}
             <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-              Drift through curated experiences and discover the world through local eyes
+              Drift through selected experiences and discover the world through local eyes
             </p>
 
             {/* Scroll indicator */}

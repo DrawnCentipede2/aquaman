@@ -81,10 +81,10 @@ CREATE POLICY "Anyone can delete pin pack relationships" ON pin_pack_pins
 
 Since you're in **MVP/testing phase**, I recommend **Option 1** (Service Role Key) because:
 
-✅ **Quick fix** - just replace one key
-✅ **No complex setup** required  
-✅ **All operations will work immediately**
-✅ **Perfect for development and testing**
+ **Quick fix** - just replace one key
+ **No complex setup** required  
+ **All operations will work immediately**
+ **Perfect for development and testing**
 
 You can switch to Option 2 later when moving to production.
 
@@ -100,11 +100,11 @@ After implementing either option:
 
 ## **Current System Benefits:**
 
-✅ **Email-based authentication** for better user identification
-✅ **Legacy user support** - old packs still work
-✅ **Enhanced search** - finds packs by email domain
-✅ **Profile persistence** across sessions
-✅ **Debug panel** to troubleshoot issues
+ **Email-based authentication** for better user identification
+ **Legacy user support** - old packs still work
+ **Enhanced search** - finds packs by email domain
+ **Profile persistence** across sessions
+ **Debug panel** to troubleshoot issues
 
 ## **Next Steps:**
 

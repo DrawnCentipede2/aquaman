@@ -297,15 +297,15 @@ export default function Navigation() {
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language, region } }))
   }
 
-  // Handle "Sell like a local" click - route based on creator registration status
+  // Handle "Sell like a local" click - route based on authentication status
   const handleSellLikeLocal = (e: React.MouseEvent) => {
     e.preventDefault()
     
-    if (isAuthenticated && isRegisteredCreator) {
-      // User is signed in and registered as creator → go to creator dashboard
-      window.location.href = '/creator-dashboard'
+    if (isAuthenticated) {
+      // User is signed in → go to manage page where they can view/create packs
+      window.location.href = '/manage'
     } else {
-      // User is not signed in OR not registered as creator → go to sell page
+      // User is not signed in → go to sell page to learn about selling
       window.location.href = '/sell'
     }
   }
@@ -455,7 +455,7 @@ export default function Navigation() {
             Cart
           </a>
 
-          {/* Always show "Sell like a local" - routes to dashboard if registered creator, sell page otherwise */}
+          {/* Always show "Sell like a local" - routes to manage page if authenticated, sell page otherwise */}
           <a 
             href="/sell" 
             className={getLinkClasses('/sell')}

@@ -191,7 +191,7 @@ This message was sent from the PinPacks contact form.
                   <Mail className="h-5 w-5 text-coral-600 mt-1 mr-3" />
                   <div>
                     <p className="text-sm font-medium text-gray-900">Email</p>
-                    <p className="text-sm text-gray-600">carlos.jmz.mtz@gmail.com</p>
+                    <p className="text-sm text-gray-600">carlos.jimenez@pincloud.co</p>
                   </div>
                 </div>
                 

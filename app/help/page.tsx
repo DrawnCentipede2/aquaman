@@ -264,7 +264,7 @@ export default function HelpCenter() {
               {/* Response Time */}
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <div className="p-3 bg-green-50 rounded-lg">
-                  <p className="text-xs text-green-800">
+                  <p className="text-xs text-gray-800">
                     <strong>Avg. response time:</strong> Usually within 24 hours
                   </p>
                 </div>

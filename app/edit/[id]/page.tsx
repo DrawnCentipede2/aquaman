@@ -133,14 +133,13 @@ export default function EditPackPage() {
           price: formData.price,
           city: formData.city,
           country: formData.country,
-          creator_location: formData.creator_location,
-          updated_at: new Date().toISOString()
+          creator_location: formData.creator_location
         })
         .eq('id', packId)
 
       if (error) throw error
 
-      alert('Pack updated successfully! ✅')
+      alert('Pack updated successfully! ')
       
     } catch (error) {
       console.error('Error saving changes:', error)
@@ -218,12 +217,6 @@ export default function EditPackPage() {
             </button>
             
             <div className="flex items-center space-x-4">
-              <button
-                onClick={() => window.open(`/pack/${packId}`, '_blank')}
-                className="btn-secondary"
-              >
-                Preview Pack
-              </button>
               <button
                 onClick={saveChanges}
                 disabled={saving}
@@ -333,13 +326,6 @@ export default function EditPackPage() {
                   <MapPin className="h-6 w-6 mr-3 text-coral-500" />
                   Places in Pack ({pins.length})
                 </h2>
-                <button
-                  onClick={() => router.push('/create')}
-                  className="btn-secondary flex items-center"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Places
-                </button>
               </div>
 
               {pins.length === 0 ? (
@@ -460,21 +446,14 @@ export default function EditPackPage() {
                     {new Date(pack.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                {pack.updated_at && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Last Updated</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {new Date(pack.updated_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                )}
+
               </div>
             </div>
 
             {/* Danger Zone */}
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-red-900 mb-4">Danger Zone</h3>
-              <p className="text-sm text-red-700 mb-4">
+            <div className="bg-gray-25 border border-gray-200 rounded-2xl p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Danger Zone</h3>
+              <p className="text-sm text-gray-700 mb-4">
                 Permanently delete this pack. This action cannot be undone.
               </p>
               <button

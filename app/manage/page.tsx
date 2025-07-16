@@ -262,7 +262,7 @@ export default function ManagePage() {
         pack.id === packId ? { ...pack, ...updates } : pack
       ))
       
-      alert('Pin pack updated successfully! ✅')
+      alert('Pin pack updated successfully! ')
     } catch (error) {
       console.error('Error updating pin pack:', error)
       alert('Failed to update pin pack. Please try again.')
@@ -414,19 +414,24 @@ export default function ManagePage() {
             {userPacks.map((pack) => (
               <div 
                 key={pack.id} 
-                className="card-airbnb card-airbnb-hover group cursor-pointer"
+                className="card-airbnb group cursor-pointer"
                 onClick={() => window.open(`/pack/${pack.id}`, '_blank')}
               >
                 {/* Pack Image with Google Maps Background */}
-                <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative overflow-hidden">
-                  <div className="absolute inset-0 group-hover:scale-105 transition-transform duration-300">
+                <div className="relative h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
+                  {/* Inner container that scales - maintains boundaries */}
+                  <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
                     <img 
                       src={packImages[pack.id] || "/google-maps-bg.svg"}
-                      alt="Map background"
+                      alt={`${pack.title} cover`}
                       className="absolute inset-0 w-full h-full object-cover"
+                      style={{ aspectRatio: '4/3' }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                      }}
                     />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                   </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                   
                   {/* Price Badge */}
                   <div className="absolute top-3 left-3">

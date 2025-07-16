@@ -29,7 +29,7 @@ export default function CreatorProfilePage() {
     name: creatorId === 'local-expert' ? 'Local Expert' : 'Maria Rodriguez',
     location: 'Barcelona, Spain',
     profilePicture: null,
-    bio: `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for over 8 years, I know all the hidden gems that locals love. I specialize in creating curated experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.
+    bio: `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for over 8 years, I know all the hidden gems that locals love. I specialize in creating selected experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.
 
 I work as a local tourism guide and have helped hundreds of travelers experience the true essence of our city. When I'm not creating pin packs, you can find me exploring new neighborhoods, trying local restaurants, or chatting with longtime residents to discover even more hidden treasures.
 

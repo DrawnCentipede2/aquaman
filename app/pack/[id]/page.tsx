@@ -907,7 +907,7 @@ export default function PackDetailPage() {
               <div className="prose prose-lg max-w-none text-gray-700 leading-relaxed">
                 <p>{pack.description}</p>
                 
-                <p>Discover the authentic side of {pack.city} through this carefully curated collection of local favorites. 
+                <p>Discover the authentic side of {pack.city} through this carefully selected collection of local favorites. 
                 Each location has been personally selected and visited, ensuring you experience the city like a true local.</p>
                 
                 <p>Perfect for travelers who want to go beyond typical tourist attractions and experience the real culture, 
@@ -915,34 +915,106 @@ export default function PackDetailPage() {
               </div>
             </div>
 
-            {/* List of all places/pins in this pack */}
+            {/* List of places/pins in this pack - Preview for non-purchased, full for purchased */}
             <div className="bg-white rounded-2xl p-8 shadow-sm">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                Places in this pack ({pins.length})
-              </h2>
-              
-              <div className="space-y-4">
-                {pins.map((pin, index) => (
-                  <div key={pin.id} className="flex items-start space-x-4 p-4 rounded-xl hover:bg-gray-50 transition-colors">
-                    {/* Numbered indicator for each place */}
-                    <div className="w-8 h-8 bg-coral-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                      {index + 1}
+              {(() => {
+                // Calculate how many places to show in preview based on total count
+                const getPreviewCount = (totalPlaces: number) => {
+                  if (totalPlaces <= 3) return 1;  // Show 1 if 3 or fewer
+                  if (totalPlaces <= 6) return 2;  // Show 2 if 4-6 places
+                  return Math.min(Math.ceil(totalPlaces * 0.3), 3); // Show ~30% but cap at 3
+                };
+
+                const previewCount = getPreviewCount(pins.length);
+                const placesToShow = isPurchased ? pins : pins.slice(0, previewCount);
+                const hiddenCount = pins.length - previewCount;
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {isPurchased ? `All Places (${pins.length})` : `Preview (${previewCount} of ${pins.length})`}
+                      </h2>
+                      {!isPurchased && (
+                        <span className="bg-coral-100 text-coral-700 text-sm font-medium px-3 py-1 rounded-full">
+                          Preview Only
+                        </span>
+                      )}
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 mb-1">{pin.name}</h3>
-                      <p className="text-gray-600 text-sm mb-2">{pin.description}</p>
-                      <div className="flex items-center text-xs text-gray-500">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        <span>{pin.address || 'Address available in map'}</span>
-                      </div>
+                    
+                    <div className="space-y-4">
+                      {placesToShow.map((pin, index) => (
+                        <div key={pin.id} className="flex items-start space-x-4 p-4 rounded-xl hover:bg-gray-50 transition-colors">
+                          {/* Numbered indicator for each place */}
+                          <div className="w-8 h-8 bg-coral-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 mb-1">{pin.name}</h3>
+                            <p className="text-gray-600 text-sm mb-2">{pin.description}</p>
+                            <div className="flex items-center text-xs text-gray-500">
+                              <MapPin className="h-3 w-3 mr-1" />
+                              <span>{pin.address || 'Address available in map'}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center text-xs text-gray-500">
+                            <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
+                            <span>Local favorite</span>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {/* Show teaser for remaining places if not purchased */}
+                      {!isPurchased && hiddenCount > 0 && (
+                        <div className="mt-6 p-6 bg-gradient-to-r from-coral-50 to-orange-50 rounded-xl border border-coral-200">
+                          <div className="text-center">
+                            <div className="flex items-center justify-center mb-3">
+                              <Package className="h-8 w-8 text-coral-500 mr-2" />
+                              <span className="text-2xl font-bold text-coral-600">+{hiddenCount}</span>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                              More Amazing Places Waiting
+                            </h3>
+                            <p className="text-gray-600 mb-4">
+                              Get the complete collection with {hiddenCount} additional hand-picked local favorites, 
+                              complete with detailed descriptions, exact locations, and insider tips.
+                            </p>
+                            <div className="flex items-center justify-center space-x-4 text-sm text-gray-500 mb-4">
+                              <div className="flex items-center">
+                                <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                                <span>Exact addresses</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                                <span>Local insider tips</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                                <span>Google Maps ready</span>
+                              </div>
+                            </div>
+                            {pack.price > 0 ? (
+                              <button
+                                onClick={() => handlePayment(pack)}
+                                className="btn-primary px-6 py-3 font-semibold"
+                              >
+                                Get All {pins.length} Places for ${pack.price}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={openInGoogleMaps}
+                                className="btn-primary px-6 py-3 font-semibold"
+                              >
+                                Get All {pins.length} Places Free
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center text-xs text-gray-500">
-                      <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
-                      <span>Local favorite</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Reviews and ratings section */}
@@ -1235,7 +1307,7 @@ export default function PackDetailPage() {
               <div className="prose prose-gray max-w-none">
                 <p className="text-gray-600 leading-relaxed">
                   Hi! I'm passionate about sharing the authentic side of {pack.city}. Having lived here for over 8 years, 
-                  I know all the hidden gems that locals love. I specialize in creating curated experiences that show you 
+                  I know all the hidden gems that locals love. I specialize in creating selected experiences that show you 
                   the real culture, amazing food spots, and unique places that most tourists never discover.
                 </p>
                 <p className="text-gray-600 leading-relaxed">
@@ -1315,8 +1387,8 @@ export default function PackDetailPage() {
                         <Heart 
                           className={`h-4 w-4 transition-colors ${
                             isAuthenticated && wishlistItems.includes(similarPack.id) 
-                              ? 'text-coral-500 fill-current' 
-                              : 'text-gray-700 group-hover:text-coral-500'
+                              ? 'text-red-500 fill-current' 
+                              : 'text-red-700 group-hover:text-red-500'
                           }`} 
                         />
                       </button>

@@ -65,7 +65,7 @@ export default function ProfilePage() {
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
-      alert('✅ Profile updated successfully!')
+      alert(' Profile updated successfully!')
     } catch (err) {
       alert('Failed to update profile. Please try again.')
       console.error('Profile update error:', err)

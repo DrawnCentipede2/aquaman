@@ -1,4 +1,4 @@
-// Curated list of countries and their major cities for travel pin packs
+// selected list of countries and their major cities for travel pin packs
 // Focused on popular travel destinations rather than exhaustive coverage
 
 export interface CountryCityData {

@@ -82,7 +82,7 @@ export default function MinimalistGrid() {
                 PinCloud
               </h1>
               <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-                Discover curated collections of amazing places, organized by experience
+                Discover selected collections of amazing places, organized by experience
               </p>
             </div>
           </div>
@@ -98,7 +98,7 @@ export default function MinimalistGrid() {
                 Choose Your Experience
               </h2>
               <p className="text-gray-600 max-w-2xl mx-auto">
-                Each category contains carefully curated maps from locals who know their cities best
+                Each category contains carefully selected maps from locals who know their cities best
               </p>
             </div>
 
@@ -220,7 +220,7 @@ export default function MinimalistGrid() {
                   <span className="text-xl font-bold text-gray-900">PinCloud</span>
                 </div>
                 <p className="text-gray-600 text-sm">
-                  Discover amazing places through curated collections from locals who know their cities best.
+                  Discover amazing places through selected collections from locals who know their cities best.
                 </p>
               </div>
 
@@ -240,7 +240,7 @@ export default function MinimalistGrid() {
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="flex items-center space-x-2">
                     <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                    <span>10,000+ curated maps</span>
+                    <span>10,000+ selected maps</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <MapPin className="h-4 w-4 text-sky-600" />

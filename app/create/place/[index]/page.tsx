@@ -98,7 +98,18 @@ export default function IndividualPlacePage() {
       Object.entries(allowedUpdates).filter(([_, value]) => value !== undefined)
     )
     
-    const newPin = { ...pin, ...filteredUpdates }
+    // Track completion status for user-added content
+    const completionUpdates = {
+      has_user_description: updatedPin.description ? !!(updatedPin.description.trim().length > 0) : undefined,
+      has_user_photo: updatedPin.photos ? !!(updatedPin.photos.length > 0) : undefined
+    }
+    
+    // Filter out undefined completion values
+    const filteredCompletionUpdates = Object.fromEntries(
+      Object.entries(completionUpdates).filter(([_, value]) => value !== undefined)
+    )
+    
+    const newPin = { ...pin, ...filteredUpdates, ...filteredCompletionUpdates }
     setPin(newPin)
     
     // Save to localStorage immediately when user makes changes
@@ -270,7 +281,7 @@ export default function IndividualPlacePage() {
       // Replace any existing photos with the new one
       updatePin({ photos: [compressedBase64] })
       
-      alert(`✅ Photo uploaded and compressed successfully!`)
+      alert(` Photo uploaded and compressed successfully!`)
       
     } catch (error) {
       console.error('Error uploading photo:', error)

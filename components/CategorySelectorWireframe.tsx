@@ -48,7 +48,7 @@ export default function CategorySelectorWireframe() {
             
             {/* Tagline Placeholder */}
             <p className="text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-              Discover amazing places through curated collections from locals who know their cities best
+              Discover amazing places through selected collections from locals who know their cities best
             </p>
           </div>
         </section>
@@ -163,7 +163,7 @@ export default function CategorySelectorWireframe() {
                     {categories.find(c => c.id === selectedCategory)?.name} Collections
                   </h3>
                   <p className="text-gray-600 text-sm">
-                    Discover curated maps and recommendations for {categories.find(c => c.id === selectedCategory)?.name.toLowerCase()} experiences
+                    Discover selected maps and recommendations for {categories.find(c => c.id === selectedCategory)?.name.toLowerCase()} experiences
                   </p>
                 </div>
               </div>

@@ -38,6 +38,9 @@ interface Pin {
   photos?: string[]
   fetching?: boolean
   needs_manual_edit?: boolean
+  // Completion tracking
+  has_user_description?: boolean
+  has_user_photo?: boolean
 }
 
 export default function CreatePackPage() {
@@ -70,6 +73,12 @@ export default function CreatePackPage() {
   // State for form submission
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [userId, setUserId] = useState<string>('')
+  
+  // State for completion error modal
+  const [showCompletionError, setShowCompletionError] = useState<{
+    show: boolean
+    incompletePlaces: Array<{index: number, pin: Pin, missing: string[]}>
+  }>({ show: false, incompletePlaces: [] })
 
   // Country and city dropdown state
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
@@ -97,6 +106,34 @@ export default function CreatePackPage() {
     setAvailableCountries(countries)
     setFilteredCountries(countries)
   }, [])
+
+  // Helper function to check if a place is complete
+  const isPlaceComplete = (pin: Pin): boolean => {
+    const hasDescription = !!(pin.description && pin.description.trim().length > 0)
+    const hasPhoto = !!(pin.photos && pin.photos.length > 0)
+    return hasDescription && hasPhoto
+  }
+
+  // Helper function to get incomplete places
+  const getIncompletePlaces = (): Array<{index: number, pin: Pin, missing: string[]}> => {
+    return pins.map((pin, index) => {
+      const missing: string[] = []
+      if (!pin.description || pin.description.trim().length === 0) {
+        missing.push('description')
+      }
+      if (!pin.photos || pin.photos.length === 0) {
+        missing.push('photo')
+      }
+      return { index, pin, missing }
+    }).filter(item => item.missing.length > 0)
+  }
+
+  // Helper function to get completion stats
+  const getCompletionStats = () => {
+    const total = pins.length
+    const complete = pins.filter(isPlaceComplete).length
+    return { complete, total, percentage: total > 0 ? (complete / total) * 100 : 0 }
+  }
 
   // Sync refs with state for keyboard navigation and auto-scroll
   useEffect(() => {
@@ -149,7 +186,7 @@ export default function CreatePackPage() {
         console.log('Legacy user found:', savedUserId)
       } else {
         // No authentication found - redirect to sign in
-        alert('Please sign in first to create pin packs')
+        console.log('No authentication found, redirecting to auth')
         window.location.href = '/auth'
         return
       }
@@ -162,11 +199,22 @@ export default function CreatePackPage() {
   useEffect(() => {
     const loadPinsFromStorage = () => {
       try {
+        // Check if user just created a pack successfully
+        const packJustCreated = localStorage.getItem('pinpacks_pack_just_created')
+        if (packJustCreated) {
+          // Clear the flag and don't load any pins
+          localStorage.removeItem('pinpacks_pack_just_created')
+          localStorage.removeItem('pinpacks_create_pins')
+          localStorage.removeItem('pinpacks_create_pack_details')
+          console.log('🧹 Detected pack was just created, clearing all data for fresh start')
+          return
+        }
+
         const savedPins = localStorage.getItem('pinpacks_create_pins')
         if (savedPins) {
           const pins: Pin[] = JSON.parse(savedPins)
           setPins(pins)
-          console.log('✅ Loaded pins from localStorage:', pins.length, pins.map(p => p.title || 'Untitled'))
+          console.log(' Loaded pins from localStorage:', pins.length, pins.map(p => p.title || 'Untitled'))
         } else {
           console.log('ℹ️ No saved pins found in localStorage')
         }
@@ -204,7 +252,7 @@ export default function CreatePackPage() {
             setMapsListReference(details.mapsListReference)
           }
           
-          console.log('✅ Loaded pack details from localStorage:', details)
+          console.log(' Loaded pack details from localStorage:', details)
         } else {
           console.log('ℹ️ No saved pack details found in localStorage')
         }
@@ -252,17 +300,17 @@ export default function CreatePackPage() {
     if (isListUrl) {
       return {
         isValid: false,
-        errorMessage: '❌ This is a Google Maps List URL',
+        errorMessage: 'This is a Google Maps List URL',
         guidance: `This URL appears to be a Google Maps list or collection, not a single place.
 
-🔍 How to get the correct URL:
+How to get the correct URL:
 1. Go to Google Maps
 2. Search for the specific place you want
 3. Click on the place name/listing (not a list)
 4. Click "Share" and copy the link
 5. The URL should look like: https://maps.app.goo.gl/... or https://maps.google.com/maps?cid=...
 
-💡 For Google Maps lists, use the "Google Maps List URL" field above instead.`
+For Google Maps lists, use the "Google Maps List URL" field above instead.`
       }
     }
     
@@ -282,10 +330,10 @@ export default function CreatePackPage() {
     if (!isValidGoogleMapsUrl) {
       return {
         isValid: false,
-        errorMessage: '❌ Not a valid Google Maps URL',
+        errorMessage: 'Not a valid Google Maps URL',
         guidance: `This doesn't appear to be a Google Maps URL.
 
-🔍 How to get the correct URL:
+How to get the correct URL:
 1. Go to Google Maps (maps.google.com)
 2. Search for the place you want to add
 3. Click on the place name/listing
@@ -293,7 +341,7 @@ export default function CreatePackPage() {
 5. Click "Copy link"
 6. Paste the URL here
 
-💡 The URL should start with:
+The URL should start with:
 • https://maps.app.goo.gl/ (recommended)
 • https://maps.google.com/
 • https://goo.gl/maps/
@@ -309,35 +357,43 @@ export default function CreatePackPage() {
     if (isSearchUrl) {
       return {
         isValid: false,
-        errorMessage: '❌ This is a search URL, not a specific place',
+        errorMessage: 'This is a search URL, not a specific place',
         guidance: `This URL appears to be a search result, not a specific place.
 
-🔍 How to get the correct URL:
+How to get the correct URL:
 1. In Google Maps, search for your place
 2. From the search results, click on the specific place name
 3. Make sure you're on the place's detail page (not search results)
 4. Click "Share" and copy the link
 5. The URL should show the place name, not search terms
 
-💡 You need to click on the actual place listing, not stay on the search page.`
+You need to click on the actual place listing, not stay on the search page.`
       }
     }
     
-    // Check if it's a browser URL with complex encoded data (less reliable)
-    const isBrowserUrl = url.includes('data=!') && url.includes('@') && url.includes(',')
+    // Check if it's the preferred browser URL format (works best with API)
+    const isBrowserUrl = url.includes('/place/') && url.includes('@') && url.includes('data=!')
     
     if (isBrowserUrl) {
+      // This is the preferred format - works best with Google Maps API
+      return { isValid: true }
+    }
+    
+    // Check if it's a shortened URL that might not work as well
+    const isShortenedUrl = url.includes('goo.gl') || url.includes('maps.app.goo.gl')
+    
+    if (isShortenedUrl) {
       return {
         isValid: true,
-        warning: `⚠️ Browser URL detected
+        warning: `For best results, use the browser URL format
 
-This URL will work, but for better reliability, we recommend using the "Share" button instead:
+While this URL will work, for more reliable data fetching:
 
-1. Click the "Share" button on the place page
-2. Click "Copy link"
-3. Use that cleaner URL instead
+1. Open this place in Google Maps
+2. Copy the URL from your browser's address bar (not the Share button)
+3. Use that URL instead
 
-The Share URL will give you more reliable results!`
+The browser URL format provides more detailed information.`
       }
     }
     
@@ -346,7 +402,13 @@ The Share URL will give you more reliable results!`
 
   const addSinglePlace = async () => {
     if (!singlePlaceUrl) {
-      alert('Please enter a Google Maps place URL')
+      console.log('No place URL provided')
+      return
+    }
+
+    // Check if Google Maps list URL has been added first
+    if (!mapsListReference) {
+      console.log('Maps list reference required before adding individual places')
       return
     }
 
@@ -357,8 +419,7 @@ The Share URL will give you more reliable results!`
       const validation = validateSinglePlaceUrl(singlePlaceUrl)
       
       if (!validation.isValid) {
-        const fullMessage = `${validation.errorMessage}\n\n${validation.guidance}`
-        alert(fullMessage)
+        console.log('Invalid URL:', validation.errorMessage)
         return
       }
 
@@ -381,7 +442,7 @@ The Share URL will give you more reliable results!`
         })
         
         if (isDuplicate) {
-          alert(`"${importedPlace.title}" is already in your pack.`)
+          console.log(`Duplicate place: "${importedPlace.title}" is already in pack`)
           return
         }
         
@@ -411,7 +472,7 @@ The Share URL will give you more reliable results!`
         // Add the imported place to our pins
         setPins(currentPins => [...currentPins, newPin])
         
-        alert(`Successfully imported "${importedPlace.title}"! ✅`)
+        console.log(`Successfully imported "${importedPlace.title}"`)
       } catch (apiError) {
         console.warn('API import failed, falling back to basic method:', apiError)
         
@@ -428,14 +489,13 @@ The Share URL will give you more reliable results!`
         }
         
         setPins(currentPins => [...currentPins, basicPin])
-        alert('Place imported with basic details! Please edit the place details.')
+        console.log('Place imported with basic details')
       }
       
       // Clear the URL field
       setSinglePlaceUrl('')
       
     } catch (err) {
-      alert('Could not import from this URL. Please make sure it\'s a valid Google Maps place URL.')
       console.error('Import error:', err)
     } finally {
       setIsImporting(false)
@@ -445,7 +505,7 @@ The Share URL will give you more reliable results!`
   // Enhanced function to import maps list URLs as references for buyers
   const importFromGoogleMapsList = async () => {
     if (!googleMapsListUrl) {
-      alert('Please enter a Google Maps list URL')
+      console.log('No Google Maps list URL provided')
       return
     }
 
@@ -469,12 +529,7 @@ The Share URL will give you more reliable results!`
       const validation = await validateMapsListUrl(googleMapsListUrl)
       
       if (!validation.is_list) {
-        alert(
-          '❌ Not a Maps List\n\n' +
-          'This URL doesn\'t appear to be a Google Maps list.\n\n' +
-          'For individual places, please use the "Single Place URL" field below.\n\n' +
-          'For maps lists, make sure you\'re copying the URL of a saved Google Maps list.'
-        )
+        console.log('URL is not a valid Google Maps list')
         return
       }
 
@@ -485,20 +540,12 @@ The Share URL will give you more reliable results!`
         title: validation.title
       })
 
-      alert(
-        'Maps List Added Successfully!\n\n' +
-        `List: ${validation.title}\n\n` +
-        'This maps list will be included with your pin pack as a reference.\n' +
-        'Buyers will be able to click the link to view your original Google Maps list.\n\n' +
-        'You can still add individual places using the "Single Place URL" field below for detailed information.'
-      )
+      console.log(`Maps list added successfully: ${validation.title}`)
       
       // Clear the URL field
       setGoogleMapsListUrl('')
       
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Could not process this URL'
-      alert(`❌ ${errorMessage}\n\nPlease make sure you're using a valid Google Maps list URL.`)
       console.error('Maps list import error:', err)
     } finally {
       setIsImporting(false)
@@ -588,7 +635,7 @@ The Share URL will give you more reliable results!`
   // Function to fetch place information from Google Maps URL
   const fetchPlaceInfo = async (index: number, url: string) => {
     if (!url.trim()) {
-      alert('Please enter a Google Maps URL first')
+      console.log('No Google Maps URL provided')
       return
     }
 
@@ -599,22 +646,9 @@ The Share URL will give you more reliable results!`
       console.log('=== DEBUG: Starting fetchPlaceInfo ===')
       console.log('URL:', url)
       
-      // Check for shortened URLs and show warning
+      // Check for shortened URLs
       if (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) {
-        const shouldContinue = confirm(
-          '🔗 Shortened URL Detected\n\n' +
-          'You\'re using a shortened URL from Google Maps "Share" button.\n\n' +
-          '⚠️ These URLs have limited information. For best results:\n' +
-          '1. Open the place in Google Maps\n' +
-          '2. Copy the URL from your browser\'s address bar\n' +
-          '3. Use that full URL instead\n\n' +
-          'Continue with shortened URL anyway?'
-        )
-        
-        if (!shouldContinue) {
-          updatePin(index, { fetching: false })
-          return
-        }
+        console.log('Shortened URL detected, proceeding with limited information')
       }
       
       // Use the existing importSinglePlace function
@@ -656,36 +690,11 @@ The Share URL will give you more reliable results!`
       console.log('=== DEBUG: Updating pin with ===', updatedPin)
       updatePin(index, updatedPin)
 
-      // Show different success messages based on the type of URL and data fetched
+      // Log success based on the type of URL and data fetched
       if (placeInfo.needs_manual_edit) {
-        alert(
-          '📍 Place Added!\n\n' +
-          'Since this is a shortened URL, we couldn\'t fetch detailed information.\n\n' +
-          '✏️ Please fill in:\n' +
-          '• Place name\n' +
-          '• Category\n' +
-          '• Your personal recommendation\n\n' +
-          'This will make your pack more valuable for travelers!'
-        )
+        console.log('Place added with limited information from shortened URL')
       } else {
-        // Show success message with fetched data
-        let message = `✅ Place information fetched successfully!\n\n📍 ${placeInfo.title || 'Unknown place'}`
-        if (placeInfo.rating) {
-          const reviewText = placeInfo.rating_count ? ` (${placeInfo.rating_count} reviews)` : ''
-          message += `\n⭐ Rating: ${placeInfo.rating}/5${reviewText}`
-        }
-        if (placeInfo.business_type) {
-          message += `\n🏢 Type: ${placeInfo.business_type}`
-        }
-        if (city && country) {
-          message += `\n🌍 Location: ${city}, ${country}`
-        }
-        if (placeInfo.category) {
-          message += `\n🏷️ Category: ${placeInfo.category}`
-        }
-        message += '\n\nNow add your personal recommendations!'
-        
-        alert(message)
+        console.log(`Place information fetched successfully: ${placeInfo.title || 'Unknown place'}`)
       }
       
     } catch (error) {
@@ -700,7 +709,7 @@ The Share URL will give you more reliable results!`
         fetching: false
       })
       
-      alert('⚠️ Could not fetch detailed place information.\n\nPossible issues:\n• Google Maps API key not configured\n• Invalid URL format\n• Place ID not found\n\nPlease fill in the details manually.')
+      console.log('Could not fetch detailed place information, using basic coordinates')
     }
   }
 
@@ -745,7 +754,26 @@ The Share URL will give you more reliable results!`
   // Function to create the pin pack
   const createPinPack = async () => {
     if (!packTitle.trim() || !city.trim() || !country.trim() || pins.length === 0) {
-      alert('Please fill in all required fields and add at least one pin.')
+      console.log('Missing required fields or no pins added')
+      return
+    }
+
+    // Check if all places are complete (have description and photo)
+    const incompletePlaces = getIncompletePlaces()
+    if (incompletePlaces.length > 0) {
+      const incompleteList = incompletePlaces.map(item => {
+        const placeName = item.pin.title || `Place ${item.index + 1}`
+        const missingItems = item.missing.join(' and ')
+        return `• ${placeName}: missing ${missingItems}`
+      }).join('\n')
+      
+      console.log('Incomplete places found:', incompletePlaces)
+      
+      // Show completion error modal instead of alert
+      setShowCompletionError({
+        show: true,
+        incompletePlaces: incompletePlaces
+      })
       return
     }
 
@@ -843,9 +871,7 @@ The Share URL will give you more reliable results!`
         throw relationshipError
       }
 
-      alert('Pin pack created successfully! 🎉')
-      
-      // Clear form
+      // Clear form and localStorage first (before showing alert)
       setPackTitle('')
       setPackDescription('')
       setCity('')
@@ -854,22 +880,23 @@ The Share URL will give you more reliable results!`
       setPins([])
       setMapsListReference(null)
       
-      // Clear localStorage to start fresh for next pack
+      // Clear localStorage and set flag for next visit
       try {
         localStorage.removeItem('pinpacks_create_pack_details')
         localStorage.removeItem('pinpacks_create_pins')
-        console.log('🧹 Cleared localStorage after successful pack creation')
+        localStorage.setItem('pinpacks_pack_just_created', 'true')
+        console.log('🧹 Cleared localStorage after successful pack creation and set flag for next visit')
       } catch (error) {
         console.error('❌ Error clearing localStorage:', error)
       }
       
-      // Redirect to manage page
-      window.location.href = '/manage'
+      console.log('Pin pack created successfully')
+      
+      // Use router.push instead of window.location.href for better navigation
+      router.push('/manage')
       
     } catch (err) {
       console.error('Error creating pin pack:', err)
-      const errorMessage = err instanceof Error ? err.message : String(err)
-      alert(`Failed to create pin pack. Error: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -1129,7 +1156,11 @@ The Share URL will give you more reliable results!`
 
   return (
     <div className="min-h-screen bg-gray-25">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div 
+        className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 ${
+          showCompletionError.show ? 'pointer-events-none' : ''
+        }`}
+      >
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-500 mb-6">
@@ -1315,7 +1346,7 @@ The Share URL will give you more reliable results!`
 
             {/* Add Place Section - Now integrated here */}
             <div className="mt-6">
-              <div className="flex items-center mb-4">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-900">Add Places</h3>
               </div>
               
@@ -1323,7 +1354,10 @@ The Share URL will give you more reliable results!`
                 {/* Maps List URL Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Google Maps List URL (Add as reference for buyers)
+                    Step 1: Add Google Maps List URL
+                    {mapsListReference && (
+                      <span className="ml-2 text-xs bg-coral-100 text-coral-800 px-2 py-1 rounded-full">Added</span>
+                    )}
                   </label>
                   <div className="flex gap-3">
                     <input
@@ -1341,27 +1375,25 @@ The Share URL will give you more reliable results!`
                       {isImporting ? 'Adding...' : 'Add List'}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Add your Google Maps list as a reference that buyers can access alongside your individual places
-                  </p>
                 </div>
 
                 {/* Single Place URL Input */}
-                <div>
+                <div className={!mapsListReference ? 'opacity-50' : ''}>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Single Place URL (Add one place)
+                    Step 2: Add Individual Places
                   </label>
                   <div className="flex gap-3">
                     <input
                       type="url"
                       value={singlePlaceUrl}
                       onChange={(e) => setSinglePlaceUrl(e.target.value)}
-                      placeholder="https://maps.app.goo.gl/... (recommended)"
+                      placeholder={mapsListReference ? "https://www.google.de/maps/place/place_name/@latitude,longitude..." : "Complete Step 1 first to add individual places"}
+                      disabled={!mapsListReference}
                       className="input-airbnb flex-1"
                     />
                     <button
                       onClick={addSinglePlace}
-                      disabled={!singlePlaceUrl.trim() || isImporting}
+                      disabled={!singlePlaceUrl.trim() || isImporting || !mapsListReference}
                       className="btn-primary px-6 disabled:opacity-50"
                     >
                       {isImporting ? 'Adding...' : 'Add Place'}
@@ -1374,19 +1406,19 @@ The Share URL will give you more reliable results!`
                     return (
                       <div className="mt-3">
                         {!validation.isValid && (
-                          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                             <div className="flex items-start">
                               <div className="flex-shrink-0">
-                                <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center">
-                                  <span className="text-red-600 text-xs font-bold">!</span>
+                                <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center">
+                                  <span className="text-gray-600 text-xs font-bold">!</span>
                                 </div>
                               </div>
                               <div className="ml-3">
-                                <h4 className="text-sm font-medium text-red-800">
+                                <h4 className="text-sm font-medium text-gray-900">
                                   {validation.errorMessage}
                                 </h4>
                                 {validation.guidance && (
-                                  <div className="mt-2 text-sm text-red-700 whitespace-pre-line">
+                                  <div className="mt-2 text-sm text-gray-700 whitespace-pre-line">
                                     {validation.guidance}
                                   </div>
                                 )}
@@ -1396,15 +1428,15 @@ The Share URL will give you more reliable results!`
                         )}
                         
                         {validation.isValid && validation.warning && (
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div className="flex items-start">
                               <div className="flex-shrink-0">
-                                <div className="w-5 h-5 bg-yellow-100 rounded-full flex items-center justify-center">
-                                  <span className="text-yellow-600 text-xs font-bold">!</span>
+                                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <span className="text-blue-600 text-xs font-bold">i</span>
                                 </div>
                               </div>
                               <div className="ml-3">
-                                <h4 className="text-sm font-medium text-yellow-800">
+                                <h4 className="text-sm font-medium text-blue-900">
                                   {validation.warning}
                                 </h4>
                               </div>
@@ -1413,16 +1445,16 @@ The Share URL will give you more reliable results!`
                         )}
                         
                         {validation.isValid && !validation.warning && (
-                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <div className="bg-coral-50 border border-coral-200 rounded-lg p-3">
                             <div className="flex items-center">
                               <div className="flex-shrink-0">
-                                <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center">
-                                  <span className="text-green-600 text-xs font-bold">✓</span>
+                                <div className="w-4 h-4 bg-coral-100 rounded-full flex items-center justify-center">
+                                  <span className="text-coral-600 text-xs font-bold">✓</span>
                                 </div>
                               </div>
                               <div className="ml-2">
-                                <span className="text-sm text-green-700">
-                                  ✅ Valid single place URL
+                                <span className="text-sm text-coral-700">
+                                  Valid single place URL
                                 </span>
                               </div>
                             </div>
@@ -1431,11 +1463,6 @@ The Share URL will give you more reliable results!`
                       </div>
                     )
                   })()}
-                  
-                  {/* Help text */}
-                  <p className="mt-2 text-sm text-gray-500">
-                    💡 <strong>Recommended:</strong> Use the "Share" button on Google Maps for the most reliable results
-                  </p>
                 </div>
               </div>
             </div>
@@ -1474,7 +1501,7 @@ The Share URL will give you more reliable results!`
           </div>
 
           {/* Pins Section */}
-          <div className="card-airbnb p-8">
+          <div className="card-airbnb p-8" data-places-section>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center">
                 <MapPin className="h-6 w-6 text-coral-500 mr-3" />
@@ -1495,54 +1522,167 @@ The Share URL will give you more reliable results!`
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {pins.map((pin, index) => (
-                  <div 
-                    key={index} 
-                    className="border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() => {
-                      console.log('Navigating to place:', index) // Debug log
-                      router.push(`/create/place/${index}`)
-                    }}
-                  >
-                    {/* Place Card Header */}
-                    <div className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 text-lg mb-1 line-clamp-1">
-                            {pin.title || `Place ${index + 1}`}
-                          </h3>
-                          <p className="text-gray-600 text-sm line-clamp-2 mb-2">
-                            {pin.address || 'No address available'}
-                          </p>
-                          
-                          {/* Rating - only show if available */}
-                          {pin.rating && (
-                            <div className="flex items-center">
-                              <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                              <span className="text-sm font-medium text-gray-900">
-                                {pin.rating}/5
-                              </span>
-                              {pin.rating_count && (
-                                <span className="text-xs text-gray-500 ml-1">
-                                  ({pin.rating_count})
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation() // Prevent card click when deleting
-                            removePin(index)
-                          }}
-                          className="text-red-500 hover:text-red-700 transition-colors ml-2 p-1"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                {pins.map((pin, index) => {
+                  const isComplete = isPlaceComplete(pin)
+                  const hasDescription = !!(pin.description && pin.description.trim().length > 0)
+                  const hasPhoto = !!(pin.photos && pin.photos.length > 0)
+                  
+                  return (
+                    <div 
+                      key={index} 
+                      className={`border rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer relative ${
+                        isComplete ? 'border-coral-200 hover:border-coral-300' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => {
+                        console.log('Navigating to place:', index)
+                        router.push(`/create/place/${index}`)
+                      }}
+                    >
+                      {/* Completion Status Badge */}
+                      <div className="absolute top-3 right-3 z-10">
+                        {isComplete ? (
+                          <div className="bg-coral-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+                            Complete
+                          </div>
+                        ) : (
+                          <div className="bg-gray-400 text-white text-xs px-2 py-1 rounded-full font-medium">
+                            Incomplete
+                          </div>
+                        )}
                       </div>
+
+                      {/* Place Card Header */}
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 pr-20">
+                            <h3 className="font-semibold text-gray-900 text-lg mb-1 line-clamp-1">
+                              {pin.title || `Place ${index + 1}`}
+                            </h3>
+                            <p className="text-gray-600 text-sm line-clamp-2 mb-2">
+                              {pin.address || 'No address available'}
+                            </p>
+                            
+                            {/* Completion indicators */}
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="flex items-center">
+                                <div className={`w-2 h-2 rounded-full mr-1 ${hasDescription ? 'bg-coral-500' : 'bg-gray-300'}`}></div>
+                                <span className="text-xs text-gray-600">Description</span>
+                              </div>
+                              <div className="flex items-center">
+                                <div className={`w-2 h-2 rounded-full mr-1 ${hasPhoto ? 'bg-coral-500' : 'bg-gray-300'}`}></div>
+                                <span className="text-xs text-gray-600">Photo</span>
+                              </div>
+                            </div>
+                            
+                            {/* Rating - only show if available */}
+                            {pin.rating && (
+                              <div className="flex items-center">
+                                <Star className="h-4 w-4 text-yellow-400 mr-1" />
+                                <span className="text-sm font-medium text-gray-900">
+                                  {pin.rating}/5
+                                </span>
+                                {pin.rating_count && (
+                                  <span className="text-xs text-gray-500 ml-1">
+                                    ({pin.rating_count})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removePin(index)
+                            }}
+                            className="text-gray-400 hover:text-gray-600 transition-colors absolute top-4 right-16"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                                </div>
+      </div>
+
+      {/* Completion Error Modal */}
+      {showCompletionError.show && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[9999] p-4"
+          onClick={(e) => {
+            // Only close if clicking on the backdrop itself, not on child elements
+            if (e.target === e.currentTarget) {
+              setShowCompletionError({ show: false, incompletePlaces: [] })
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-2xl max-w-md w-full border border-gray-300 relative z-[10000] pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
+                  <span className="text-gray-600 font-bold">!</span>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Complete All Places First
+                </h3>
+              </div>
+              
+              <p className="text-gray-600 mb-4">
+                Before creating your pack, each place needs a description and photo. 
+                The following places are incomplete:
+              </p>
+              
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 max-h-48 overflow-y-auto">
+                {showCompletionError.incompletePlaces.map((item, index) => (
+                  <div key={index} className="flex items-start mb-3 last:mb-0">
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        {item.pin.title || `Place ${item.index + 1}`}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Missing: {item.missing.join(' and ')}
+                      </p>
                     </div>
+                    <button
+                      onClick={() => {
+                        setShowCompletionError({ show: false, incompletePlaces: [] })
+                        router.push(`/create/place/${item.index}`)
+                      }}
+                      className="text-coral-600 hover:text-coral-800 text-sm font-medium ml-3"
+                    >
+                      Edit
+                    </button>
                   </div>
                 ))}
+              </div>
+              
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCompletionError({ show: false, incompletePlaces: [] })}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCompletionError({ show: false, incompletePlaces: [] })
+                    // Scroll to places section
+                    const placesSection = document.querySelector('[data-places-section]')
+                    if (placesSection) {
+                      placesSection.scrollIntoView({ behavior: 'smooth' })
+                    }
+                  }}
+                  className="btn-primary px-4 py-2"
+                >
+                  Complete Places
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})}
               </div>
             )}
           </div>

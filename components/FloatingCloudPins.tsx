@@ -57,7 +57,7 @@ export default function FloatingCloudPins() {
                 PinCloud
               </h1>
               <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-                Pluck the perfect pin from the clouds and discover amazing places curated by locals
+                Pluck the perfect pin from the clouds and discover amazing places selected by locals
               </p>
             </div>
           </div>

@@ -7,44 +7,47 @@ import { DollarSign, Users, Globe, Star, TrendingUp, CheckCircle, Heart, MapPin,
 const useCounterAnimation = (targetValue: number, duration: number = 2000, shouldStart: boolean = false) => {
   const [currentValue, setCurrentValue] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [hasStarted, setHasStarted] = useState(false)
 
   useEffect(() => {
-    if (!shouldStart || isAnimating) return
+    if (!shouldStart || isAnimating || hasStarted) return
 
-    setIsAnimating(true)
-    let startTime: number | null = null
-    let animationId: number
+    setHasStarted(true)
+    
+    // Add a small delay before starting animation for better visual effect
+    const startDelay = setTimeout(() => {
+      setIsAnimating(true)
+      let startTime: number | null = null
+      let animationId: number
 
-    const animate = (timestamp: number) => {
-      if (!startTime) startTime = timestamp
-      const progress = Math.min((timestamp - startTime) / duration, 1)
-      
-      // Use easeOut animation for smooth effect
-      const easeOut = 1 - Math.pow(1 - progress, 3)
-      const current = Math.floor(easeOut * targetValue)
-      
-      setCurrentValue(current)
-      
-      if (progress < 1) {
-        animationId = requestAnimationFrame(animate)
-      } else {
-        setCurrentValue(targetValue)
-        setIsAnimating(false)
+      const animate = (timestamp: number) => {
+        if (!startTime) startTime = timestamp
+        const progress = Math.min((timestamp - startTime) / duration, 1)
+        
+        // Use easeOut animation for smooth effect
+        const easeOut = 1 - Math.pow(1 - progress, 3)
+        const current = Math.floor(easeOut * targetValue)
+        
+        setCurrentValue(current)
+        
+        if (progress < 1) {
+          animationId = requestAnimationFrame(animate)
+        } else {
+          setCurrentValue(targetValue)
+          setIsAnimating(false)
+        }
       }
-    }
 
-    animationId = requestAnimationFrame(animate)
+      animationId = requestAnimationFrame(animate)
+    }, 300) // 300ms delay before starting animation
 
     return () => {
-      if (animationId) {
-        cancelAnimationFrame(animationId)
-      }
+      clearTimeout(startDelay)
     }
-  }, [targetValue, duration, shouldStart, isAnimating])
+  }, [targetValue, duration, shouldStart, isAnimating, hasStarted])
 
-  // If animation hasn't started yet, show the target value instead of 0
-  // This prevents showing zeros while waiting for intersection observer
-  return shouldStart ? currentValue : targetValue
+  // Always return currentValue - starts at 0 and animates up when shouldStart is true
+  return currentValue
 }
 
 // Custom hook for scroll animations
@@ -194,6 +197,33 @@ export default function SellPage() {
   const [currentTestimonial, setCurrentTestimonial] = useState(0)
   const [shouldAnimateStats, setShouldAnimateStats] = useState(false)
 
+  // Function to check if user is authenticated
+  const checkUserAuthentication = () => {
+    try {
+      const userProfile = localStorage.getItem('pinpacks_user_profile')
+      const savedUserId = localStorage.getItem('pinpacks_user_id')
+      
+      // User is authenticated if they have either profile or user ID
+      return !!(userProfile || savedUserId)
+    } catch (error) {
+      console.warn('Error checking authentication:', error)
+      return false
+    }
+  }
+
+  // Handle "Get Started Now" button click
+  const handleGetStarted = () => {
+    const isAuthenticated = checkUserAuthentication()
+    
+    if (isAuthenticated) {
+      // User has account → redirect to manage page
+      window.location.href = '/manage'
+    } else {
+      // User doesn't have account → redirect to sign up
+      window.location.href = '/signup'
+    }
+  }
+
   // Remove sticky navigation behavior for sell page (normal scrolling)
   useEffect(() => {
     const header = document.querySelector('header')
@@ -268,7 +298,7 @@ export default function SellPage() {
     },
     {
       question: "What makes a good pin pack?",
-      answer: "Great packs include 5-15 carefully curated places with detailed descriptions, insider tips, and personal stories. Focus on specific themes like 'hidden coffee shops,' 'sunset spots,' or 'local food gems' rather than generic tourist attractions."
+      answer: "Great packs include 5-15 carefully selected places with detailed descriptions, insider tips, and personal stories. Focus on specific themes like 'hidden coffee shops,' 'sunset spots,' or 'local food gems' rather than generic tourist attractions."
     },
     {
       question: "How do I get paid?",
@@ -334,14 +364,6 @@ export default function SellPage() {
               Share the places you love in <span suppressHydrationWarning>{userLocation || 'your city'}</span> and earn money helping travelers discover authentic experiences
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <button className="bg-white text-coral-500 hover:bg-gray-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center transform hover:scale-105">
-                <DollarSign className="h-5 w-5 mr-2" />
-                Start Earning Today
-              </button>
-              <button className="bg-coral-600 hover:bg-coral-700 text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center transform hover:scale-105">
-                <Play className="h-5 w-5 mr-2" />
-                Watch How It Works
-              </button>
             </div>
 
             {/* Quick stats with counter animation */}
@@ -456,7 +478,10 @@ export default function SellPage() {
             <div className="bg-gradient-to-r from-gray-900 to-gray-700 rounded-2xl p-8 text-white text-center">
               <h3 className="text-2xl font-bold mb-4">Ready to find out your earning potential?</h3>
               <p className="text-gray-300 mb-6">Get a personalized estimate based on your location and interests</p>
-              <button className="bg-white text-gray-900 hover:bg-gray-100 px-8 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105">
+              <button 
+                onClick={handleGetStarted}
+                className="bg-white text-gray-900 hover:bg-gray-100 px-8 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105"
+              >
                 Calculate My Earnings
               </button>
             </div>
@@ -610,7 +635,7 @@ export default function SellPage() {
                   <ul className="space-y-2 text-gray-600">
                     <li>• Specific themes ("Best breakfast spots in SoHo")</li>
                     <li>• Personal stories and context for each place</li>
-                    <li>• 5-15 carefully curated locations</li>
+                    <li>• 5-15 carefully selected locations</li>
                     <li>• Insider tips (best time to visit, what to order)</li>
                     <li>• Places that reflect local culture</li>
                   </ul>
@@ -773,11 +798,17 @@ export default function SellPage() {
           
           <AnimatedSection delay={200}>
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <button className="bg-white text-coral-500 hover:bg-gray-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center transform hover:scale-105">
+              <button 
+                onClick={handleGetStarted}
+                className="bg-white text-coral-500 hover:bg-gray-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center transform hover:scale-105"
+              >
                 <ArrowRight className="h-5 w-5 mr-2" />
                 Get Started Now
               </button>
-              <button className="bg-coral-600 hover:bg-coral-700 border-2 border-white text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center transform hover:scale-105">
+              <button 
+                onClick={() => window.location.href = '/contact'}
+                className="bg-coral-600 hover:bg-coral-700 border-2 border-white text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center transform hover:scale-105"
+              >
                 <Users className="h-5 w-5 mr-2" />
                 Join Community
               </button>

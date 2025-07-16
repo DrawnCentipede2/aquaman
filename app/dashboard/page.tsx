@@ -177,7 +177,7 @@ export default function DashboardPage() {
                 >
                   <MapPin className="h-10 w-10 text-blue-600 mx-auto mb-3 group-hover:scale-110 transition-transform" />
                   <p className="font-semibold text-blue-900 mb-1">Discover Experiences</p>
-                  <p className="text-sm text-blue-700">Browse curated local collections</p>
+                  <p className="text-sm text-blue-700">Browse selected local collections</p>
                 </a>
                 <a 
                   href="/profile"

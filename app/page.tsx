@@ -48,7 +48,7 @@ export default function LandingPage() {
             </h1>
             
             <p className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-              Discover authentic travel experiences through curated pin collections from people who know their cities best.
+              Discover authentic travel experiences through selected pin collections from people who know their cities best.
             </p>
 
             {/* Enhanced Airbnb-style search bar with subtle highlighting */}

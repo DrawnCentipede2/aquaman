@@ -5,7 +5,7 @@ import PinCloudLogo from '@/components/PinCloudLogo'
 
 export const metadata: Metadata = {
   title: 'PinCloud - Local Travel Pins by Locals',
-  description: 'Discover authentic travel spots through curated pin packs created by locals',
+  description: 'Discover authentic travel spots through selected pin packs created by locals',
 }
 
 export default function RootLayout({
@@ -96,7 +96,7 @@ export default function RootLayout({
                   </h3>
                   <ul className="space-y-3">
                     <li><a href="/help" className="text-gray-600 hover:text-gray-900 transition-colors">Help center</a></li>
-                    <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Contact us</a></li>
+                    <li><a href="/contact" className="text-gray-600 hover:text-gray-900 transition-colors">Contact us</a></li>
                     <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Safety</a></li>
                   </ul>
                 </div>
