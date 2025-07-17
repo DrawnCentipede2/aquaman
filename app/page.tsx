@@ -161,25 +161,26 @@ export default function LandingPage() {
       </div>
 
       {/* Featured Categories Section - Tetris-like Layout */}
-      <div className="py-20 bg-white">
+      <div className="py-12 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               Featured Categories
             </h2>
           </div>
 
           {/* Tetris-style layout - compact and visible without scrolling */}
-          <div className="grid grid-cols-12 gap-4 auto-rows-[120px] md:auto-rows-[180px]">
+          <div className="grid grid-cols-12 gap-4 auto-rows-[100px] md:auto-rows-[140px]">
             {/* Row 1: Nightlife (full height, 2 rows) + Food (top half) + Family (bottom half) */}
             
             {/* Nightlife - Full height spanning 2 rows (6 cols) */}
             <div className="col-span-2 md:col-span-3 row-span-2 group cursor-pointer">
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Nightlife.jpg"
                   alt="Nightlife"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4">
@@ -189,12 +190,13 @@ export default function LandingPage() {
             </div>
 
             {/* Food - Top half (6 cols, 1 row) */}
-            <div className="col-span-6 md:col-span-6 row-span-1 group cursor-pointer">
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+            <div className="col-span-6 md:col-span-3 row-span-1 group cursor-pointer">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Food.jpg"
                   alt="Food"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -205,11 +207,12 @@ export default function LandingPage() {
 
             {/* Family - Bottom half (6 cols, 1 row) */}
             <div className="col-span-6 md:col-span-6 row-span-1 group cursor-pointer">
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Family.jpg"
                   alt="Family"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -222,11 +225,12 @@ export default function LandingPage() {
             
             {/* Adventure - Full height spanning 2 rows (6 cols) */}
             <div className="col-span-6 md:col-span-6 row-span-2 group cursor-pointer">
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Adventure.jpg"
                   alt="Adventure"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4">
@@ -236,12 +240,13 @@ export default function LandingPage() {
             </div>
 
             {/* Romantic - Top half (6 cols, 1 row) */}
-            <div className="col-span-6 md:col-span-6 row-span-1 group cursor-pointer">
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+            <div className="col-span-6 md:col-span-3 row-span-2 group cursor-pointer">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Romantic.jpg"
                   alt="Romantic"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -251,12 +256,13 @@ export default function LandingPage() {
             </div>
 
             {/* Hidden Gems - Bottom half (6 cols, 1 row) */}
-            <div className="col-span-6 md:col-span-6 row-span-1 group cursor-pointer">
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-105">
+            <div className="col-span-2 md:col-span-3 row-span-2 group cursor-pointer">
+              <div className="relative h-1/2 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Hidden_Gems.jpg"
                   alt="Hidden Gems"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -269,10 +275,10 @@ export default function LandingPage() {
       </div>
 
       {/* Highly Rated Packs Section - Using Real Data */}
-      <div className="py-20 bg-gray-25">
+      <div className="py-8 bg-gray-25">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               Highly Rated Packs
             </h2>
           </div>
@@ -452,9 +458,9 @@ export default function LandingPage() {
       </div>
 
       {/* CTA Section */}
-      <div className="py-20 gradient-coral">
+      <div className="py-16 gradient-coral">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 text-shadow">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 text-shadow">
             Ready to explore like a local?
           </h2>
           <p className="text-xl text-white/90 mb-12 text-shadow">
