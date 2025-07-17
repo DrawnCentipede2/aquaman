@@ -597,9 +597,19 @@ export default function Navigation() {
                       </div>
                     </div>
 
-                    {/* Creator Dashboard Link - Only show if registered creator */}
-                    {isRegisteredCreator && (
-                      <div className="py-2">
+                    {/* Profile Link - Always show for authenticated users */}
+                    <div className="py-2">
+                      <a
+                        href="/profile"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <User className="h-4 w-4 mr-3 text-gray-500" />
+                        Profile Settings
+                      </a>
+                      
+                      {/* Creator Dashboard Link - Only show if registered creator */}
+                      {isRegisteredCreator && (
                         <a
                           href="/creator-dashboard"
                           onClick={() => setIsDropdownOpen(false)}
@@ -608,10 +618,10 @@ export default function Navigation() {
                           <Settings className="h-4 w-4 mr-3 text-gray-500" />
                           Creator Dashboard
                         </a>
-                        
-                        <div className="border-t border-gray-100 my-2"></div>
-                      </div>
-                    )}
+                      )}
+                      
+                      <div className="border-t border-gray-100 my-2"></div>
+                    </div>
 
                     {/* Quick Settings - Only essential items */}
                     <div className="py-2">

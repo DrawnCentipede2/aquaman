@@ -5,11 +5,11 @@ import { useParams } from 'next/navigation'
 import { MapPin, Star, Users, Heart, Calendar, Globe, MessageCircle, Shield, ArrowLeft, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
-import { getPackDisplayImage } from '@/lib/utils'
+import { getPackDisplayImage, queryCreatorData } from '@/lib/utils'
 
 export default function CreatorProfilePage() {
   const params = useParams()
-  const creatorId = params.id as string
+  const creatorId = decodeURIComponent(params.id as string)
   
   const [creatorPacks, setCreatorPacks] = useState<PinPack[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,27 +23,107 @@ export default function CreatorProfilePage() {
     yearsCreating: 5
   })
   
-  // Mock creator data - in production this would come from a creators table
-  const creator = {
-    id: creatorId,
-    name: creatorId === 'local-expert' ? 'Local Expert' : 'Maria Rodriguez',
-    location: 'Barcelona, Spain',
-    profilePicture: null,
-    bio: `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for over 8 years, I know all the hidden gems that locals love. I specialize in creating selected experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.
+  // State for real creator data from database
+  const [creator, setCreator] = useState<any>(null)
 
-I work as a local tourism guide and have helped hundreds of travelers experience the true essence of our city. When I'm not creating pin packs, you can find me exploring new neighborhoods, trying local restaurants, or chatting with longtime residents to discover even more hidden treasures.
+  // Load real creator data from database
+  useEffect(() => {
+    const loadCreatorData = async () => {
+      try {
+        // Use shared utility function for consistent querying
+        const { data: creatorData, error, queryType } = await queryCreatorData(creatorId)
+
+        if (creatorData && !error) {
+          setCreator({
+            id: creatorId,
+                         name: creatorData.name || creatorData.email?.split('@')[0].split('.').map((word: string) => 
+               word.charAt(0).toUpperCase() + word.slice(1)
+             ).join(' ') || 'Local Creator',
+            location: `${creatorData.city || 'Barcelona'}, ${creatorData.country || 'Spain'}`,
+            profilePicture: creatorData.profile_picture || null,
+            bio: creatorData.bio || `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for several years, I know all the hidden gems that locals love. I specialize in creating selected experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.
+
+I work as a local guide and have helped many travelers experience the true essence of our city. When I'm not creating pin packs, you can find me exploring new neighborhoods, trying local restaurants, or chatting with longtime residents to discover even more hidden treasures.
 
 My packs are carefully crafted based on years of exploration and conversations with locals. Each location is personally vetted and represents something special about our local culture.`,
-    work: 'Local tourism guide & cultural enthusiast',
-    languages: ['English', 'Spanish', 'Catalan', 'French'],
-    verified: true,
-    joinDate: '2019-03-15',
-    reviews: creatorStats.reviews,
-    rating: creatorStats.rating,
-    yearsCreating: creatorStats.yearsCreating,
-    totalPacks: 0,
-    totalDownloads: 0
-  }
+            work: creatorData.occupation || 'Local tourism guide & cultural enthusiast',
+            verified: creatorData.verified || false,
+            joinDate: creatorData.created_at || '2019-03-15',
+            reviews: creatorStats.reviews,
+            rating: creatorStats.rating,
+            yearsCreating: creatorStats.yearsCreating,
+            totalPacks: 0,
+            totalDownloads: 0,
+            email: creatorData.email
+          })
+        } else if (error) {
+          console.warn('Creator data query failed:', error)
+          // Fallback for backwards compatibility
+          const fallbackName = queryType === 'UUID' 
+            ? 'Local Creator' 
+            : (creatorId === 'local-expert' 
+                ? 'Local Expert' 
+                : creatorId.includes('@') 
+                  ? decodeURIComponent(creatorId).split('@')[0].split('.').map((word: string) => 
+                      word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join(' ')
+                  : 'Local Creator')
+          
+          setCreator({
+            id: creatorId,
+            name: fallbackName,
+            location: 'Barcelona, Spain',
+            profilePicture: null,
+            bio: `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for several years, I know all the hidden gems that locals love. I specialize in creating selected experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.
+
+I work as a local guide and have helped many travelers experience the true essence of our city. When I'm not creating pin packs, you can find me exploring new neighborhoods, trying local restaurants, or chatting with longtime residents to discover even more hidden treasures.
+
+My packs are carefully crafted based on years of exploration and conversations with locals. Each location is personally vetted and represents something special about our local culture.`,
+            work: 'Local tourism guide & cultural enthusiast',
+            verified: false,
+            joinDate: '2019-03-15',
+            reviews: creatorStats.reviews,
+            rating: creatorStats.rating,
+            yearsCreating: creatorStats.yearsCreating,
+            totalPacks: 0,
+            totalDownloads: 0,
+            email: queryType === 'UUID' ? '' : decodeURIComponent(creatorId)
+          })
+        }
+      } catch (error) {
+        console.error('Error loading creator data:', error)
+        // Set fallback data for any unexpected errors
+        const decodedCreatorId = decodeURIComponent(creatorId)
+        const isUUIDFallback = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedCreatorId)
+        const fallbackName = isUUIDFallback 
+          ? 'Local Creator' 
+          : (decodedCreatorId.includes('@') 
+              ? decodedCreatorId.split('@')[0].split('.').map((word: string) => 
+                  word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(' ')
+              : 'Local Creator')
+        
+        setCreator({
+          id: creatorId,
+          name: fallbackName,
+          location: 'Barcelona, Spain',
+          profilePicture: null,
+          bio: 'Local guide passionate about sharing authentic experiences.',
+          work: 'Local guide',
+          verified: false,
+          joinDate: '2019-03-15',
+          reviews: creatorStats.reviews,
+          rating: creatorStats.rating,
+          yearsCreating: creatorStats.yearsCreating,
+          totalPacks: 0,
+          totalDownloads: 0,
+          email: isUUIDFallback ? '' : decodedCreatorId
+        })
+      }
+    }
+
+    loadCreatorData()
+  }, [creatorId])
 
   useEffect(() => {
     loadCreatorPacks()
@@ -67,15 +147,44 @@ My packs are carefully crafted based on years of exploration and conversations w
     try {
       setLoading(true)
       
-      // Load all packs (in production, filter by creator_id)
-      const { data: packsData, error } = await supabase
-        .from('pin_packs')
-        .select('*')
-        .limit(10)
+      // Filter packs by the specific creator
+      let packsData = []
+      let error = null
+      
+      // Check if creatorId looks like a UUID or an email (same logic as creator data)
+      const decodedCreatorId = decodeURIComponent(creatorId)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedCreatorId)
+      
+      if (isUUID) {
+        // Query by UUID (creator_id field)
+        console.log('Loading packs for creator UUID:', decodedCreatorId)
+        const result = await supabase
+          .from('pin_packs')
+          .select('*')
+          .eq('creator_id', decodedCreatorId)
+          .order('created_at', { ascending: false })
+        
+        packsData = result.data || []
+        error = result.error
+      } else {
+        // Query by email (creator_id field for legacy packs)
+        console.log('Loading packs for creator email:', decodedCreatorId)
+        const result = await supabase
+          .from('pin_packs')
+          .select('*')
+          .eq('creator_id', decodedCreatorId)
+          .order('created_at', { ascending: false })
+        
+        packsData = result.data || []
+        error = result.error
+      }
 
+      console.log(`Found ${packsData.length} packs for creator ${decodedCreatorId}`)
+      console.log('Packs found:', packsData.map(p => ({ id: p.id, title: p.title, creator_id: p.creator_id })))
+      
       if (error) throw error
       
-      setCreatorPacks(packsData || [])
+      setCreatorPacks(packsData)
       
       // Load pack images
       const images: {[key: string]: string} = {}
@@ -113,6 +222,20 @@ My packs are carefully crafted based on years of exploration and conversations w
 
   // Calculate stats
   const totalDownloads = creatorPacks.reduce((sum, pack) => sum + (pack.download_count || 0), 0)
+
+  // Show loading state while creator data is loading
+  if (!creator) {
+    return (
+      <div className="min-h-screen bg-gray-25">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading creator profile...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-25">
@@ -188,10 +311,6 @@ My packs are carefully crafted based on years of exploration and conversations w
                   <span>{creator.work}</span>
                 </div>
                 <div className="flex items-center text-gray-600">
-                  <Globe className="h-4 w-4 mr-3" />
-                  <span>Speaks {creator.languages.join(', ')}</span>
-                </div>
-                <div className="flex items-center text-gray-600">
                   <Calendar className="h-4 w-4 mr-3" />
                   <span>Creating since {new Date(creator.joinDate).getFullYear()}</span>
                 </div>
@@ -207,7 +326,7 @@ My packs are carefully crafted based on years of exploration and conversations w
           <div className="mt-8 pt-8 border-t border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-4">About {creator.name}</h2>
             <div className="prose prose-gray max-w-none">
-              {creator.bio.split('\n\n').map((paragraph, index) => (
+                                {creator.bio.split('\n\n').map((paragraph: string, index: number) => (
                 <p key={index} className="text-gray-600 leading-relaxed mb-4">
                   {paragraph}
                 </p>
@@ -384,8 +503,8 @@ My packs are carefully crafted based on years of exploration and conversations w
                       <Heart 
                         className={`h-4 w-4 transition-colors ${
                           wishlistItems.includes(pack.id) 
-                            ? 'text-coral-500 fill-current' 
-                            : 'text-gray-700 group-hover:text-coral-500'
+                            ? 'text-red-500 fill-current' 
+                            : 'text-red-700 group-hover:text-red-500'
                         }`} 
                       />
                     </button>

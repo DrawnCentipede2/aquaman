@@ -24,7 +24,6 @@ export default function Navbar({ userRole: initialRole }: NavbarProps) {
   ]
 
   const sellerNavItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: Home },
     { href: '/manage', label: 'Manage Packs', icon: Package },
     { href: '/profile', label: 'Profile', icon: User },
   ]

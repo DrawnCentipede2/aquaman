@@ -1,80 +1,284 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User, Mail, MapPin, ShoppingBag, Store, Settings, LogOut, Save } from 'lucide-react'
+import { User, Mail, MapPin, Phone, Globe, Shield, Save, Trash2, Camera, Verified, AlertTriangle, Edit3, Eye, EyeOff, Building, LogOut } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 import CloudLoader from '@/components/CloudLoader'
 
+interface UserProfile {
+  id?: string
+  name?: string
+  email: string
+  bio?: string
+  phone?: string
+  country?: string
+  city?: string
+  occupation?: string
+  verified?: boolean
+  verification_method?: string
+  profile_visibility?: 'public' | 'limited' | 'private'
+  marketing_emails?: boolean
+  social_links?: {
+    website?: string
+    instagram?: string
+    twitter?: string
+  }
+}
+
 export default function ProfilePage() {
-  const [userProfile, setUserProfile] = useState<any>(null)
-  const [email, setEmail] = useState('')
-  const [userType, setUserType] = useState<'buyer' | 'seller'>('buyer')
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  
+  // Form fields
+  const [formData, setFormData] = useState<UserProfile>({
+    name: '',
+    email: '',
+    bio: '',
+    phone: '',
+    country: '',
+    city: '',
+    occupation: '',
+    profile_visibility: 'public',
+    marketing_emails: true,
+    social_links: {
+      website: '',
+      instagram: '',
+      twitter: ''
+    }
+  })
+  
+  // Location data
+  const [availableCountries, setAvailableCountries] = useState<string[]>([])
+  const [availableCities, setAvailableCities] = useState<string[]>([])
+  
+  // Load countries on mount
+  useEffect(() => {
+    const countries = getAllCountries()
+    setAvailableCountries(countries)
+  }, [])
+
+  // Load cities when country changes
+  useEffect(() => {
+    if (formData.country) {
+      const cities = getCitiesForCountry(formData.country)
+      setAvailableCities(cities)
+    } else {
+      setAvailableCities([])
+    }
+  }, [formData.country])
 
   // Load user profile on component mount
   useEffect(() => {
-    const loadUserProfile = () => {
-      const savedProfile = localStorage.getItem('pinpacks_user_profile')
-      if (savedProfile) {
-        try {
-          const profile = JSON.parse(savedProfile)
-          setUserProfile(profile)
-          setEmail(profile.email || '')
-          setUserType(profile.userType || 'buyer')
-        } catch (error) {
-          console.error('Error parsing user profile:', error)
-          // Redirect to sign in if profile is corrupted
-          window.location.href = '/auth'
-        }
-      } else {
-        // No profile found, redirect to sign in
-        window.location.href = '/auth'
-      }
-      setIsLoading(false)
-    }
-    
     loadUserProfile()
   }, [])
 
-  // Save profile changes
+  const loadUserProfile = async () => {
+    const savedProfile = localStorage.getItem('pinpacks_user_profile')
+    if (!savedProfile) {
+      // No profile found, redirect to sign in
+      window.location.href = '/auth'
+      return
+    }
+
+    try {
+      const localProfile = JSON.parse(savedProfile)
+      
+      // Try to fetch full profile from database
+      const { data: dbProfile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', localProfile.email)
+        .maybeSingle()
+
+      if (error) {
+        console.error('Error fetching profile from database:', error)
+      }
+
+      // Merge local storage profile with database profile
+      const mergedProfile: UserProfile = {
+        email: localProfile.email,
+        name: dbProfile?.name || localProfile.name || '',
+        bio: dbProfile?.bio || '',
+        phone: dbProfile?.phone || '',
+        country: dbProfile?.country || '',
+        city: dbProfile?.city || '',
+        occupation: dbProfile?.occupation || '',
+        verified: dbProfile?.verified || false,
+        verification_method: dbProfile?.verification_method || '',
+        profile_visibility: dbProfile?.profile_visibility || 'public',
+        marketing_emails: dbProfile?.marketing_emails !== undefined ? dbProfile.marketing_emails : true,
+        social_links: dbProfile?.social_links || { website: '', instagram: '', twitter: '' }
+      }
+
+      setUserProfile(mergedProfile)
+      setFormData(mergedProfile)
+      
+    } catch (error) {
+      console.error('Error parsing user profile:', error)
+      window.location.href = '/auth'
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleInputChange = (field: keyof UserProfile, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleSocialLinkChange = (platform: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      social_links: {
+        ...prev.social_links,
+        [platform]: value
+      }
+    }))
+  }
+
   const handleSaveProfile = async () => {
-    if (!email.trim()) {
+    if (!formData.email?.trim()) {
       alert('Please enter a valid email address')
       return
     }
 
     setIsSaving(true)
     try {
-      // Update the user profile with new information
-      const updatedProfile = {
-        ...userProfile,
-        email: email.trim().toLowerCase(),
-        userId: email.trim().toLowerCase(),
-        userType: userType,
-        lastUpdated: new Date().toISOString()
+      console.log('Saving profile data:', formData)
+      
+      // Prepare the data for database save
+      const profileData = {
+        email: formData.email.trim().toLowerCase(),
+        name: formData.name?.trim() || null,
+        bio: formData.bio?.trim() || null,
+        phone: formData.phone?.trim() || null,
+        country: formData.country || null,
+        city: formData.city || null,
+        occupation: formData.occupation?.trim() || null,
+        profile_visibility: formData.profile_visibility || 'public',
+        marketing_emails: formData.marketing_emails !== undefined ? formData.marketing_emails : true,
+        social_links: formData.social_links || {},
+        last_login: new Date().toISOString()
       }
 
-      // Save to localStorage
-      localStorage.setItem('pinpacks_user_profile', JSON.stringify(updatedProfile))
-      localStorage.setItem('pinpacks_user_id', updatedProfile.userId)
-      localStorage.setItem('pinpacks_user_email', updatedProfile.email)
-      localStorage.setItem('pinpacks_user_type', updatedProfile.userType)
+      console.log('Attempting to save to database:', profileData)
 
-      setUserProfile(updatedProfile)
+      // Save to database using upsert
+      const { data: savedData, error: dbError } = await supabase
+        .from('users')
+        .upsert(profileData, {
+          onConflict: 'email',
+          ignoreDuplicates: false
+        })
+        .select()
+
+      console.log('Database save result:', { savedData, dbError })
+
+      if (dbError) {
+        console.error('Database save error:', dbError)
+        alert(`Profile save failed: ${dbError.message || 'Unknown database error'}\n\nPlease try again or contact support if the issue persists.`)
+        return
+      }
+
+      // Update localStorage (for backwards compatibility and offline access)
+      const currentUserType = localStorage.getItem('pinpacks_user_type') || 'buyer'
+      const localStorageProfile = {
+        userId: formData.email.trim().toLowerCase(),
+        name: formData.name?.trim() || '',
+        userType: currentUserType,
+        lastUpdated: new Date().toISOString(),
+        ...formData,
+        email: formData.email.trim().toLowerCase()
+      }
+
+      // Create clean profile object that matches UserProfile interface
+      const cleanedProfile: UserProfile = {
+        ...formData,
+        email: formData.email.trim().toLowerCase()
+      }
+
+      console.log('Saving to localStorage:', localStorageProfile)
+
+      localStorage.setItem('pinpacks_user_profile', JSON.stringify(localStorageProfile))
+      localStorage.setItem('pinpacks_user_id', localStorageProfile.userId)
+      localStorage.setItem('pinpacks_user_email', localStorageProfile.email)
+
+      setUserProfile(cleanedProfile)
       
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
-      alert(' Profile updated successfully!')
+      alert('Profile updated successfully!')
+      console.log('Profile save completed successfully')
+      
     } catch (err) {
-      alert('Failed to update profile. Please try again.')
       console.error('Profile update error:', err)
+      alert(`Failed to update profile: ${err instanceof Error ? err.message : 'Unknown error'}\n\nPlease try again or contact support if the issue persists.`)
     } finally {
       setIsSaving(false)
     }
   }
 
-  // Logout function
+  const requestVerification = () => {
+    alert(`Verification Request Submitted!
+
+Your request for local creator verification has been submitted. Our team will review your profile and contact you within 2-3 business days.
+
+Verification helps build trust with travelers and may increase your pack visibility.
+
+What happens next:
+• Our team reviews your profile information
+• We may request additional documentation
+• You'll receive an email with the verification result
+
+Current verification methods available:
+• Identity verification
+• Location verification (IP-based)
+• Social media verification`)
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true)
+      return
+    }
+
+    try {
+      // Mark account as deleted in database
+      await supabase
+        .from('users')
+        .update({ 
+          account_status: 'deleted',
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', userProfile?.email)
+
+      // Clear all user data from localStorage
+      const keysToRemove = [
+        'pinpacks_user_profile', 'pinpacks_user_id', 'pinpacks_user_email',
+        'pinpacks_user_type', 'pinpacks_user_ip', 'pinpacks_user_location',
+        'pinpacks_create_pins', 'pinpacks_create_pack_details', 'pinpacks_wishlist'
+      ]
+      
+      keysToRemove.forEach(key => localStorage.removeItem(key))
+      
+      // Trigger storage event to update navigation
+      window.dispatchEvent(new Event('storage'))
+      
+      alert('Your account has been deleted. You will be redirected to the homepage.')
+      window.location.href = '/'
+      
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      alert('Failed to delete account. Please try again or contact support.')
+    }
+  }
+
   const handleLogout = () => {
     const confirmLogout = confirm('Are you sure you want to sign out?')
     if (confirmLogout) {
@@ -89,7 +293,6 @@ export default function ProfilePage() {
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
-      alert('👋 You have been signed out.')
       window.location.href = '/'
     }
   }
@@ -97,7 +300,7 @@ export default function ProfilePage() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <div className="min-h-screen bg-gray-25">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="text-center">
             <CloudLoader size="xl" text="Loading your profile..." />
@@ -112,195 +315,374 @@ export default function ProfilePage() {
     return null
   }
 
-  const isBuyer = userType === 'buyer'
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-gray-25">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         
         {/* Page Header */}
         <div className="text-center mb-12">
           <div className="flex justify-center mb-6">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-4 rounded-full">
-              <User className="h-12 w-12 text-white" />
+            <div className="relative">
+              <div className="w-20 h-20 bg-gradient-to-r from-primary-500 to-coral-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                {formData.name?.charAt(0).toUpperCase() || formData.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              {userProfile.verified && (
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-coral-500 rounded-full flex items-center justify-center">
+                  <Verified className="h-4 w-4 text-white" />
+                </div>
+              )}
             </div>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-green-800 to-emerald-800 bg-clip-text text-transparent mb-4">
-            Profile Settings
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            Your Profile
           </h1>
           <p className="text-xl text-gray-600">
-            Manage your account preferences and settings
+            Manage your personal information and account settings
           </p>
         </div>
 
-        {/* Profile Information Card */}
-        <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-white/20 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-            <Settings className="h-6 w-6 mr-2 text-blue-500" />
-            Account Information
-          </h2>
+        {/* Main Profile Form */}
+        <div className="space-y-8">
           
-          <div className="space-y-6">
-            {/* Email Input */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          {/* Basic Information */}
+          <div className="card-airbnb p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <User className="h-6 w-6 text-primary-500 mr-3" />
+              Basic Information
+            </h2>
+            
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.name || ''}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  placeholder="Your full name"
+                  className="input-airbnb w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Email Address *
+                </label>
                 <input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
                   placeholder="your@email.com"
+                  className="input-airbnb w-full"
                   required
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                This is used to identify your account and sync your data
-              </p>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone || ''}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  placeholder="+1 (555) 123-4567"
+                  className="input-airbnb w-full"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Occupation
+                </label>
+                <input
+                  type="text"
+                  value={formData.occupation || ''}
+                  onChange={(e) => handleInputChange('occupation', e.target.value)}
+                  placeholder="Local guide, photographer, etc."
+                  className="input-airbnb w-full"
+                />
+              </div>
             </div>
 
-            {/* User Type Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-4">
-                Account Type
+            {/* Bio Section */}
+            <div className="mt-6">
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                About You
               </label>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Buyer Option */}
-                <button
-                  type="button"
-                  onClick={() => setUserType('buyer')}
-                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
-                    userType === 'buyer'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                  }`}
-                >
-                  <ShoppingBag className="h-8 w-8 mx-auto mb-2" />
-                  <div className="text-sm font-medium">Buyer</div>
-                  <div className="text-xs mt-1">Browse & download pin packs</div>
-                </button>
-
-                {/* Seller Option */}
-                <button
-                  type="button"
-                  onClick={() => setUserType('seller')}
-                  className={`p-4 rounded-xl border-2 transition-all duration-200 ${
-                    userType === 'seller'
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                  }`}
-                >
-                  <Store className="h-8 w-8 mx-auto mb-2" />
-                  <div className="text-sm font-medium">Seller</div>
-                  <div className="text-xs mt-1">Create & sell pin packs</div>
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                {isBuyer 
-                  ? 'As a buyer, you can browse and download pin packs. Seller features will be hidden.'
-                  : 'As a seller, you can create and manage pin packs. You also have access to buyer features.'
-                }
+              <textarea
+                value={formData.bio || ''}
+                onChange={(e) => handleInputChange('bio', e.target.value)}
+                placeholder="Tell travelers about yourself, your local knowledge, and what makes your recommendations special..."
+                rows={4}
+                className="input-airbnb w-full resize-none"
+                maxLength={500}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {(formData.bio || '').length}/500 characters
               </p>
             </div>
-
-            {/* Save Button */}
-            <div className="flex justify-end">
-              <button
-                onClick={handleSaveProfile}
-                disabled={isSaving || !email.trim()}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center"
-              >
-                {isSaving ? (
-                  <>
-                    <CloudLoader size="sm" className="mr-2" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-5 w-5 mr-2" />
-                    Save Changes
-                  </>
-                )}
-              </button>
-            </div>
           </div>
-        </div>
 
-        {/* Account Details Card */}
-        <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-white/20 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Account Details</h2>
-          
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+          {/* Location Information */}
+          <div className="card-airbnb p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <MapPin className="h-6 w-6 text-primary-500 mr-3" />
+              Location
+            </h2>
+            
+            <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <label className="text-sm font-medium text-gray-600">Current Email</label>
-                <p className="text-lg text-gray-900">{userProfile.email}</p>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Country
+                </label>
+                <select
+                  value={formData.country || ''}
+                  onChange={(e) => {
+                    handleInputChange('country', e.target.value)
+                    handleInputChange('city', '') // Reset city when country changes
+                  }}
+                  className="input-airbnb w-full"
+                >
+                  <option value="">Select a country</option>
+                  {availableCountries.map(country => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
+                </select>
               </div>
+              
               <div>
-                <label className="text-sm font-medium text-gray-600">Account Type</label>
-                <p className="text-lg text-gray-900 flex items-center">
-                  {userProfile.userType === 'buyer' ? (
-                    <>
-                      <ShoppingBag className="h-5 w-5 mr-2 text-blue-500" />
-                      Buyer
-                    </>
-                  ) : (
-                    <>
-                      <Store className="h-5 w-5 mr-2 text-green-500" />
-                      Seller
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-600">Member Since</label>
-                <p className="text-lg text-gray-900">{new Date(userProfile.created).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Location</label>
-                <p className="text-lg text-gray-900 flex items-center">
-                  <MapPin className="h-5 w-5 mr-2 text-gray-500" />
-                  {userProfile.location}
-                </p>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  City
+                </label>
+                <select
+                  value={formData.city || ''}
+                  onChange={(e) => handleInputChange('city', e.target.value)}
+                  disabled={!formData.country}
+                  className="input-airbnb w-full disabled:opacity-50"
+                >
+                  <option value="">Select a city</option>
+                  {availableCities.map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Quick Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-          <a 
-            href="/dashboard"
-            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center justify-center"
-          >
-            <User className="h-5 w-5 mr-2" />
-            Go to Dashboard
-          </a>
-          {userType === 'seller' && (
-            <a 
-              href="/create"
-              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold text-lg px-8 py-4 rounded-xl hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200 inline-flex items-center justify-center"
+
+          {/* Social Links */}
+          <div className="card-airbnb p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <Globe className="h-6 w-6 text-primary-500 mr-3" />
+              Social Links
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Website
+                </label>
+                <input
+                  type="url"
+                  value={formData.social_links?.website || ''}
+                  onChange={(e) => handleSocialLinkChange('website', e.target.value)}
+                  placeholder="https://yourwebsite.com"
+                  className="input-airbnb w-full"
+                />
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Instagram
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.social_links?.instagram || ''}
+                    onChange={(e) => handleSocialLinkChange('instagram', e.target.value)}
+                    placeholder="@username"
+                    className="input-airbnb w-full"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Twitter
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.social_links?.twitter || ''}
+                    onChange={(e) => handleSocialLinkChange('twitter', e.target.value)}
+                    placeholder="@username"
+                    className="input-airbnb w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Verification */}
+          <div className="card-airbnb p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <Shield className="h-6 w-6 text-primary-500 mr-3" />
+              Account Verification
+            </h2>
+            
+            <div className="flex items-start space-x-4 p-4 rounded-lg bg-gray-50 border border-gray-200">
+              {userProfile.verified ? (
+                <>
+                  <div className="w-10 h-10 bg-coral-500 rounded-full flex items-center justify-center">
+                    <Verified className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900">Verified Creator</h3>
+                    <p className="text-gray-600">
+                      Your account has been verified as a local creator.
+                      {userProfile.verification_method && (
+                        <span className="block text-sm mt-1">
+                          Verified via: {userProfile.verification_method}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                    <Shield className="h-6 w-6 text-gray-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900">Not Verified</h3>
+                    <p className="text-gray-600 mb-3">
+                      Get verified as a local creator to build trust with travelers and increase your pack visibility.
+                    </p>
+                    <button
+                      onClick={requestVerification}
+                      className="btn-primary px-4 py-2 text-sm"
+                    >
+                      Request Verification
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Privacy Settings */}
+          <div className="card-airbnb p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <Eye className="h-6 w-6 text-primary-500 mr-3" />
+              Privacy Settings
+            </h2>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Profile Visibility
+                </label>
+                <select
+                  value={formData.profile_visibility || 'public'}
+                  onChange={(e) => handleInputChange('profile_visibility', e.target.value)}
+                  className="input-airbnb w-full max-w-md"
+                >
+                  <option value="public">Public - Anyone can see your profile</option>
+                  <option value="limited">Limited - Only basic info visible</option>
+                  <option value="private">Private - Only you can see your profile</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Marketing Emails</h3>
+                  <p className="text-sm text-gray-600">Receive updates about new features and promotions</p>
+                </div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.marketing_emails !== undefined ? formData.marketing_emails : true}
+                    onChange={(e) => handleInputChange('marketing_emails', e.target.checked)}
+                    className="mr-2 text-primary-500 focus:ring-primary-500"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="flex justify-between items-center">
+            <button
+              onClick={handleLogout}
+              className="text-gray-600 hover:text-gray-800 font-medium px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center"
             >
-              <Store className="h-5 w-5 mr-2" />
-              Create Pin Pack
-            </a>
-          )}
-        </div>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </button>
+            
+            <button
+              onClick={handleSaveProfile}
+              disabled={isSaving || !formData.email?.trim()}
+              className="btn-primary px-8 py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            >
+              {isSaving ? (
+                <>
+                  <CloudLoader size="sm" className="mr-2" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-5 w-5 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
 
-        {/* Sign Out Button */}
-        <div className="text-center">
-          <button
-            onClick={handleLogout}
-            className="text-red-600 hover:text-red-800 font-medium px-6 py-2 border border-red-300 rounded-lg hover:bg-red-50 transition-colors inline-flex items-center"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </button>
+          {/* Account Management */}
+          <div className="card-airbnb p-6 border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Account Management</h2>
+            
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700">Delete Account</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Permanently remove your account and all data
+                  </p>
+                </div>
+                
+                <div>
+                  {!showDeleteConfirm ? (
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-xs text-gray-500 hover:text-red-600 underline transition-colors"
+                    >
+                      Delete account
+                    </button>
+                  ) : (
+                    <div className="text-right">
+                      <p className="text-xs text-gray-600 mb-2">Are you sure?</p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setShowDeleteConfirm(false)}
+                          className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleDeleteAccount}
+                          className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

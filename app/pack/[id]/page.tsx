@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation, Shield, Globe, User, MessageCircle, Package } from 'lucide-react'
+import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, ShoppingCart, CreditCard, X, CheckCircle, Copy, Smartphone, Navigation, Shield, User, MessageCircle, Package } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
@@ -12,6 +12,7 @@ interface PinPackWithPhoto extends PinPack {
   coverPhoto?: string | null
 }
 import { exportToGoogleMyMaps } from '@/lib/googleMaps'
+import { queryCreatorData } from '@/lib/utils'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 import GalleryModal from '@/components/GalleryModal'
@@ -93,9 +94,96 @@ export default function PackDetailPage() {
     return allPhotos
   }
 
-  // Get creator name based on creator_id (matching creator profile page logic)
+  // State for creator profile data
+  const [creatorProfile, setCreatorProfile] = useState<any>(null)
+
+  // Load creator profile data based on creator_id
+  useEffect(() => {
+    const loadCreatorProfile = async () => {
+      if (pack?.creator_id) {
+        try {
+          // Use shared utility function for consistent querying
+          const { data: creator, error, queryType } = await queryCreatorData(
+            pack.creator_id, 
+            'name, email, bio, verified, city, country, occupation'
+          )
+
+          if (creator && !error) {
+            setCreatorProfile(creator)
+          } else if (error) {
+            console.warn('Creator profile query failed:', error)
+            // Set fallback creator data if query fails
+            setCreatorProfile({
+              name: 'Local Creator',
+              email: queryType === 'UUID' ? '' : decodeURIComponent(pack.creator_id),
+              bio: 'Local guide passionate about sharing authentic experiences.',
+              verified: false,
+              city: pack.city,
+              country: pack.country,
+              occupation: 'Local Guide'
+            })
+          }
+        } catch (error) {
+          console.error('Error loading creator profile:', error)
+          // Set fallback creator data on any error
+          setCreatorProfile({
+            name: 'Local Creator',
+            email: '',
+            bio: 'Local guide passionate about sharing authentic experiences.',
+            verified: false,
+            city: pack.city,
+            country: pack.country,
+            occupation: 'Local Guide'
+          })
+        }
+      }
+    }
+
+    loadCreatorProfile()
+  }, [pack?.creator_id])
+
+  // Get creator name - use real profile data or fallback
   const getCreatorName = (creatorId?: string) => {
-    return creatorId === 'local-expert' ? 'Local Expert' : 'Maria Rodriguez'
+    if (creatorProfile?.name) {
+      return creatorProfile.name
+    }
+    
+    // Fallback to email-based name or hardcoded values for backwards compatibility
+    if (creatorId) {
+      if (creatorId === 'local-expert') return 'Local Expert'
+      if (creatorId.includes('@')) {
+        return creatorId.split('@')[0].split('.').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ')
+      }
+    }
+    
+    return 'Local Creator'
+  }
+
+  // Get creator bio
+  const getCreatorBio = () => {
+    if (creatorProfile?.bio) {
+      return creatorProfile.bio
+    }
+    
+    // Default bio for backwards compatibility
+    return `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for several years, I know all the hidden gems that locals love. I specialize in creating selected experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.`
+  }
+
+  // Get creator occupation
+  const getCreatorOccupation = () => {
+    if (creatorProfile?.occupation) {
+      return creatorProfile.occupation
+    }
+    return 'Local tourism guide'
+  }
+
+
+
+  // Check if creator is verified
+  const isCreatorVerified = () => {
+    return creatorProfile?.verified || false
   }
 
   // Check authentication status
@@ -201,7 +289,7 @@ export default function PackDetailPage() {
         .from('pin_packs')
         .select('*')
         .eq('id', packId)
-        .single()
+        .maybeSingle()
 
       console.log('Pack query result:', { packData, packError }) // Debug log
 
@@ -1175,10 +1263,12 @@ export default function PackDetailPage() {
                   >
                     {getCreatorName(pack.creator_id)?.charAt(0).toUpperCase() || 'L'}
                   </button>
-                  {/* Verification badge */}
-                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-coral-500 rounded-full flex items-center justify-center">
-                    <Shield className="h-3 w-3 text-white" />
-                  </div>
+                  {/* Verification badge - only show if verified */}
+                  {isCreatorVerified() && (
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-coral-500 rounded-full flex items-center justify-center">
+                      <Shield className="h-3 w-3 text-white" />
+                    </div>
+                  )}
 
                 </div>
 
@@ -1238,10 +1328,12 @@ export default function PackDetailPage() {
                 <div className="w-24 h-24 bg-gradient-to-br from-coral-500 to-primary-500 rounded-full flex items-center justify-center text-white text-3xl font-bold group-hover:shadow-lg transition-shadow duration-200">
                   {getCreatorName(pack.creator_id)?.charAt(0).toUpperCase() || 'L'}
                 </div>
-                {/* Verification badge */}
-                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-coral-500 rounded-full flex items-center justify-center border-4 border-white">
-                  <Shield className="h-4 w-4 text-white" />
-                </div>
+                {/* Verification badge - only show if verified */}
+                {isCreatorVerified() && (
+                  <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-coral-500 rounded-full flex items-center justify-center border-4 border-white">
+                    <Shield className="h-4 w-4 text-white" />
+                  </div>
+                )}
               </div>
 
               {/* Creator Info */}
@@ -1287,37 +1379,24 @@ export default function PackDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex items-center text-gray-600">
                   <MessageCircle className="h-5 w-5 mr-3" />
-                  <span>My work: Local tourism guide</span>
-                </div>
-                <div className="flex items-center text-gray-600">
-                  <Globe className="h-5 w-5 mr-3" />
-                  <span>Speaks English, Spanish, and local dialects</span>
+                  <span>My work: {getCreatorOccupation()}</span>
                 </div>
                 <div className="flex items-center text-gray-600">
                   <MapPin className="h-5 w-5 mr-3" />
-                  <span>Lives in {pack.city}, {pack.country}</span>
+                  <span>Lives in {creatorProfile?.city || pack.city}, {creatorProfile?.country || pack.country}</span>
                 </div>
-                <div className="flex items-center text-gray-600">
-                  <Shield className="h-5 w-5 mr-3" />
-                  <span className="underline">Identity verified</span>
-                </div>
+                {isCreatorVerified() && (
+                  <div className="flex items-center text-gray-600">
+                    <Shield className="h-5 w-5 mr-3" />
+                    <span className="underline">Identity verified</span>
+                  </div>
+                )}
               </div>
 
               {/* Creator bio */}
               <div className="prose prose-gray max-w-none">
-                <p className="text-gray-600 leading-relaxed">
-                  Hi! I'm passionate about sharing the authentic side of {pack.city}. Having lived here for over 8 years, 
-                  I know all the hidden gems that locals love. I specialize in creating selected experiences that show you 
-                  the real culture, amazing food spots, and unique places that most tourists never discover.
-                </p>
-                <p className="text-gray-600 leading-relaxed">
-                  I work as a local tourism guide and have helped hundreds of travelers experience the true essence of our city. 
-                  When I'm not creating pin packs, you can find me exploring new neighborhoods, trying local restaurants, 
-                  or chatting with longtime residents to discover even more hidden treasures.
-                </p>
-                <p className="text-gray-600 leading-relaxed">
-                  My packs are carefully crafted based on years of exploration and conversations with locals. 
-                  Each location is personally vetted and represents something special about our local culture.
+                <p className="text-gray-600 leading-relaxed whitespace-pre-line">
+                  {getCreatorBio()}
                 </p>
               </div>
 

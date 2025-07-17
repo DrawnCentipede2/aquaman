@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star, ChevronDown } from 'lucide-react'
+import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star, ChevronDown, Package } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { importSinglePlace, extractCoordinates, extractPlaceId } from '@/lib/googleMaps'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
@@ -79,6 +79,10 @@ export default function CreatePackPage() {
     show: boolean
     incompletePlaces: Array<{index: number, pin: Pin, missing: string[]}>
   }>({ show: false, incompletePlaces: [] })
+
+  // State for success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [createdPackTitle, setCreatedPackTitle] = useState('')
 
   // Country and city dropdown state
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
@@ -170,7 +174,7 @@ export default function CreatePackPage() {
 
   // Check for authenticated user or redirect to sign in
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       // Check if user is authenticated via new email system
       const userProfile = localStorage.getItem('pinpacks_user_profile')
       const savedUserId = localStorage.getItem('pinpacks_user_id')
@@ -178,7 +182,27 @@ export default function CreatePackPage() {
       if (userProfile) {
         // User is authenticated via email system
         const profile = JSON.parse(userProfile)
-        setUserId(profile.userId)
+        
+        // Ensure we have the correct UUID for this user
+        try {
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('id, email')
+            .eq('email', profile.email)
+            .single()
+          
+          if (userData && !error) {
+            setUserId(userData.id) // Use the actual UUID from database
+            console.log('Authenticated user found, using UUID:', userData.id)
+          } else {
+            console.warn('Could not find user in database:', error)
+            setUserId(profile.userId) // Fallback to stored userId
+          }
+        } catch (error) {
+          console.error('Error fetching user UUID:', error)
+          setUserId(profile.userId) // Fallback to stored userId
+        }
+        
         console.log('Authenticated user found:', profile.email)
       } else if (savedUserId) {
         // User has old system ID - still allow them to use it
@@ -871,7 +895,10 @@ The browser URL format provides more detailed information.`
         throw relationshipError
       }
 
-      // Clear form and localStorage first (before showing alert)
+      // Store the created pack title for the success modal
+      setCreatedPackTitle(packTitle.trim())
+      
+      // Clear form first
       setPackTitle('')
       setPackDescription('')
       setCity('')
@@ -892,14 +919,28 @@ The browser URL format provides more detailed information.`
       
       console.log('Pin pack created successfully')
       
-      // Use router.push instead of window.location.href for better navigation
-      router.push('/manage')
+      // Show success modal instead of immediately navigating
+      setShowSuccessModal(true)
       
     } catch (err) {
       console.error('Error creating pin pack:', err)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Handle success modal actions
+  const handleViewMyPacks = () => {
+    setShowSuccessModal(false)
+    router.push('/manage')
+  }
+
+  const handleCreateAnotherPack = () => {
+    setShowSuccessModal(false)
+    // Form is already cleared, just reset any modal states
+    setCreatedPackTitle('')
+    // Scroll to top for better UX
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
     // Handle country search/filter
@@ -1709,6 +1750,52 @@ The browser URL format provides more detailed information.`
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 shadow-2xl transform transition-all">
+            <div className="text-center">
+              {/* Success Icon */}
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              
+              {/* Success Message */}
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Pack Created Successfully!</h2>
+              <p className="text-gray-600 mb-6">
+                <span className="font-semibold text-coral-500">"{createdPackTitle}"</span> has been created and is now available for travelers to discover.
+              </p>
+              
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={handleViewMyPacks}
+                  className="w-full btn-primary py-3 text-lg"
+                >
+                  <Package className="h-5 w-5 mr-2 inline" />
+                  View My Packs
+                </button>
+                
+                <button
+                  onClick={handleCreateAnotherPack}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-lg transition-colors text-lg"
+                >
+                  <Plus className="h-5 w-5 mr-2 inline" />
+                  Create Another Pack
+                </button>
+              </div>
+              
+              {/* Small tip */}
+              <p className="text-xs text-gray-500 mt-4">
+                You can always manage your packs later from the navigation menu
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
