@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star, ChevronDown, Package } from 'lucide-react'
+import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star, ChevronDown, Package, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { importSinglePlace, extractCoordinates, extractPlaceId } from '@/lib/googleMaps'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
@@ -52,6 +52,7 @@ export default function CreatePackPage() {
   const [city, setCity] = useState('')
   const [country, setCountry] = useState('')
   const [price, setPrice] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   
   // State for pins in the pack
   const [pins, setPins] = useState<Pin[]>([])
@@ -103,6 +104,20 @@ export default function CreatePackPage() {
   // Dropdown container refs for auto-scrolling
   const countryDropdownRef = useRef<HTMLDivElement>(null)
   const cityDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Available categories for packs
+  const availableCategories = [
+    'Solo Travel',
+    'Romantic', 
+    'Family',
+    'Friends Group',
+    'Business Travel',
+    'Adventure',
+    'Relaxation',
+    'Cultural',
+    'Food & Drink',
+    'Nightlife'
+  ]
 
   // Load countries and cities data on component mount
   useEffect(() => {
@@ -270,6 +285,7 @@ export default function CreatePackPage() {
             setFilteredCities(cities)
           }
           if (details.city) setCity(details.city)
+          if (details.selectedCategories) setSelectedCategories(details.selectedCategories)
           
           // Load maps list reference if it exists
           if (details.mapsListReference) {
@@ -298,6 +314,7 @@ export default function CreatePackPage() {
           price,
           country,
           city,
+          selectedCategories,
           mapsListReference
         }
         
@@ -309,10 +326,10 @@ export default function CreatePackPage() {
     }
 
     // Only save if we have some meaningful data
-    if (packTitle || packDescription || price || country || city || mapsListReference) {
+    if (packTitle || packDescription || price || country || city || selectedCategories.length > 0 || mapsListReference) {
       savePackDetailsToStorage()
     }
-  }, [packTitle, packDescription, price, country, city, mapsListReference])
+  }, [packTitle, packDescription, price, country, city, selectedCategories, mapsListReference])
 
   // Function to validate single place URLs and provide helpful guidance
   const validateSinglePlaceUrl = (url: string): { isValid: boolean; errorMessage?: string; guidance?: string; warning?: string } => {
@@ -583,7 +600,7 @@ The browser URL format provides more detailed information.`
     console.log('Edit request:', { field, currentValue, requestedValue })
     
     // Show confirmation to user
-    alert(
+    console.log(
       `Edit Request Submitted! 📝\n\n` +
       `Field: ${field}\n` +
       `Current: ${currentValue}\n` +
@@ -793,7 +810,7 @@ The browser URL format provides more detailed information.`
       
       console.log('Incomplete places found:', incompletePlaces)
       
-      // Show completion error modal instead of alert
+      // Show completion error modal instead of console.log
       setShowCompletionError({
         show: true,
         incompletePlaces: incompletePlaces
@@ -812,6 +829,7 @@ The browser URL format provides more detailed information.`
         price: price === '' ? 0 : Number(price),
         creator_id: userId,
         pin_count: pins.length,
+        categories: selectedCategories, // Add categories as JSONB array
         maps_list_reference: mapsListReference ? JSON.stringify(mapsListReference) : null,
         created_at: new Date().toISOString()
       }
@@ -904,6 +922,7 @@ The browser URL format provides more detailed information.`
       setCity('')
       setCountry('')
       setPrice('')
+      setSelectedCategories([])
       setPins([])
       setMapsListReference(null)
       
@@ -1029,6 +1048,26 @@ The browser URL format provides more detailed information.`
     setCitySearchTerm('') // Clear search term
     setSelectedCityIndex(-1) // Reset selection
     setShowCityDropdown(false)
+  }
+
+  // Category selection functions
+  const handleCategoryToggle = (category: string) => {
+    setSelectedCategories(prev => {
+      if (prev.includes(category)) {
+        // Remove category if already selected
+        return prev.filter(c => c !== category)
+      } else {
+        // Add category if not already selected and under limit
+        if (prev.length < 3) {
+          return [...prev, category]
+        }
+        return prev // Don't add if already at limit
+      }
+    })
+  }
+
+  const removeCategory = (categoryToRemove: string) => {
+    setSelectedCategories(prev => prev.filter(c => c !== categoryToRemove))
   }
 
   // Handle country keyboard navigation
@@ -1385,6 +1424,64 @@ The browser URL format provides more detailed information.`
               />
             </div>
 
+            {/* Categories Selection */}
+            <div className="mt-6">
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                Categories (Select up to 3)
+              </label>
+              <div className="space-y-3">
+                {/* Selected Categories Display */}
+                {selectedCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {selectedCategories.map((category) => (
+                      <div
+                        key={category}
+                        className="inline-flex items-center bg-coral-100 text-coral-800 px-3 py-1 rounded-full text-sm font-medium"
+                      >
+                        <span>{category}</span>
+                        <button
+                          onClick={() => removeCategory(category)}
+                          className="ml-2 text-coral-600 hover:text-coral-800 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Category Selection Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                  {availableCategories.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => handleCategoryToggle(category)}
+                      disabled={!selectedCategories.includes(category) && selectedCategories.length >= 3}
+                      className={`px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${
+                        selectedCategories.includes(category)
+                          ? 'bg-coral-500 text-white border-coral-500'
+                          : selectedCategories.length >= 3
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-coral-300'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Helper text */}
+                <p className="text-xs text-gray-500">
+                  {selectedCategories.length === 0 
+                    ? 'Select categories to help travelers find your pack'
+                    : selectedCategories.length >= 3
+                    ? 'Maximum 3 categories selected'
+                    : `${3 - selectedCategories.length} more categories available`
+                  }
+                </p>
+              </div>
+            </div>
+
             {/* Add Place Section - Now integrated here */}
             <div className="mt-6">
               <div className="flex items-center justify-between mb-4">
@@ -1405,7 +1502,7 @@ The browser URL format provides more detailed information.`
                       type="url"
                       value={googleMapsListUrl}
                       onChange={(e) => setGoogleMapsListUrl(e.target.value)}
-                      placeholder="https://maps.google.com/maps/lists/... or https://maps.app.goo.gl/..."
+                      placeholder="https://maps.google.com/maps/lists/"
                       className="input-airbnb flex-1"
                     />
                     <button
@@ -1645,7 +1742,7 @@ The browser URL format provides more detailed information.`
       {/* Completion Error Modal */}
       {showCompletionError.show && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[9999] p-4"
+          className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[9999] p-4 pointer-events-none"
           onClick={(e) => {
             // Only close if clicking on the backdrop itself, not on child elements
             if (e.target === e.currentTarget) {
@@ -1654,10 +1751,10 @@ The browser URL format provides more detailed information.`
           }}
         >
           <div 
-            className="bg-white rounded-lg shadow-2xl max-w-md w-full border border-gray-300 relative z-[10000] pointer-events-auto"
+            className="bg-white rounded-lg shadow-2xl max-w-md w-full border border-gray-300 relative z-[10000] pointer-events-none"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6">
+            <div className="p-6 pointer-events-none">
               <div className="flex items-center mb-4">
                 <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
                   <span className="text-gray-600 font-bold">!</span>
@@ -1672,11 +1769,14 @@ The browser URL format provides more detailed information.`
                 The following places are incomplete:
               </p>
               
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 max-h-48 overflow-y-auto">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 max-h-48 overflow-y-auto pointer-events-auto">
                 {showCompletionError.incompletePlaces.map((item, index) => (
                   <div key={index} className="flex items-start mb-3 last:mb-0">
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">
+                    <div className="flex-1 cursor-pointer" onClick={() => {
+                      setShowCompletionError({ show: false, incompletePlaces: [] })
+                      router.push(`/create/place/${item.index}`)
+                    }}>
+                      <p className="font-medium text-gray-900 hover:text-coral-600 transition-colors">
                         {item.pin.title || `Place ${item.index + 1}`}
                       </p>
                       <p className="text-sm text-gray-600">
@@ -1696,25 +1796,12 @@ The browser URL format provides more detailed information.`
                 ))}
               </div>
               
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pointer-events-auto">
                 <button
                   onClick={() => setShowCompletionError({ show: false, incompletePlaces: [] })}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
                 >
                   Close
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCompletionError({ show: false, incompletePlaces: [] })
-                    // Scroll to places section
-                    const placesSection = document.querySelector('[data-places-section]')
-                    if (placesSection) {
-                      placesSection.scrollIntoView({ behavior: 'smooth' })
-                    }
-                  }}
-                  className="btn-primary px-4 py-2"
-                >
-                  Complete Places
                 </button>
               </div>
             </div>

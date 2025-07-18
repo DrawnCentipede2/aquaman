@@ -365,10 +365,10 @@ export default function PinventoryPage() {
       // Fallback: copy link to clipboard
       try {
         await navigator.clipboard.writeText(`${shareText} ${shareUrl}`)
-        alert('Pack details copied to clipboard!')
+        console.log('Pack details copied to clipboard!')
       } catch (error) {
         console.error('Failed to copy:', error)
-        alert('Unable to copy. Please share manually: ' + shareUrl)
+        console.log('Unable to copy. Please share manually: ' + shareUrl)
       }
     }
   }
@@ -448,7 +448,7 @@ export default function PinventoryPage() {
       
     } catch (err) {
       console.error('Error loading pack pins:', err)
-      alert('Failed to load pack details. Please try again.')
+      console.log('Failed to load pack details. Please try again.')
     }
   }
 
@@ -545,7 +545,7 @@ export default function PinventoryPage() {
       // Get user email
       const userEmail = userProfile?.email
       if (!userEmail) {
-        alert('No user email found. Please sign in first.')
+        console.log('No user email found. Please sign in first.')
         return
       }
 
@@ -604,21 +604,21 @@ export default function PinventoryPage() {
           })
 
           if (completeOrderResponse.ok) {
-            alert(`Test order created successfully! Order ID: ${order.id}`)
+            console.log(`Test order created successfully! Order ID: ${order.id}`)
             // Reload purchased packs
             loadPurchasedPacks()
           } else {
-            alert('Failed to complete test order')
+            console.log('Failed to complete test order')
           }
         } else {
-          alert('Failed to create test order')
+          console.log('Failed to create test order')
         }
       } else {
-        alert('No packs found in database')
+        console.log('No packs found in database')
       }
     } catch (error) {
       console.error('Error creating test order:', error)
-      alert('Error creating test order: ' + error)
+      console.log('Error creating test order: ' + error)
     }
   }
 
@@ -627,7 +627,7 @@ export default function PinventoryPage() {
     try {
       const userEmail = userProfile?.email
       if (!userEmail) {
-        alert('No user email found. Please sign in first.')
+        console.log('No user email found. Please sign in first.')
         return
       }
 
@@ -642,7 +642,7 @@ export default function PinventoryPage() {
       console.log('🔍 Orders for user:', { orders, ordersError })
 
       if (ordersError) {
-        alert('Error checking orders: ' + ordersError.message)
+        console.log('Error checking orders: ' + ordersError.message)
         return
       }
 
@@ -657,7 +657,7 @@ export default function PinventoryPage() {
         console.log('🔍 Order items:', { orderItems, itemsError })
 
         if (itemsError) {
-          alert('Error checking order items: ' + itemsError.message)
+          console.log('Error checking order items: ' + itemsError.message)
           return
         }
 
@@ -671,16 +671,16 @@ export default function PinventoryPage() {
             .in('id', packIds)
 
           console.log('🔍 Packs found:', { packs, packsError })
-          alert(`Found ${orders.length} orders, ${orderItems?.length || 0} items, ${packs?.length || 0} packs`)
+          console.log(`Found ${orders.length} orders, ${orderItems?.length || 0} items, ${packs?.length || 0} packs`)
         } else {
-          alert(`Found ${orders.length} orders but no order items`)
+          console.log(`Found ${orders.length} orders but no order items`)
         }
       } else {
-        alert('No orders found for this user')
+        console.log('No orders found for this user')
       }
     } catch (error) {
       console.error('Error checking database:', error)
-      alert('Error checking database: ' + error)
+      console.log('Error checking database: ' + error)
     }
   }
 
@@ -689,7 +689,7 @@ export default function PinventoryPage() {
     try {
       const userEmail = userProfile?.email
       if (!userEmail) {
-        alert('No user email found. Please sign in first.')
+        console.log('No user email found. Please sign in first.')
         return
       }
 
@@ -705,7 +705,7 @@ export default function PinventoryPage() {
       console.log('🔗 Orders to link:', { orders, ordersError })
 
       if (ordersError) {
-        alert('Error finding orders to link: ' + ordersError.message)
+        console.log('Error finding orders to link: ' + ordersError.message)
         return
       }
 
@@ -717,20 +717,20 @@ export default function PinventoryPage() {
           .is('user_email', null)
 
         if (updateError) {
-          alert('Error updating orders: ' + updateError.message)
+          console.log('Error updating orders: ' + updateError.message)
           return
         }
 
-        alert(`Successfully linked ${orders.length} orders to your PinCloud email!`)
+        console.log(`Successfully linked ${orders.length} orders to your PinCloud email!`)
         
         // Reload purchased packs
         loadPurchasedPacks()
       } else {
-        alert('No orders found that need linking')
+        console.log('No orders found that need linking')
       }
     } catch (error) {
       console.error('Error linking orders:', error)
-      alert('Error linking orders: ' + error)
+      console.log('Error linking orders: ' + error)
     }
   }
 
@@ -1067,7 +1067,7 @@ export default function PinventoryPage() {
                           openMyMapsImportPage()
                           setShowDeliveryModal(false)
                         } catch (error) {
-                          alert(error instanceof Error ? error.message : 'Failed to export')
+                          console.log(error instanceof Error ? error.message : 'Failed to export')
                         }
                       }}
                       className="flex-2 btn-primary py-3 flex items-center justify-center"

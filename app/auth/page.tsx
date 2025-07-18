@@ -42,7 +42,7 @@ export default function AuthPage() {
   // Simple email-based sign in for existing users
   const handleSignIn = async () => {
     if (!email.trim()) {
-      alert('Please enter your email address')
+      console.log('Please enter your email address')
       return
     }
 
@@ -114,13 +114,13 @@ export default function AuthPage() {
           setEmail('')
         }
       } else {
-        alert('No account found with that email. Please double-check the address and try again.')
+        console.log('No account found with that email. Please double-check the address and try again.')
         setEmail('')
       }
       return
       
     } catch (err) {
-      alert('Failed to sign in. Please try again.')
+      console.log('Failed to sign in. Please try again.')
       console.error('Sign in error:', err)
     } finally {
       setIsLoading(false)

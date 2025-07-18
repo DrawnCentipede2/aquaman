@@ -139,7 +139,7 @@ export default function EditPackPage() {
 
       if (error) throw error
 
-      alert('Pack updated successfully! ')
+      console.log('Pack updated successfully! ')
       
     } catch (error) {
       console.error('Error saving changes:', error)
@@ -164,11 +164,11 @@ export default function EditPackPage() {
 
       // Update local state
       setPins(pins.filter(pin => pin.id !== pinId))
-      alert('Pin removed successfully!')
+      console.log('Pin removed successfully!')
       
     } catch (error) {
       console.error('Error deleting pin:', error)
-      alert('Failed to remove pin. Please try again.')
+      console.log('Failed to remove pin. Please try again.')
     }
   }
 

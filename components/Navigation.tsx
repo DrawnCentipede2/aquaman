@@ -698,7 +698,7 @@ export default function Navigation() {
                       {/* Notifications */}
                       <button
                         onClick={() => {
-                          alert('Notification preferences:\n\n• Email notifications: ON\n• Push notifications: OFF\n• Marketing emails: ON\n\nFeature coming soon!')
+                          console.log('Notification preferences:\n\n• Email notifications: ON\n• Push notifications: OFF\n• Marketing emails: ON\n\nFeature coming soon!')
                         }}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >

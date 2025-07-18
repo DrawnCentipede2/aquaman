@@ -9,10 +9,11 @@ import { getPackDisplayImage, queryCreatorData } from '@/lib/utils'
 
 export default function CreatorProfilePage() {
   const params = useParams()
-  const creatorId = decodeURIComponent(params.id as string)
+  const creatorId = params.id as string // Don't decode here, let the utility function handle it
   
   const [creatorPacks, setCreatorPacks] = useState<PinPack[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
   const [packImages, setPackImages] = useState<{[key: string]: string}>({})
 
@@ -30,6 +31,7 @@ export default function CreatorProfilePage() {
   useEffect(() => {
     const loadCreatorData = async () => {
       try {
+        setError(null) // Clear any previous errors
         // Use shared utility function for consistent querying
         const { data: creatorData, error, queryType } = await queryCreatorData(creatorId)
 
@@ -146,6 +148,7 @@ My packs are carefully crafted based on years of exploration and conversations w
   const loadCreatorPacks = async () => {
     try {
       setLoading(true)
+      setError(null)
       
       // Filter packs by the specific creator
       let packsData = []
@@ -180,24 +183,38 @@ My packs are carefully crafted based on years of exploration and conversations w
       }
 
       console.log(`Found ${packsData.length} packs for creator ${decodedCreatorId}`)
-      console.log('Packs found:', packsData.map(p => ({ id: p.id, title: p.title, creator_id: p.creator_id })))
       
       if (error) throw error
       
       setCreatorPacks(packsData)
       
-      // Load pack images
-      const images: {[key: string]: string} = {}
-      for (const pack of packsData || []) {
-        const imageUrl = await getPackDisplayImage(pack.id)
-        if (imageUrl) {
-          images[pack.id] = imageUrl
-        }
+      // Load pack images in parallel for better performance
+      if (packsData.length > 0) {
+        const imagePromises = packsData.map(async (pack) => {
+          try {
+            const imageUrl = await getPackDisplayImage(pack.id)
+            return { id: pack.id, imageUrl }
+          } catch (error) {
+            console.warn(`Failed to load image for pack ${pack.id}:`, error)
+            return { id: pack.id, imageUrl: null }
+          }
+        })
+        
+        const imageResults = await Promise.allSettled(imagePromises)
+        const images: {[key: string]: string} = {}
+        
+        imageResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value.imageUrl) {
+            images[result.value.id] = result.value.imageUrl
+          }
+        })
+        
+        setPackImages(images)
       }
-      setPackImages(images)
       
     } catch (error) {
       console.error('Error loading creator packs:', error)
+      setError('Failed to load creator packs')
     } finally {
       setLoading(false)
     }
@@ -253,6 +270,31 @@ My packs are carefully crafted based on years of exploration and conversations w
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                <User className="h-6 w-6 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-red-900">Error Loading Creator</h3>
+                <p className="text-red-700">{error}</p>
+                <button 
+                  onClick={() => {
+                    setError(null)
+                    setLoading(true)
+                    loadCreatorPacks()
+                  }}
+                  className="text-red-600 hover:text-red-800 font-medium mt-2"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Creator Profile Header */}
         <div className="bg-white rounded-2xl p-8 shadow-sm mb-8">
           <div className="flex flex-col md:flex-row md:items-start space-y-6 md:space-y-0 md:space-x-8">

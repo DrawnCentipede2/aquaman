@@ -2,7 +2,7 @@
 
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { useState } from 'react'
-import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import { XCircle, Check, Loader2 } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 
 // PayPal checkout component interface
@@ -144,7 +144,7 @@ export default function PayPalCheckout(props: PayPalCheckoutProps) {
     return (
       <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
         <div className="flex items-center mb-2">
-          <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                          <XCircle className="h-5 w-5 text-red-500 mr-2" />
           <h3 className="font-medium text-red-800">PayPal Not Configured</h3>
         </div>
         <p className="text-red-700 text-sm">

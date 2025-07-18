@@ -22,6 +22,7 @@ interface PinPackWithAnalytics {
   average_rating: number
   rating_count: number
   recent_downloads: number // Downloads in last 7 days
+  categories?: string[] // Array of category strings (up to 3)
 }
 
 export default function ManagePage() {
@@ -34,7 +35,7 @@ export default function ManagePage() {
 
   // Check for authenticated user and use email-based system
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       // Check if user is authenticated via new email system
       const userProfile = localStorage.getItem('pinpacks_user_profile')
       const savedUserId = localStorage.getItem('pinpacks_user_id')
@@ -42,7 +43,27 @@ export default function ManagePage() {
       if (userProfile) {
         // User is authenticated via email system
         const profile = JSON.parse(userProfile)
-        setUserId(profile.userId)
+        
+        // Ensure we have the correct UUID for this user (same logic as create page)
+        try {
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('id, email')
+            .eq('email', profile.email)
+            .single()
+          
+          if (userData && !error) {
+            setUserId(userData.id) // Use the actual UUID from database
+            console.log('Authenticated user found, using UUID:', userData.id)
+          } else {
+            console.warn('Could not find user in database:', error)
+            setUserId(profile.userId) // Fallback to stored userId
+          }
+        } catch (error) {
+          console.error('Error fetching user UUID:', error)
+          setUserId(profile.userId) // Fallback to stored userId
+        }
+        
         console.log('Authenticated user found:', profile.email)
       } else if (savedUserId) {
         // User has old system ID - still allow them to use it
@@ -50,7 +71,7 @@ export default function ManagePage() {
         console.log('Legacy user found:', savedUserId)
       } else {
         // No authentication found - redirect to sign in
-        alert('Please sign in first to view your pin packs')
+        console.log('Please sign in first to view your pin packs')
         window.location.href = '/auth'
         return
       }
@@ -233,11 +254,11 @@ export default function ManagePage() {
 
       // Update local state
       setUserPacks(userPacks.filter(pack => pack.id !== packId))
-      alert('Pin pack deleted successfully! 🗑️')
+      console.log('Pin pack deleted successfully! 🗑️')
       
     } catch (error) {
       console.error('Error deleting pin pack:', error)
-      alert('Failed to delete pin pack. Please try again.')
+      console.log('Failed to delete pin pack. Please try again.')
     }
   }
 
@@ -262,10 +283,10 @@ export default function ManagePage() {
         pack.id === packId ? { ...pack, ...updates } : pack
       ))
       
-      alert('Pin pack updated successfully! ')
+      console.log('Pin pack updated successfully! ')
     } catch (error) {
       console.error('Error updating pin pack:', error)
-      alert('Failed to update pin pack. Please try again.')
+      console.log('Failed to update pin pack. Please try again.')
     }
   }
 
@@ -475,6 +496,20 @@ export default function ManagePage() {
                   <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
                     {pack.description || 'No description provided'}
                   </p>
+
+                  {/* Categories Display */}
+                  {pack.categories && pack.categories.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {pack.categories.map((category, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center bg-coral-100 text-coral-800 px-2 py-1 rounded-full text-xs font-medium"
+                        >
+                          {category}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Stats Row */}
                   <div className="flex items-center justify-between mb-4 text-sm text-gray-500">

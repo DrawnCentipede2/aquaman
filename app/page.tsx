@@ -174,12 +174,15 @@ export default function LandingPage() {
             {/* Row 1: Nightlife (full height, 2 rows) + Food (top half) + Family (bottom half) */}
             
             {/* Nightlife - Full height spanning 2 rows (6 cols) */}
-            <div className="col-span-2 md:col-span-3 row-span-2 group cursor-pointer">
+            <div 
+              className="col-span-2 md:col-span-3 row-span-2 group cursor-pointer"
+              onClick={() => window.location.href = '/browse?category=Nightlife'}
+            >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Nightlife.jpg"
                   alt="Nightlife"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
@@ -190,12 +193,15 @@ export default function LandingPage() {
             </div>
 
             {/* Food - Top half (6 cols, 1 row) */}
-            <div className="col-span-6 md:col-span-3 row-span-1 group cursor-pointer">
+            <div 
+              className="col-span-6 md:col-span-3 row-span-1 group cursor-pointer"
+              onClick={() => window.location.href = '/browse?category=Food & Drink'}
+            >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Food.jpg"
                   alt="Food"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
@@ -206,12 +212,15 @@ export default function LandingPage() {
             </div>
 
             {/* Family - Bottom half (6 cols, 1 row) */}
-            <div className="col-span-6 md:col-span-6 row-span-1 group cursor-pointer">
+            <div 
+              className="col-span-6 md:col-span-6 row-span-1 group cursor-pointer"
+              onClick={() => window.location.href = '/browse?category=Family'}
+            >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Family.jpg"
                   alt="Family"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
@@ -224,12 +233,15 @@ export default function LandingPage() {
             {/* Row 2: Adventure (full height, 2 rows) + Romantic (top half) + Hidden Gems (bottom half) */}
             
             {/* Adventure - Full height spanning 2 rows (6 cols) */}
-            <div className="col-span-6 md:col-span-6 row-span-2 group cursor-pointer">
+            <div 
+              className="col-span-6 md:col-span-6 row-span-2 group cursor-pointer"
+              onClick={() => window.location.href = '/browse?category=Adventure'}
+            >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Adventure.jpg"
                   alt="Adventure"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
@@ -240,12 +252,15 @@ export default function LandingPage() {
             </div>
 
             {/* Romantic - Top half (6 cols, 1 row) */}
-            <div className="col-span-6 md:col-span-3 row-span-2 group cursor-pointer">
+            <div 
+              className="col-span-6 md:col-span-3 row-span-2 group cursor-pointer"
+              onClick={() => window.location.href = '/browse?category=Romantic'}
+            >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Romantic.jpg"
                   alt="Romantic"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
@@ -256,12 +271,15 @@ export default function LandingPage() {
             </div>
 
             {/* Hidden Gems - Bottom half (6 cols, 1 row) */}
-            <div className="col-span-2 md:col-span-3 row-span-2 group cursor-pointer">
-              <div className="relative h-1/2 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div 
+              className="col-span-1 md:col-span-3 row-span-1 group cursor-pointer"
+              onClick={() => window.location.href = '/browse?category=Cultural'}
+            >
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
                 <img 
                   src="/Hidden_Gems.jpg"
                   alt="Hidden Gems"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>

@@ -694,7 +694,7 @@ export default function PackDetailPage() {
   const handlePayPalError = (error: any) => {
     console.error('PayPal payment error:', error)
     setShowPayPalModal(false)
-    alert('Payment failed. Please try again.')
+    console.log('Payment failed. Please try again.')
   }
 
   // Payment success modal handlers
@@ -727,7 +727,7 @@ export default function PackDetailPage() {
         setIsPurchased(true)
         
         // Show success message
-        alert(`🎉 Free pack "${pack.title}" added to your Pinventory! You can now access it anytime from your collection.`)
+        console.log(`🎉 Free pack "${pack.title}" added to your Pinventory! You can now access it anytime from your collection.`)
       }
 
       // Create a search query with all the places in the pack
@@ -767,7 +767,7 @@ export default function PackDetailPage() {
     } else {
       // Fallback: copy link to clipboard
       navigator.clipboard.writeText(shareUrl)
-      alert('Link copied to clipboard!')
+      console.log('Link copied to clipboard!')
     }
   }
 
@@ -889,7 +889,29 @@ export default function PackDetailPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4 text-sm text-gray-500">
-          </div>
+              <div className="flex items-center">
+                <MapPin className="h-4 w-4 mr-1" />
+                <span>{pack.city}, {pack.country}</span>
+              </div>
+              <div className="flex items-center">
+                <Package className="h-4 w-4 mr-1" />
+                <span>{pack.pin_count} places</span>
+              </div>
+            </div>
+            
+            {/* Categories Display */}
+            {pack.categories && pack.categories.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {pack.categories.map((category, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center bg-coral-100 text-coral-800 px-3 py-1 rounded-full text-sm font-medium"
+                  >
+                    {category}
+                  </span>
+                ))}
+              </div>
+            )}
         </div>
           
           {/* Action buttons for wishlist and sharing in top right */}
@@ -1706,7 +1728,7 @@ export default function PackDetailPage() {
                           openMyMapsImportPage()
                           setShowDeliveryModal(false)
                         } catch (error) {
-                          alert(error instanceof Error ? error.message : 'Failed to export')
+                          console.log(error instanceof Error ? error.message : 'Failed to export')
                         }
                       }}
                       className="flex-2 btn-primary py-3 flex items-center justify-center"
@@ -1845,7 +1867,7 @@ export default function PackDetailPage() {
                           await generateMyMapsKML()
                           openMyMapsImportPage()
                         } catch (error) {
-                          alert(error instanceof Error ? error.message : 'Failed to export')
+                          console.log(error instanceof Error ? error.message : 'Failed to export')
                         }
                       }}
                       className="p-6 border-2 border-coral-200 bg-coral-50 hover:bg-coral-100 rounded-2xl text-left transition-colors"

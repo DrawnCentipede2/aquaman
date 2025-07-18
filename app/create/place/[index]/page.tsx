@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { MapPin, Save, ArrowLeft, Upload, Globe, Star, Clock, Phone, ExternalLink, Trash2, ChevronUp, ChevronDown, Tag, Building, HelpCircle, X, Image as ImageIcon, Plus } from 'lucide-react'
+import { log } from 'console'
 
 // Interface for a single pin (same as in main create page)
 interface Pin {
@@ -254,7 +255,7 @@ export default function IndividualPlacePage() {
 
     // Check if user already has a photo
     if (pin?.photos && pin.photos.length >= 1) {
-      alert('You can only upload 1 photo per place. Please remove the existing photo first.')
+      console.log('You can only upload 1 photo per place. Please remove the existing photo first.')
       return
     }
 
@@ -265,13 +266,13 @@ export default function IndividualPlacePage() {
       
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert(`File "${file.name}" is not an image. Please select only image files.`)
+        console.log(`File "${file.name}" is not an image. Please select only image files.`)
         return
       }
       
       // Validate file size (max 10MB before compression)
       if (file.size > 10 * 1024 * 1024) {
-        alert(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
+        console.log(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
         return
       }
       
@@ -281,11 +282,11 @@ export default function IndividualPlacePage() {
       // Replace any existing photos with the new one
       updatePin({ photos: [compressedBase64] })
       
-      alert(` Photo uploaded and compressed successfully!`)
+      console.log(` Photo uploaded and compressed successfully!`)
       
     } catch (error) {
       console.error('Error uploading photo:', error)
-      alert('Error uploading photo. Please try again.')
+      console.log('Error uploading photo. Please try again.')
     } finally {
       setIsUploadingPhoto(false)
       // Reset file input
@@ -610,21 +611,6 @@ export default function IndividualPlacePage() {
                       title="Remove photo"
                     >
                       <X className="h-4 w-4" />
-                    </button>
-                    
-                    {/* Replace photo button */}
-                    <button
-                      onClick={triggerPhotoUpload}
-                      disabled={isUploadingPhoto}
-                      className="absolute bottom-2 left-2 bg-coral-500 text-white text-sm px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-coral-600 flex items-center"
-                      title="Replace photo"
-                    >
-                      {isUploadingPhoto ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-1"></div>
-                      ) : (
-                        <Upload className="h-4 w-4 mr-1" />
-                      )}
-                      Replace
                     </button>
                   </div>
                 </div>

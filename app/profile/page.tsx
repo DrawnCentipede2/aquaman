@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User, Mail, MapPin, Phone, Globe, Shield, Save, Trash2, Camera, Verified, AlertTriangle, Edit3, Eye, EyeOff, Building, LogOut } from 'lucide-react'
+import { User, Mail, MapPin, Phone, Globe, Shield, Save, Trash2, Camera, Verified, console.logTriangle, Edit3, Eye, EyeOff, Building, LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 import CloudLoader from '@/components/CloudLoader'
@@ -143,7 +143,7 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async () => {
     if (!formData.email?.trim()) {
-      alert('Please enter a valid email address')
+      console.log('Please enter a valid email address')
       return
     }
 
@@ -181,7 +181,7 @@ export default function ProfilePage() {
 
       if (dbError) {
         console.error('Database save error:', dbError)
-        alert(`Profile save failed: ${dbError.message || 'Unknown database error'}\n\nPlease try again or contact support if the issue persists.`)
+        console.log(`Profile save failed: ${dbError.message || 'Unknown database error'}\n\nPlease try again or contact support if the issue persists.`)
         return
       }
 
@@ -213,19 +213,19 @@ export default function ProfilePage() {
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
-      alert('Profile updated successfully!')
+      console.log('Profile updated successfully!')
       console.log('Profile save completed successfully')
       
     } catch (err) {
       console.error('Profile update error:', err)
-      alert(`Failed to update profile: ${err instanceof Error ? err.message : 'Unknown error'}\n\nPlease try again or contact support if the issue persists.`)
+      console.log(`Failed to update profile: ${err instanceof Error ? err.message : 'Unknown error'}\n\nPlease try again or contact support if the issue persists.`)
     } finally {
       setIsSaving(false)
     }
   }
 
   const requestVerification = () => {
-    alert(`Verification Request Submitted!
+    console.log(`Verification Request Submitted!
 
 Your request for local creator verification has been submitted. Our team will review your profile and contact you within 2-3 business days.
 
@@ -270,12 +270,12 @@ Current verification methods available:
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
-      alert('Your account has been deleted. You will be redirected to the homepage.')
+      console.log('Your account has been deleted. You will be redirected to the homepage.')
       window.location.href = '/'
       
     } catch (error) {
       console.error('Error deleting account:', error)
-      alert('Failed to delete account. Please try again or contact support.')
+      console.log('Failed to delete account. Please try again or contact support.')
     }
   }
 

@@ -72,7 +72,7 @@ export default function BrowsePage() {
   const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
   
   // Get unique values for filter options
-  const categories = ['Solo Travel', 'Couple', 'Family', 'Friends Group', 'Business Travel', 'Adventure', 'Relaxation', 'Cultural', 'Food & Drink', 'Nightlife']
+  const categories = ['Solo Travel', 'Romantic', 'Family', 'Friends Group', 'Business Travel', 'Adventure', 'Relaxation', 'Cultural', 'Food & Drink', 'Nightlife']
 
   // Check authentication status
   const checkAuthentication = () => {
@@ -160,13 +160,22 @@ export default function BrowsePage() {
   useEffect(() => {
     checkAuthentication()
     loadPinPacks()
-    // Only handle search param on mount
+    // Handle URL parameters on mount
     const urlParams = new URLSearchParams(window.location.search)
     const searchParam = urlParams.get('search')
+    const categoryParam = urlParams.get('category')
+    
     if (searchParam) {
       setSearchTerm(searchParam)
       setActiveSearchTerm(searchParam) // Set the active search term for filtering
       setHasSearched(true)
+    }
+    
+    if (categoryParam) {
+      // Decode the URL parameter to handle special characters like & and spaces
+      const decodedCategory = decodeURIComponent(categoryParam)
+      console.log('Setting category filter from URL:', decodedCategory)
+      setCategoryFilter(decodedCategory)
     }
   }, [])
 
@@ -726,25 +735,38 @@ export default function BrowsePage() {
       filtered = filtered.filter(pack => pack.pin_count > 15)
     }
 
-    // Category filter (for demo purposes, we'll use a random assignment based on pack ID)
+    // Category filter using actual categories from database
     if (categoryFilter !== 'all') {
-      // In a real app, this would be stored in the database
-      // For demo, we'll filter based on a pattern
+      console.log('Filtering by category:', categoryFilter)
+      console.log('Total packs before filtering:', filtered.length)
+      
       filtered = filtered.filter(pack => {
-        const packCategories = {
-          'Solo Travel': pack.id.includes('1') || pack.id.includes('4'),
-          'Couple': pack.id.includes('2') || pack.id.includes('5'),
-          'Family': pack.id.includes('3') || pack.id.includes('6'),
-          'Friends Group': pack.id.includes('7') || pack.id.includes('0'),
-          'Business Travel': pack.id.includes('8'),
-          'Adventure': pack.title.toLowerCase().includes('adventure') || pack.title.toLowerCase().includes('outdoor'),
-          'Relaxation': pack.title.toLowerCase().includes('relax') || pack.title.toLowerCase().includes('spa'),
-          'Cultural': pack.title.toLowerCase().includes('culture') || pack.title.toLowerCase().includes('museum'),
-          'Food & Drink': pack.title.toLowerCase().includes('food') || pack.title.toLowerCase().includes('restaurant'),
-          'Nightlife': pack.title.toLowerCase().includes('night') || pack.title.toLowerCase().includes('bar')
+        // Check if pack has categories and if the selected category is in the array
+        if (pack.categories && Array.isArray(pack.categories)) {
+          const hasCategory = pack.categories.includes(categoryFilter)
+          console.log(`Pack "${pack.title}" has categories:`, pack.categories, 'includes', categoryFilter, ':', hasCategory)
+          return hasCategory
         }
-        return packCategories[categoryFilter as keyof typeof packCategories]
+        // Fallback to title-based filtering for packs without categories
+        const titleLower = pack.title.toLowerCase()
+        const packCategories = {
+          'Solo Travel': titleLower.includes('solo') || titleLower.includes('alone'),
+          'Romantic': titleLower.includes('Romantic') || titleLower.includes('romantic') || titleLower.includes('date'),
+          'Family': titleLower.includes('family') || titleLower.includes('kids') || titleLower.includes('children'),
+          'Friends Group': titleLower.includes('friend') || titleLower.includes('group') || titleLower.includes('party'),
+          'Business Travel': titleLower.includes('business') || titleLower.includes('work') || titleLower.includes('office'),
+          'Adventure': titleLower.includes('adventure') || titleLower.includes('outdoor'),
+          'Relaxation': titleLower.includes('relax') || titleLower.includes('spa') || titleLower.includes('wellness'),
+          'Cultural': titleLower.includes('culture') || titleLower.includes('museum') || titleLower.includes('art'),
+          'Food & Drink': titleLower.includes('food') || titleLower.includes('restaurant') || titleLower.includes('cafe'),
+          'Nightlife': titleLower.includes('night') || titleLower.includes('bar') || titleLower.includes('club')
+        }
+        const matchesTitle = packCategories[categoryFilter as keyof typeof packCategories]
+        console.log(`Pack "${pack.title}" title-based match for ${categoryFilter}:`, matchesTitle)
+        return matchesTitle
       })
+      
+      console.log('Packs after category filtering:', filtered.length)
     }
 
     // Apply sorting
@@ -901,9 +923,10 @@ export default function BrowsePage() {
     setStarRatingFilter('all')
     setPinCountFilter('all')
     setCategoryFilter('all')
-    // Update URL to remove search parameter
+    // Update URL to remove search and category parameters
     const url = new URL(window.location.href)
     url.searchParams.delete('search')
+    url.searchParams.delete('category')
     window.history.replaceState({}, '', url.toString())
   }
 
@@ -1005,7 +1028,7 @@ export default function BrowsePage() {
   const handlePayPalError = (error: any) => {
     console.error('PayPal payment error:', error)
     setShowPayPalModal(false)
-    alert('Payment failed. Please try again.')
+    console.log('Payment failed. Please try again.')
   }
 
   // Payment success modal handlers
@@ -1269,7 +1292,13 @@ export default function BrowsePage() {
                       type="radio"
                       name="category"
                       checked={categoryFilter === 'all'}
-                      onChange={() => setCategoryFilter('all')}
+                      onChange={() => {
+                        setCategoryFilter('all')
+                        // Update URL to remove category parameter
+                        const url = new URL(window.location.href)
+                        url.searchParams.delete('category')
+                        window.history.replaceState({}, '', url.toString())
+                      }}
                       className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
                     />
                     <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">All categories</span>
@@ -1280,7 +1309,17 @@ export default function BrowsePage() {
                         type="radio"
                         name="category"
                         checked={categoryFilter === category}
-                        onChange={() => setCategoryFilter(category)}
+                        onChange={() => {
+                          setCategoryFilter(category)
+                          // Update URL with category parameter
+                          const url = new URL(window.location.href)
+                          if (category === 'all') {
+                            url.searchParams.delete('category')
+                          } else {
+                            url.searchParams.set('category', category)
+                          }
+                          window.history.replaceState({}, '', url.toString())
+                        }}
                         className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
                       />
                       <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">{category}</span>
@@ -1527,7 +1566,7 @@ export default function BrowsePage() {
                       className={`h-4 w-4 transition-colors ${
                         isAuthenticated && wishlistItems.includes(pack.id) 
                           ? 'text-red-500 fill-current' // CHANGED from text-coral-500
-                          : 'text-gray-700 group-hover:text-red-500'
+                          : 'text-red-700 group-hover:text-red-500'
                       }`} 
                     />
                   </button>

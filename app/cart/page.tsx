@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Check, AlertCircle, ShoppingBag } from 'lucide-react'
+import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Check, XCircle, ShoppingBag } from 'lucide-react'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import { getPackDisplayImage } from '@/lib/utils'
 
@@ -305,7 +305,7 @@ export default function CartPage() {
                   }`}>
                     <div className="flex items-center">
                       {paymentStatus === 'success' && <Check className="h-5 w-5 text-green-500 mr-2" />}
-                      {paymentStatus === 'error' && <AlertCircle className="h-5 w-5 text-red-500 mr-2" />}
+                      {paymentStatus === 'error' && <XCircle className="h-5 w-5 text-red-500 mr-2" />}
                       <p className={`text-sm ${
                         paymentStatus === 'success' 
                           ? 'text-green-800' 

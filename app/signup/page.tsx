@@ -23,7 +23,7 @@ export default function SignUpPage() {
   // Handle form submission
   const handleSignUp = async () => {
     if (!formData.name.trim() || !formData.email.trim()) {
-      alert('Please fill in all fields')
+      console.log('Please fill in all fields')
       return
     }
 
@@ -101,7 +101,7 @@ export default function SignUpPage() {
       window.location.href = '/browse'
       
     } catch (err) {
-      alert('Failed to create profile. Please try again.')
+      console.log('Failed to create profile. Please try again.')
       console.error('Sign up error:', err)
     } finally {
       setIsLoading(false)
