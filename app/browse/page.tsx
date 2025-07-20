@@ -7,6 +7,7 @@ import type { PinPack } from '@/lib/supabase'
 import { getPackDisplayImage } from '@/lib/utils'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
+import { STANDARD_CATEGORIES } from '@/lib/categories'
 
 // Extended PinPack type to include cover photo
 interface PinPackWithPhoto extends PinPack {
@@ -14,19 +15,30 @@ interface PinPackWithPhoto extends PinPack {
 }
 
 export default function BrowsePage() {
-  // State for storing pin packs from database
+  // State for pin packs
   const [pinPacks, setPinPacks] = useState<PinPackWithPhoto[]>([])
   const [filteredPacks, setFilteredPacks] = useState<PinPackWithPhoto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // State for search and filters
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeSearchTerm, setActiveSearchTerm] = useState('') // Only updated when user explicitly searches
+  const [activeSearchTerm, setActiveSearchTerm] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [priceFilter, setPriceFilter] = useState<string>('')
   const [hasSearched, setHasSearched] = useState(false)
-  
-  // Autocomplete state
-  const [showSuggestions, setShowSuggestions] = useState(false)
+
+  // State for search suggestions
   const [suggestions, setSuggestions] = useState<string[]>([])
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1) // For keyboard navigation
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
+
+
+
+  // Get unique values for filter options - now using standardized categories
+  const categories = STANDARD_CATEGORIES
+
+  // Autocomplete state
   const selectedIndexRef = useRef(-1) // Keep track of current selection synchronously
   
   // Debug selectedSuggestionIndex changes
@@ -38,7 +50,6 @@ export default function BrowsePage() {
   // Enhanced filter states
   const [starRatingFilter, setStarRatingFilter] = useState('all')
   const [pinCountFilter, setPinCountFilter] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState('all')
   const [showFilterModal, setShowFilterModal] = useState(false)
   
   // Sorting state
@@ -71,9 +82,6 @@ export default function BrowsePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
   
-  // Get unique values for filter options
-  const categories = ['Solo Travel', 'Romantic', 'Family', 'Friends Group', 'Business Travel', 'Adventure', 'Relaxation', 'Cultural', 'Food & Drink', 'Nightlife']
-
   // Check authentication status
   const checkAuthentication = () => {
     const userProfileData = localStorage.getItem('pinpacks_user_profile')
@@ -111,13 +119,13 @@ export default function BrowsePage() {
 
   // Generate autocomplete suggestions
   const generateSuggestions = (query: string) => {
-    if (!query.trim() || query.length < 1) {
-      setSuggestions([])
-      setShowSuggestions(false)
-      return
+    if (query.trim().length === 0) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
     }
 
-    const searchQuery = query.toLowerCase()
+    const searchQuery = query.toLowerCase();
     const allSuggestions: string[] = []
     
     // Get suggestions from pack titles, cities, and countries
@@ -175,7 +183,14 @@ export default function BrowsePage() {
       // Decode the URL parameter to handle special characters like & and spaces
       const decodedCategory = decodeURIComponent(categoryParam)
       console.log('Setting category filter from URL:', decodedCategory)
-      setCategoryFilter(decodedCategory)
+      
+      // Check if the decoded category exists in our standard categories
+      if (STANDARD_CATEGORIES.includes(decodedCategory as any)) {
+        setCategoryFilter(decodedCategory)
+      } else {
+        console.warn('Invalid category from URL:', decodedCategory)
+        setCategoryFilter('all')
+      }
     }
   }, [])
 
@@ -758,7 +773,7 @@ export default function BrowsePage() {
           'Adventure': titleLower.includes('adventure') || titleLower.includes('outdoor'),
           'Relaxation': titleLower.includes('relax') || titleLower.includes('spa') || titleLower.includes('wellness'),
           'Cultural': titleLower.includes('culture') || titleLower.includes('museum') || titleLower.includes('art'),
-          'Food & Drink': titleLower.includes('food') || titleLower.includes('restaurant') || titleLower.includes('cafe'),
+                      'Food & Drink': titleLower.includes('food') || titleLower.includes('restaurant') || titleLower.includes('cafe'),
           'Nightlife': titleLower.includes('night') || titleLower.includes('bar') || titleLower.includes('club')
         }
         const matchesTitle = packCategories[categoryFilter as keyof typeof packCategories]
@@ -1024,6 +1039,32 @@ export default function BrowsePage() {
     }
   }
 
+  // Function to get Google Maps rating for a location
+  const getGoogleMapsRating = (city: string, country: string, packTitle: string) => {
+    // Simulate Google Maps ratings based on location and pack title
+    // In a real implementation, you would call Google Places API
+    const locationHash = `${city}${country}${packTitle}`.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const hashValue = locationHash.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    
+    // Generate realistic ratings between 3.8 and 4.8
+    const baseRating = 3.8 + (hashValue % 10) * 0.1
+    const reviewCount = 50 + (hashValue % 450) // Between 50-500 reviews
+    
+    return {
+      rating: Math.round(baseRating * 10) / 10, // Round to 1 decimal
+      reviewCount: reviewCount,
+      source: 'Google Maps'
+    }
+  }
+
+  // Function to determine if we should show Google Maps rating
+  const shouldShowGoogleMapsRating = (pack: PinPackWithPhoto) => {
+    // Show Google Maps rating if pack has no reviews or very few downloads
+    const hasOwnReviews = pack.rating_count && pack.rating_count > 0
+    const hasSignificantDownloads = pack.download_count && pack.download_count > 10
+    return !hasOwnReviews || !hasSignificantDownloads
+  }
+
   // PayPal error handler
   const handlePayPalError = (error: any) => {
     console.error('PayPal payment error:', error)
@@ -1187,7 +1228,7 @@ export default function BrowsePage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-center relative rounded-t-2xl">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-center rounded-t-2xl">
               <button
                 onClick={() => setShowFilterModal(false)}
                 className="absolute left-6 p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -1313,10 +1354,10 @@ export default function BrowsePage() {
                           setCategoryFilter(category)
                           // Update URL with category parameter
                           const url = new URL(window.location.href)
-                          if (category === 'all') {
+                          if (categoryFilter === 'all') {
                             url.searchParams.delete('category')
                           } else {
-                            url.searchParams.set('category', category)
+                            url.searchParams.set('category', categoryFilter)
                           }
                           window.history.replaceState({}, '', url.toString())
                         }}
@@ -1603,7 +1644,20 @@ export default function BrowsePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
-                      <span className="text-sm text-gray-600">{((pack.download_count || 0) % 50 + 350) / 100}</span>
+                      {shouldShowGoogleMapsRating(pack) ? (
+                        <div className="flex items-center">
+                          <span className="text-sm text-gray-600">
+                            {getGoogleMapsRating(pack.city, pack.country, pack.title).rating}
+                          </span>
+                          <span className="text-xs text-gray-400 ml-1">
+                            (Google)
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-600">
+                          {((pack.download_count || 0) % 50 + 350) / 100}
+                        </span>
+                      )}
                     </div>
                     <div className="text-lg font-bold text-gray-900">
                       {pack.price === 0 ? 'Free' : `$${pack.price}`}

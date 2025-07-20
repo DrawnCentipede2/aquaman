@@ -1,11 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Mail, ArrowRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ui/toast'
 
 export default function SignUpPage() {
+  const router = useRouter()
+  const { showToast } = useToast()
   const [formData, setFormData] = useState({
     name: '',
     email: ''
@@ -23,85 +27,48 @@ export default function SignUpPage() {
   // Handle form submission
   const handleSignUp = async () => {
     if (!formData.name.trim() || !formData.email.trim()) {
-      console.log('Please fill in all fields')
+      showToast('Please fill in all fields', 'error')
       return
     }
 
     setIsLoading(true)
     try {
-      // Get user's IP and location for enhanced profile
-      const response = await fetch('https://ipapi.co/json/')
-      const locationData = await response.json()
-      
-      // Create user profile in Supabase (upsert by email)
-      const { data: existingUser, error: userSelectError } = await supabase
+      // Create user profile in database
+      const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('*')
-        .eq('email', formData.email.trim().toLowerCase())
-        .single()
+        .insert([{
+          email: formData.email.trim().toLowerCase(),
+          name: formData.name.trim(),
+          created_at: new Date().toISOString()
+        }])
+        .select()
 
-      if (userSelectError && userSelectError.code !== 'PGRST116') {
-        console.error('Supabase select error:', userSelectError)
-        throw userSelectError
+      if (userError) {
+        console.error('User creation error:', userError)
+        throw userError
       }
 
-      let userId: string | undefined = existingUser?.id as string | undefined
-
-      if (!existingUser) {
-        // Insert new user
-        const { data: insertData, error: insertError } = await supabase
-          .from('users')
-          .insert({
-            name: formData.name.trim(),
-            email: formData.email.trim().toLowerCase(),
-            location: `${locationData.city}, ${locationData.country_name}` || 'Unknown',
-            ip: locationData.ip || 'unknown'
-          })
-          .select()
-          .single()
-        if (insertError) {
-          console.error('Supabase insert error:', insertError)
-          throw insertError
-        }
-        userId = insertData?.id
-      }
-
-      if (!userId) {
-        throw new Error('Failed to retrieve user ID after signup')
-      }
-
-      // Update last_login
-      await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', userId)
-
-      // Create user profile object for client side
+      // Save to localStorage for immediate access
       const userProfile = {
-        name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
-        userId,
-        ip: locationData.ip || 'unknown',
-        location: `${locationData.city}, ${locationData.country_name}` || 'Unknown',
-        created: existingUser?.created_at || new Date().toISOString(),
-        lastLogin: new Date().toISOString()
+        name: formData.name.trim(),
+        userType: 'buyer', // Default to buyer
+        created_at: new Date().toISOString()
       }
 
-      // Save to localStorage with consistent "pinpacks_" keys (matches auth & browse pages)
       localStorage.setItem('pinpacks_user_profile', JSON.stringify(userProfile))
-      localStorage.setItem('pinpacks_user_id', userProfile.userId)
+      localStorage.setItem('pinpacks_user_id', userProfile.email)
       localStorage.setItem('pinpacks_user_email', userProfile.email)
-      localStorage.setItem('pinpacks_user_ip', userProfile.ip)
-      localStorage.setItem('pinpacks_user_location', userProfile.location)
-      
-      // Also save the profile under the email key for sign-in lookup
-      localStorage.setItem(`pinpacks_profile_${userProfile.email}`, JSON.stringify(userProfile))
+      localStorage.setItem('pinpacks_user_type', 'buyer')
 
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
-      
+
       // Redirect to browse page
-      window.location.href = '/browse'
+      router.push('/browse')
       
     } catch (err) {
-      console.log('Failed to create profile. Please try again.')
+      showToast('Failed to create profile. Please try again.', 'error')
       console.error('Sign up error:', err)
     } finally {
       setIsLoading(false)

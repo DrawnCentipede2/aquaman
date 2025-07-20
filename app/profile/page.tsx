@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User, Mail, MapPin, Phone, Globe, Shield, Save, Trash2, Camera, Verified, console.logTriangle, Edit3, Eye, EyeOff, Building, LogOut } from 'lucide-react'
+import { User, Mail, MapPin, Phone, Globe, Shield, Save, Trash2, Camera, Verified, Triangle, Edit3, Eye, EyeOff, Building, LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 import CloudLoader from '@/components/CloudLoader'
+import { useToast } from '@/components/ui/toast'
 
 interface UserProfile {
   id?: string
@@ -27,6 +28,7 @@ interface UserProfile {
 }
 
 export default function ProfilePage() {
+  const { showToast } = useToast()
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -143,7 +145,7 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async () => {
     if (!formData.email?.trim()) {
-      console.log('Please enter a valid email address')
+      showToast('Please enter a valid email address', 'error')
       return
     }
 
@@ -151,95 +153,77 @@ export default function ProfilePage() {
     try {
       console.log('Saving profile data:', formData)
       
-      // Prepare the data for database save
+      // Prepare profile data for database
       const profileData = {
-        email: formData.email.trim().toLowerCase(),
+        email: formData.email.trim(),
         name: formData.name?.trim() || null,
-        bio: formData.bio?.trim() || null,
         phone: formData.phone?.trim() || null,
         country: formData.country || null,
         city: formData.city || null,
+        bio: formData.bio?.trim() || null,
         occupation: formData.occupation?.trim() || null,
         profile_visibility: formData.profile_visibility || 'public',
         marketing_emails: formData.marketing_emails !== undefined ? formData.marketing_emails : true,
         social_links: formData.social_links || {},
-        last_login: new Date().toISOString()
+        updated_at: new Date().toISOString()
       }
 
       console.log('Attempting to save to database:', profileData)
-
-      // Save to database using upsert
+      
+      // Save to database
       const { data: savedData, error: dbError } = await supabase
         .from('users')
-        .upsert(profileData, {
-          onConflict: 'email',
-          ignoreDuplicates: false
-        })
+        .upsert([profileData], { onConflict: 'email' })
         .select()
 
       console.log('Database save result:', { savedData, dbError })
 
       if (dbError) {
         console.error('Database save error:', dbError)
-        console.log(`Profile save failed: ${dbError.message || 'Unknown database error'}\n\nPlease try again or contact support if the issue persists.`)
+        showToast(`Profile save failed: ${dbError.message || 'Unknown database error'}. Please try again or contact support if the issue persists.`, 'error')
         return
       }
 
-      // Update localStorage (for backwards compatibility and offline access)
-      const currentUserType = localStorage.getItem('pinpacks_user_type') || 'buyer'
+      // Prepare profile data for localStorage (simplified version)
       const localStorageProfile = {
-        userId: formData.email.trim().toLowerCase(),
+        email: formData.email.trim(),
         name: formData.name?.trim() || '',
-        userType: currentUserType,
-        lastUpdated: new Date().toISOString(),
-        ...formData,
-        email: formData.email.trim().toLowerCase()
-      }
-
-      // Create clean profile object that matches UserProfile interface
-      const cleanedProfile: UserProfile = {
-        ...formData,
-        email: formData.email.trim().toLowerCase()
+        phone: formData.phone?.trim() || '',
+        country: formData.country || '',
+        city: formData.city || '',
+        bio: formData.bio?.trim() || '',
+        occupation: formData.occupation?.trim() || '',
+        profile_visibility: formData.profile_visibility || 'public',
+        marketing_emails: formData.marketing_emails !== undefined ? formData.marketing_emails : true,
+        social_links: formData.social_links || { website: '', instagram: '', twitter: '' },
+        updated_at: new Date().toISOString()
       }
 
       console.log('Saving to localStorage:', localStorageProfile)
-
+      
+      // Save to localStorage
       localStorage.setItem('pinpacks_user_profile', JSON.stringify(localStorageProfile))
-      localStorage.setItem('pinpacks_user_id', localStorageProfile.userId)
-      localStorage.setItem('pinpacks_user_email', localStorageProfile.email)
-
-      setUserProfile(cleanedProfile)
+      
+      // Update local state
+      setUserProfile(localStorageProfile)
       
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
+      showToast('Profile updated successfully!', 'success')
       console.log('Profile updated successfully!')
       console.log('Profile save completed successfully')
       
     } catch (err) {
       console.error('Profile update error:', err)
-      console.log(`Failed to update profile: ${err instanceof Error ? err.message : 'Unknown error'}\n\nPlease try again or contact support if the issue persists.`)
+      showToast(`Failed to update profile: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again or contact support if the issue persists.`, 'error')
     } finally {
       setIsSaving(false)
     }
   }
 
   const requestVerification = () => {
-    console.log(`Verification Request Submitted!
-
-Your request for local creator verification has been submitted. Our team will review your profile and contact you within 2-3 business days.
-
-Verification helps build trust with travelers and may increase your pack visibility.
-
-What happens next:
-• Our team reviews your profile information
-• We may request additional documentation
-• You'll receive an email with the verification result
-
-Current verification methods available:
-• Identity verification
-• Location verification (IP-based)
-• Social media verification`)
+    showToast('Verification request submitted! Our team will review your profile and contact you within 2-3 business days.', 'info')
   }
 
   const handleDeleteAccount = async () => {
@@ -270,12 +254,12 @@ Current verification methods available:
       // Trigger storage event to update navigation
       window.dispatchEvent(new Event('storage'))
       
-      console.log('Your account has been deleted. You will be redirected to the homepage.')
+      showToast('Your account has been deleted. You will be redirected to the homepage.', 'success')
       window.location.href = '/'
       
     } catch (error) {
       console.error('Error deleting account:', error)
-      console.log('Failed to delete account. Please try again or contact support.')
+      showToast('Failed to delete account. Please try again or contact support.', 'error')
     }
   }
 

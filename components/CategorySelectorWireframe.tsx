@@ -1,16 +1,65 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowRight, ArrowUpRight } from 'lucide-react'
+import { MapPin, Heart, Mountain, Building, Utensils, Music, ArrowRight, ArrowUpRight } from 'lucide-react'
+import { STANDARD_CATEGORIES, CATEGORY_DESCRIPTIONS, CATEGORY_COLORS, CATEGORY_BG_COLORS } from '@/lib/categories'
 
-// Category data for the floating clouds
+// Category data - now using standardized categories
 const categories = [
-  { id: 'couples', name: 'Couples', position: 'top-left' },
-  { id: 'family', name: 'Family', position: 'top-right' },
-  { id: 'adventure', name: 'Adventure', position: 'left' },
-  { id: 'culture', name: 'Culture', position: 'right' },
-  { id: 'food', name: 'Food & Drink', position: 'bottom-left' },
-  { id: 'relaxation', name: 'Relaxation', position: 'bottom-right' }
+  {
+    id: 'romantic',
+    name: 'Romantic',
+    icon: Heart,
+    description: CATEGORY_DESCRIPTIONS['Romantic'],
+    color: CATEGORY_COLORS['Romantic'],
+    bgColor: CATEGORY_BG_COLORS['Romantic'],
+    position: 'top-left'
+  },
+  {
+    id: 'adventure',
+    name: 'Adventure',
+    icon: Mountain,
+    description: CATEGORY_DESCRIPTIONS['Adventure'],
+    color: CATEGORY_COLORS['Adventure'],
+    bgColor: CATEGORY_BG_COLORS['Adventure'],
+    position: 'top-right'
+  },
+  {
+    id: 'cultural',
+    name: 'Cultural',
+    icon: Building,
+    description: CATEGORY_DESCRIPTIONS['Cultural'],
+    color: CATEGORY_COLORS['Cultural'],
+    bgColor: CATEGORY_BG_COLORS['Cultural'],
+    position: 'left'
+  },
+  {
+    id: 'food-drink',
+    name: 'Food & Drink',
+    icon: Utensils,
+    description: CATEGORY_DESCRIPTIONS['Food & Drink'],
+    color: CATEGORY_COLORS['Food & Drink'],
+    bgColor: CATEGORY_BG_COLORS['Food & Drink'],
+    position: 'right'
+  },
+  {
+    id: 'nightlife',
+    name: 'Nightlife',
+    icon: Music,
+    description: CATEGORY_DESCRIPTIONS['Nightlife'],
+    color: CATEGORY_COLORS['Nightlife'],
+    bgColor: CATEGORY_BG_COLORS['Nightlife'],
+    position: 'bottom-left'
+  },
+  {
+    id: 'family',
+    name: 'Family',
+    icon: MapPin,
+    description: CATEGORY_DESCRIPTIONS['Family'],
+    color: CATEGORY_COLORS['Family'],
+    bgColor: CATEGORY_BG_COLORS['Family'],
+    position: 'bottom-right'
+  }
 ]
 
 export default function CategorySelectorWireframe() {

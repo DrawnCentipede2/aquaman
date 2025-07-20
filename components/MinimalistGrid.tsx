@@ -1,65 +1,58 @@
 'use client'
 
 import { useState } from 'react'
-import { Coffee, Heart, Mountain, Camera, Music, Utensils, Building, MapPin, Star } from 'lucide-react'
+import { MapPin, Heart, Mountain, Building, Utensils, Music } from 'lucide-react'
+import { STANDARD_CATEGORIES, CATEGORY_DESCRIPTIONS, CATEGORY_COLORS, CATEGORY_BG_COLORS } from '@/lib/categories'
 
-// Category data with descriptions
+// Category data - now using standardized categories
 const categories = [
-  { 
-    id: 'hidden-cafes', 
-    name: 'Hidden Cafés', 
-    icon: Coffee, 
-    description: 'Cozy spots off the beaten path',
-    color: 'bg-amber-50 border-amber-200 text-amber-700'
+  {
+    id: 'romantic',
+    name: 'Romantic',
+    icon: Heart,
+    description: CATEGORY_DESCRIPTIONS['Romantic'],
+    color: CATEGORY_COLORS['Romantic'],
+    bgColor: CATEGORY_BG_COLORS['Romantic']
   },
-  { 
-    id: 'romantic-spots', 
-    name: 'Romantic Spots', 
-    icon: Heart, 
-    description: 'Perfect for intimate moments',
-    color: 'bg-rose-50 border-rose-200 text-rose-700'
+  {
+    id: 'adventure',
+    name: 'Adventure',
+    icon: Mountain,
+    description: CATEGORY_DESCRIPTIONS['Adventure'],
+    color: CATEGORY_COLORS['Adventure'],
+    bgColor: CATEGORY_BG_COLORS['Adventure']
   },
-  { 
-    id: 'adventure-trails', 
-    name: 'Adventure Trails', 
-    icon: Mountain, 
-    description: 'Thrilling outdoor experiences',
-    color: 'bg-orange-50 border-orange-200 text-orange-700'
+  {
+    id: 'cultural',
+    name: 'Cultural',
+    icon: Building,
+    description: CATEGORY_DESCRIPTIONS['Cultural'],
+    color: CATEGORY_COLORS['Cultural'],
+    bgColor: CATEGORY_BG_COLORS['Cultural']
   },
-  { 
-    id: 'photo-ops', 
-    name: 'Photo Ops', 
-    icon: Camera, 
-    description: 'Picture-perfect locations',
-    color: 'bg-cyan-50 border-cyan-200 text-cyan-700'
+  {
+    id: 'food-drink',
+    name: 'Food & Drink',
+    icon: Utensils,
+    description: CATEGORY_DESCRIPTIONS['Food & Drink'],
+    color: CATEGORY_COLORS['Food & Drink'],
+    bgColor: CATEGORY_BG_COLORS['Food & Drink']
   },
-  { 
-    id: 'live-music', 
-    name: 'Live Music', 
-    icon: Music, 
-    description: 'Vibrant music scenes',
-    color: 'bg-purple-50 border-purple-200 text-purple-700'
+  {
+    id: 'nightlife',
+    name: 'Nightlife',
+    icon: Music,
+    description: CATEGORY_DESCRIPTIONS['Nightlife'],
+    color: CATEGORY_COLORS['Nightlife'],
+    bgColor: CATEGORY_BG_COLORS['Nightlife']
   },
-  { 
-    id: 'local-eats', 
-    name: 'Local Eats', 
-    icon: Utensils, 
-    description: 'Authentic culinary experiences',
-    color: 'bg-green-50 border-green-200 text-green-700'
-  },
-  { 
-    id: 'cultural-sites', 
-    name: 'Cultural Sites', 
-    icon: Building, 
-    description: 'Arts, history & local life',
-    color: 'bg-indigo-50 border-indigo-200 text-indigo-700'
-  },
-  { 
-    id: 'secret-spots', 
-    name: 'Secret Spots', 
-    icon: MapPin, 
-    description: 'Local secrets revealed',
-    color: 'bg-slate-50 border-slate-200 text-slate-700'
+  {
+    id: 'family',
+    name: 'Family',
+    icon: MapPin,
+    description: CATEGORY_DESCRIPTIONS['Family'],
+    color: CATEGORY_COLORS['Family'],
+    bgColor: CATEGORY_BG_COLORS['Family']
   }
 ]
 
@@ -123,7 +116,7 @@ export default function MinimalistGrid() {
                     <div className={`
                       relative h-48 rounded-2xl border-2 
                       transition-all duration-500 ease-out
-                      ${category.color}
+                      ${category.bgColor}
                       ${isHovered 
                         ? 'shadow-2xl scale-105 -translate-y-2 border-opacity-100' 
                         : 'shadow-lg hover:shadow-xl border-opacity-60'
@@ -239,7 +232,7 @@ export default function MinimalistGrid() {
                 <h4 className="font-semibold text-gray-900 mb-4">Community</h4>
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="flex items-center space-x-2">
-                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                    <MapPin className="h-4 w-4 text-sky-600" />
                     <span>10,000+ selected maps</span>
                   </div>
                   <div className="flex items-center space-x-2">

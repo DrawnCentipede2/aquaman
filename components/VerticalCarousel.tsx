@@ -1,57 +1,58 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MapPin, Heart, Coffee, Mountain, Camera, Music, Utensils, Building, ArrowDown, ArrowUp } from 'lucide-react'
+import { MapPin, Heart, Mountain, Building, Utensils, Camera, Music, ArrowDown, ArrowUp } from 'lucide-react'
+import { STANDARD_CATEGORIES, CATEGORY_DESCRIPTIONS, CATEGORY_COLORS, CATEGORY_BG_COLORS } from '@/lib/categories'
 
-// Category data with poetic descriptions
+// Category data with poetic descriptions - now using standardized categories
 const categories = [
   {
-    id: 'couples',
-    name: 'Romantic Escapes',
+    id: 'romantic',
+    name: 'Romantic',
     icon: Heart,
-    description: 'Where love stories unfold in hidden corners and candlelit moments',
-    color: 'from-rose-400 to-pink-500',
-    bgColor: 'bg-gradient-to-br from-rose-50 to-pink-50'
+    description: CATEGORY_DESCRIPTIONS['Romantic'],
+    color: CATEGORY_COLORS['Romantic'],
+    bgColor: CATEGORY_BG_COLORS['Romantic']
   },
   {
     id: 'adventure',
-    name: 'Adventure Awaits',
+    name: 'Adventure',
     icon: Mountain,
-    description: 'Thrilling trails and breathtaking vistas that awaken your inner explorer',
-    color: 'from-orange-400 to-red-500',
-    bgColor: 'bg-gradient-to-br from-orange-50 to-red-50'
+    description: CATEGORY_DESCRIPTIONS['Adventure'],
+    color: CATEGORY_COLORS['Adventure'],
+    bgColor: CATEGORY_BG_COLORS['Adventure']
   },
   {
-    id: 'culture',
-    name: 'Cultural Gems',
+    id: 'cultural',
+    name: 'Cultural',
     icon: Building,
-    description: 'Ancient stories and modern creativity collide in these cultural havens',
-    color: 'from-purple-400 to-violet-500',
-    bgColor: 'bg-gradient-to-br from-purple-50 to-violet-50'
+    description: CATEGORY_DESCRIPTIONS['Cultural'],
+    color: CATEGORY_COLORS['Cultural'],
+    bgColor: CATEGORY_BG_COLORS['Cultural']
   },
   {
-    id: 'food',
-    name: 'Culinary Journeys',
+    id: 'food-drink',
+    name: 'Food & Drink',
     icon: Utensils,
-    description: 'Taste the soul of the city through authentic flavors and local traditions',
-    color: 'from-green-400 to-emerald-500',
-    bgColor: 'bg-gradient-to-br from-green-50 to-emerald-50'
+    description: CATEGORY_DESCRIPTIONS['Food & Drink'],
+    color: CATEGORY_COLORS['Food & Drink'],
+    bgColor: CATEGORY_BG_COLORS['Food & Drink']
   },
   {
-    id: 'photography',
-    name: 'Picture Perfect',
-    icon: Camera,
-    description: 'Capture moments that tell stories in every frame and angle',
-    color: 'from-cyan-400 to-teal-500',
-    bgColor: 'bg-gradient-to-br from-cyan-50 to-teal-50'
-  },
-  {
-    id: 'music',
-    name: 'Rhythm & Soul',
+    id: 'nightlife',
+    name: 'Nightlife',
     icon: Music,
-    description: 'Where melodies meet memories in vibrant venues and intimate spaces',
-    color: 'from-yellow-400 to-amber-500',
-    bgColor: 'bg-gradient-to-br from-yellow-50 to-amber-50'
+    description: CATEGORY_DESCRIPTIONS['Nightlife'],
+    color: CATEGORY_COLORS['Nightlife'],
+    bgColor: CATEGORY_BG_COLORS['Nightlife']
+  },
+  {
+    id: 'family',
+    name: 'Family',
+    icon: MapPin,
+    description: CATEGORY_DESCRIPTIONS['Family'],
+    color: CATEGORY_COLORS['Family'],
+    bgColor: CATEGORY_BG_COLORS['Family']
   }
 ]
 

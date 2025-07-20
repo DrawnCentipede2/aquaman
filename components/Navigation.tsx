@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { User, Plus, Heart, ShoppingCart, Package, Settings, ChevronDown, Globe, DollarSign, Bell, HelpCircle, LogOut, X, Check, CreditCard, Shield, Lock } from 'lucide-react'
+import { useToast } from '@/components/ui/toast'
 
 // Function to get (and if necessary migrate) the user profile from localStorage
 const getStoredProfile = () => {
@@ -56,6 +57,7 @@ const getInitialAuthState = () => {
 
 export default function Navigation() {
   const pathname = usePathname()
+  const { showToast } = useToast()
   
   // Track if component has mounted to prevent hydration mismatch
   const [isMounted, setIsMounted] = useState(false)
@@ -698,7 +700,7 @@ export default function Navigation() {
                       {/* Notifications */}
                       <button
                         onClick={() => {
-                          console.log('Notification preferences:\n\n• Email notifications: ON\n• Push notifications: OFF\n• Marketing emails: ON\n\nFeature coming soon!')
+                          showToast('Notification preferences: Email notifications ON, Push notifications OFF, Marketing emails ON. Feature coming soon!', 'info')
                         }}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >

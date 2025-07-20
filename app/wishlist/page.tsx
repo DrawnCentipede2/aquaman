@@ -1,10 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Heart, MapPin, Star, Download } from 'lucide-react'
+import { Heart, Trash2, Eye, Download, MapPin, Calendar, Star } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
+import { supabase } from '@/lib/supabase'
+import type { PinPack } from '@/lib/supabase'
+import { useToast } from '@/components/ui/toast'
 
 export default function WishlistPage() {
+  const { showToast } = useToast()
   const [wishlistItems, setWishlistItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -33,9 +37,10 @@ export default function WishlistPage() {
       // Update local state
       setWishlistItems(currentWishlist)
       
-      console.log('Removed from wishlist:', packId)
+      showToast('Pack removed from wishlist', 'success')
     } catch (error) {
       console.error('Error removing from wishlist:', error)
+      showToast('Failed to remove pack from wishlist', 'error')
     }
   }
 

@@ -138,12 +138,18 @@ CREATE POLICY "Anyone can view pins" ON pins
 CREATE POLICY "Anyone can insert pins" ON pins
     FOR INSERT WITH CHECK (true);
 
+CREATE POLICY "Anyone can delete pins" ON pins
+    FOR DELETE USING (true);
+
 -- Pin packs policies
 CREATE POLICY "Anyone can view pin packs" ON pin_packs
     FOR SELECT USING (true);
 
 CREATE POLICY "Anyone can insert pin packs" ON pin_packs
     FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete pin packs" ON pin_packs
+    FOR DELETE USING (true);
 
 -- Pin pack pins policies
 CREATE POLICY "Anyone can view pin pack pins" ON pin_pack_pins
@@ -152,6 +158,9 @@ CREATE POLICY "Anyone can view pin pack pins" ON pin_pack_pins
 CREATE POLICY "Anyone can insert pin pack pins" ON pin_pack_pins
     FOR INSERT WITH CHECK (true);
 
+CREATE POLICY "Anyone can delete pin pack pins" ON pin_pack_pins
+    FOR DELETE USING (true);
+
 -- Pack downloads policies
 CREATE POLICY "Anyone can view downloads" ON pack_downloads
     FOR SELECT USING (true);
@@ -159,12 +168,18 @@ CREATE POLICY "Anyone can view downloads" ON pack_downloads
 CREATE POLICY "Anyone can insert downloads" ON pack_downloads
     FOR INSERT WITH CHECK (true);
 
+CREATE POLICY "Anyone can delete downloads" ON pack_downloads
+    FOR DELETE USING (true);
+
 -- Pack ratings policies
 CREATE POLICY "Anyone can view ratings" ON pack_ratings
     FOR SELECT USING (true);
 
 CREATE POLICY "Anyone can insert ratings" ON pack_ratings
     FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete ratings" ON pack_ratings
+    FOR DELETE USING (true);
 
 -- Place edit requests policies
 CREATE POLICY "Anyone can view edit requests" ON place_edit_requests
@@ -175,6 +190,9 @@ CREATE POLICY "Anyone can insert edit requests" ON place_edit_requests
 
 CREATE POLICY "Anyone can update edit requests" ON place_edit_requests
     FOR UPDATE USING (true);
+
+CREATE POLICY "Anyone can delete edit requests" ON place_edit_requests
+    FOR DELETE USING (true);
 
 -- Optional: Create a view for easier querying of complete pin packs
 CREATE VIEW pin_pack_details AS

@@ -1,18 +1,59 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MapPin, Heart, Coffee, Mountain, Camera, Music, Utensils, Building } from 'lucide-react'
+import { MapPin, Heart, Mountain, Building, Utensils, Music } from 'lucide-react'
+import { STANDARD_CATEGORIES, CATEGORY_DESCRIPTIONS, CATEGORY_COLORS, CATEGORY_BG_COLORS } from '@/lib/categories'
 
-// Category data with icons and descriptions
+// Category data - now using standardized categories
 const categories = [
-  { id: 'adventure', name: 'Adventure', icon: Mountain, description: 'Thrilling outdoor experiences', color: 'from-orange-400 to-red-500' },
-  { id: 'chill', name: 'Chill', icon: Coffee, description: 'Relaxing spots to unwind', color: 'from-blue-400 to-indigo-500' },
-  { id: 'romance', name: 'Romance', icon: Heart, description: 'Perfect for couples', color: 'from-pink-400 to-rose-500' },
-  { id: 'culture', name: 'Culture', icon: Building, description: 'Arts, history & local life', color: 'from-purple-400 to-violet-500' },
-  { id: 'food', name: 'Food & Drink', icon: Utensils, description: 'Culinary adventures', color: 'from-green-400 to-emerald-500' },
-  { id: 'photography', name: 'Photography', icon: Camera, description: 'Picture-perfect locations', color: 'from-cyan-400 to-teal-500' },
-  { id: 'music', name: 'Music & Arts', icon: Music, description: 'Creative vibes & venues', color: 'from-yellow-400 to-amber-500' },
-  { id: 'hidden', name: 'Hidden Gems', icon: MapPin, description: 'Local secrets revealed', color: 'from-slate-400 to-gray-500' }
+  {
+    id: 'romantic',
+    name: 'Romantic',
+    icon: Heart,
+    description: CATEGORY_DESCRIPTIONS['Romantic'],
+    color: CATEGORY_COLORS['Romantic'],
+    bgColor: CATEGORY_BG_COLORS['Romantic']
+  },
+  {
+    id: 'adventure',
+    name: 'Adventure',
+    icon: Mountain,
+    description: CATEGORY_DESCRIPTIONS['Adventure'],
+    color: CATEGORY_COLORS['Adventure'],
+    bgColor: CATEGORY_BG_COLORS['Adventure']
+  },
+  {
+    id: 'cultural',
+    name: 'Cultural',
+    icon: Building,
+    description: CATEGORY_DESCRIPTIONS['Cultural'],
+    color: CATEGORY_COLORS['Cultural'],
+    bgColor: CATEGORY_BG_COLORS['Cultural']
+  },
+  {
+    id: 'food-drink',
+    name: 'Food & Drink',
+    icon: Utensils,
+    description: CATEGORY_DESCRIPTIONS['Food & Drink'],
+    color: CATEGORY_COLORS['Food & Drink'],
+    bgColor: CATEGORY_BG_COLORS['Food & Drink']
+  },
+  {
+    id: 'nightlife',
+    name: 'Nightlife',
+    icon: Music,
+    description: CATEGORY_DESCRIPTIONS['Nightlife'],
+    color: CATEGORY_COLORS['Nightlife'],
+    bgColor: CATEGORY_BG_COLORS['Nightlife']
+  },
+  {
+    id: 'family',
+    name: 'Family',
+    icon: MapPin,
+    description: CATEGORY_DESCRIPTIONS['Family'],
+    color: CATEGORY_COLORS['Family'],
+    bgColor: CATEGORY_BG_COLORS['Family']
+  }
 ]
 
 export default function FloatingCloudPins() {

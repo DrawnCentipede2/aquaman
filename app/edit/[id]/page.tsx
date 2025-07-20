@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { MapPin, Save, ArrowLeft, Trash2, Plus, Upload, DollarSign, FileText, Image, X } from 'lucide-react'
+import { MapPin, Save, ArrowLeft, Trash2, Plus, Upload, DollarSign, FileText, Image, X, Tag } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { getPackDisplayImage } from '@/lib/utils'
+import { STANDARD_CATEGORIES } from '@/lib/categories'
 
 export default function EditPackPage() {
   const params = useParams()
@@ -20,6 +21,8 @@ export default function EditPackPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [packImage, setPackImage] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -30,6 +33,12 @@ export default function EditPackPage() {
     country: '',
     creator_location: ''
   })
+
+  // Category state
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+
+  // Available categories for packs - now using standardized categories
+  const availableCategories = STANDARD_CATEGORIES
 
   // Load pack details when component mounts
   useEffect(() => {
@@ -63,6 +72,9 @@ export default function EditPackPage() {
         country: packData.country || '',
         creator_location: packData.creator_location || ''
       })
+
+      // Load existing categories
+      setSelectedCategories(packData.categories || [])
 
       // Load pack image
       const imageUrl = await getPackDisplayImage(packId)
@@ -119,11 +131,33 @@ export default function EditPackPage() {
     }))
   }
 
+  // Category selection functions
+  const handleCategoryToggle = (category: string) => {
+    setSelectedCategories(prev => {
+      if (prev.includes(category)) {
+        // Remove category if already selected
+        return prev.filter(c => c !== category)
+      } else {
+        // Add category if not already selected and under limit
+        if (prev.length < 3) {
+          return [...prev, category]
+        }
+        return prev // Don't add if already at limit
+      }
+    })
+  }
+
+  const removeCategory = (categoryToRemove: string) => {
+    setSelectedCategories(prev => prev.filter(c => c !== categoryToRemove))
+  }
+
   // Save pack changes
   const saveChanges = async () => {
     try {
       setSaving(true)
       setError(null)
+      setSaveSuccess(false)
+      setSaveError(false)
 
       const { error } = await supabase
         .from('pin_packs')
@@ -133,7 +167,8 @@ export default function EditPackPage() {
           price: formData.price,
           city: formData.city,
           country: formData.country,
-          creator_location: formData.creator_location
+          creator_location: formData.creator_location,
+          categories: selectedCategories
         })
         .eq('id', packId)
 
@@ -141,9 +176,25 @@ export default function EditPackPage() {
 
       console.log('Pack updated successfully! ')
       
+      // Show success animation
+      setSaveSuccess(true)
+      
+      // Hide success animation after 2 seconds
+      setTimeout(() => {
+        setSaveSuccess(false)
+      }, 2000)
+      
     } catch (error) {
       console.error('Error saving changes:', error)
       setError('Failed to save changes. Please try again.')
+      
+      // Show error animation
+      setSaveError(true)
+      
+      // Hide error animation after 2 seconds
+      setTimeout(() => {
+        setSaveError(false)
+      }, 2000)
     } finally {
       setSaving(false)
     }
@@ -230,6 +281,30 @@ export default function EditPackPage() {
         </div>
       </div>
 
+      {/* Success Notification */}
+      {saveSuccess && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-in slide-in-from-top-2 duration-300">
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            <span className="font-medium">Changes saved successfully!</span>
+          </div>
+        </div>
+      )}
+
+      {/* Error Notification */}
+      {saveError && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-in slide-in-from-top-2 duration-300">
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            <span className="font-medium">Failed to save changes. Please try again.</span>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
@@ -315,6 +390,40 @@ export default function EditPackPage() {
                     />
                   </div>
                   <p className="text-sm text-gray-500 mt-2">Set to 0 for free packs</p>
+                </div>
+
+                {/* Categories Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <Tag className="h-4 w-4 mr-2 text-coral-500" />
+                    Categories
+                  </label>
+                  <p className="text-sm text-gray-500 mb-4">Select up to 3 categories that best describe your pack</p>
+                  
+                  {/* Available Categories */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {availableCategories.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => handleCategoryToggle(category)}
+                        disabled={selectedCategories.length >= 3 && !selectedCategories.includes(category)}
+                        className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                          selectedCategories.includes(category)
+                            ? 'bg-coral-500 text-white border-coral-500'
+                            : selectedCategories.length >= 3 && !selectedCategories.includes(category)
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-coral-300'
+                        }`}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {selectedCategories.length >= 3 && (
+                    <p className="text-sm text-gray-500 mt-2">Maximum 3 categories selected</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -423,6 +532,27 @@ export default function EditPackPage() {
                   <p className="text-xs text-gray-600 line-clamp-2">
                     {formData.description || 'No description provided'}
                   </p>
+                  
+                  {/* Categories in Preview */}
+                  {selectedCategories.length > 0 && (
+                    <div className="mt-2">
+                      <div className="flex flex-wrap gap-1">
+                        {selectedCategories.slice(0, 2).map((category) => (
+                          <span
+                            key={category}
+                            className="inline-block px-2 py-1 rounded text-xs font-medium bg-coral-100 text-coral-800"
+                          >
+                            {category}
+                          </span>
+                        ))}
+                        {selectedCategories.length > 2 && (
+                          <span className="inline-block px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                            +{selectedCategories.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

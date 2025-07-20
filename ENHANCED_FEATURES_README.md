@@ -236,3 +236,49 @@ UI improvements:
 ```
 
 Remember to commit your changes! 🚀 
+
+# Enhanced Features for Google Pins Marketplace
+
+## Recent Updates
+
+### Category Editing for Pin Packs (Latest)
+
+**Feature**: Users can now edit categories for their pin packs in the edit page.
+
+**What's New**:
+- Added category selection interface in the edit pack page (`/edit/[id]`)
+- Users can select up to 3 categories from the available options
+- Categories are displayed in the pack preview sidebar
+- Categories are saved along with other pack details
+
+**Available Categories**:
+- Solo Travel
+- Romantic
+- Family
+- Friends Group
+- Business Travel
+- Adventure
+- Relaxation
+- Cultural
+- Food & Drink
+- Nightlife
+
+**How to Test**:
+1. Navigate to `/manage` to see your packs
+2. Click "Edit" on any pack
+3. Scroll down to the "Categories" section in the Basic Information
+4. Select up to 3 categories by clicking on them
+5. Remove categories by clicking the X button on selected categories
+6. Save changes to update the pack categories
+7. Verify categories appear in the pack preview sidebar
+
+**Technical Details**:
+- Categories are stored as a JSONB array in the `pin_packs` table
+- Maximum of 3 categories per pack enforced by database constraint
+- Categories are loaded from existing pack data when editing
+- UI follows the same design patterns as the create page
+
+**Database Migration**:
+- Run the migration in `add-categories-to-pin-packs-migration.sql` to add the categories column
+- This migration also populates existing packs with default categories based on their titles
+``` 

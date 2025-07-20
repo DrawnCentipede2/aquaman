@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Plus, Trash2, Save, HelpCircle, Globe, Upload, Sparkles, Download, ExternalLink, Star, ChevronDown, Package, X } from 'lucide-react'
+import { MapPin, Plus, Trash2, Save, X, ChevronDown, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { importSinglePlace, extractCoordinates, extractPlaceId } from '@/lib/googleMaps'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
+import { STANDARD_CATEGORIES } from '@/lib/categories'
+import { useToast } from '@/components/ui/toast'
 
 // Interface for a single pin
 interface Pin {
@@ -15,75 +16,64 @@ interface Pin {
   category: string
   latitude: number
   longitude: number
+  photos?: string[]
   rating?: number
   rating_count?: number
   business_type?: string
-  place_city?: string
-  place_country?: string
-  zip_code?: string
-  address?: string
-  phone?: string
-  website?: string
-  current_opening_hours?: {
-    open_now: boolean
-    weekday_text: string[]
-  }
-  business_status?: string
-  reviews?: Array<{
-    author_name: string
-    rating: number
-    text: string
-    time: number
-  }>
-  photos?: string[]
-  fetching?: boolean
-  needs_manual_edit?: boolean
-  // Completion tracking
-  has_user_description?: boolean
-  has_user_photo?: boolean
 }
 
 export default function CreatePackPage() {
   const router = useRouter()
+  const { showToast } = useToast()
   
-  // State for the pin pack being created
+  // State for form data
   const [packTitle, setPackTitle] = useState('')
   const [packDescription, setPackDescription] = useState('')
   const [city, setCity] = useState('')
   const [country, setCountry] = useState('')
   const [price, setPrice] = useState('')
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   
-  // State for pins in the pack
+  // State for pins
   const [pins, setPins] = useState<Pin[]>([])
   
-  // State for Google Maps list import
-  const [googleMapsListUrl, setGoogleMapsListUrl] = useState('')
-  const [singlePlaceUrl, setSinglePlaceUrl] = useState('')
-  const [importedPlaces, setImportedPlaces] = useState<any[]>([])
-  const [isImporting, setIsImporting] = useState(false)
-  const [showHelp, setShowHelp] = useState(false)
-  
-  // State for storing the maps list reference for buyers
-  const [mapsListReference, setMapsListReference] = useState<{
-    original_url: string
-    expanded_url: string
+  // State for Google Maps lists
+  const [googleMapsList, setGoogleMapsList] = useState<{
+    id: string
     title: string
+    url: string
+    description: string
   } | null>(null)
+  
+  // State for categories
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  
+  // Available categories - now using standardized categories
+  const availableCategories = STANDARD_CATEGORIES
+  
+  // State for Google Maps URLs
+  const [singlePlaceUrl, setSinglePlaceUrl] = useState('')
+  const [googleMapsListUrl, setGoogleMapsListUrl] = useState('')
   
   // State for form submission
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [userId, setUserId] = useState<string>('')
-  
-  // State for completion error modal
-  const [showCompletionError, setShowCompletionError] = useState<{
-    show: boolean
-    incompletePlaces: Array<{index: number, pin: Pin, missing: string[]}>
-  }>({ show: false, incompletePlaces: [] })
 
   // State for success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [createdPackTitle, setCreatedPackTitle] = useState('')
+
+
+
+  // State for image uploads
+  const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [mainImageIndex, setMainImageIndex] = useState<number>(-1) // -1 means no main image selected
+
+  // State for places input
+  const [placesInput, setPlacesInput] = useState('')
+  
+  // State for loading place details
+  const [isFetchingPlaceDetails, setIsFetchingPlaceDetails] = useState(false)
 
   // Country and city dropdown state
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
@@ -105,56 +95,17 @@ export default function CreatePackPage() {
   const countryDropdownRef = useRef<HTMLDivElement>(null)
   const cityDropdownRef = useRef<HTMLDivElement>(null)
 
-  // Available categories for packs
-  const availableCategories = [
-    'Solo Travel',
-    'Romantic', 
-    'Family',
-    'Friends Group',
-    'Business Travel',
-    'Adventure',
-    'Relaxation',
-    'Cultural',
-    'Food & Drink',
-    'Nightlife'
-  ]
+  // File input ref for image uploads
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load countries and cities data on component mount
+  // Load countries on component mount
   useEffect(() => {
     const countries = getAllCountries()
     setAvailableCountries(countries)
     setFilteredCountries(countries)
   }, [])
 
-  // Helper function to check if a place is complete
-  const isPlaceComplete = (pin: Pin): boolean => {
-    const hasDescription = !!(pin.description && pin.description.trim().length > 0)
-    const hasPhoto = !!(pin.photos && pin.photos.length > 0)
-    return hasDescription && hasPhoto
-  }
-
-  // Helper function to get incomplete places
-  const getIncompletePlaces = (): Array<{index: number, pin: Pin, missing: string[]}> => {
-    return pins.map((pin, index) => {
-      const missing: string[] = []
-      if (!pin.description || pin.description.trim().length === 0) {
-        missing.push('description')
-      }
-      if (!pin.photos || pin.photos.length === 0) {
-        missing.push('photo')
-      }
-      return { index, pin, missing }
-    }).filter(item => item.missing.length > 0)
-  }
-
-  // Helper function to get completion stats
-  const getCompletionStats = () => {
-    const total = pins.length
-    const complete = pins.filter(isPlaceComplete).length
-    return { complete, total, percentage: total > 0 ? (complete / total) * 100 : 0 }
-  }
-
-  // Sync refs with state for keyboard navigation and auto-scroll
+  // Sync refs with state for keyboard navigation
   useEffect(() => {
     selectedCountryIndexRef.current = selectedCountryIndex
     
@@ -187,782 +138,84 @@ export default function CreatePackPage() {
     }
   }, [selectedCityIndex])
 
-  // Check for authenticated user or redirect to sign in
-  useEffect(() => {
-    const checkAuth = async () => {
-      // Check if user is authenticated via new email system
-      const userProfile = localStorage.getItem('pinpacks_user_profile')
-      const savedUserId = localStorage.getItem('pinpacks_user_id')
-      
-      if (userProfile) {
-        // User is authenticated via email system
-        const profile = JSON.parse(userProfile)
-        
-        // Ensure we have the correct UUID for this user
-        try {
-          const { data: userData, error } = await supabase
-            .from('users')
-            .select('id, email')
-            .eq('email', profile.email)
-            .single()
+  // Image upload functions
+  const handleImageUpload = (files: FileList | null) => {
+    if (!files) return
+    
+    setIsUploading(true)
+    const newImages: string[] = []
+    let processedCount = 0
+    
+    Array.from(files).forEach((file) => {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const result = e.target?.result as string
+          newImages.push(result)
+          processedCount++
           
-          if (userData && !error) {
-            setUserId(userData.id) // Use the actual UUID from database
-            console.log('Authenticated user found, using UUID:', userData.id)
-          } else {
-            console.warn('Could not find user in database:', error)
-            setUserId(profile.userId) // Fallback to stored userId
+          if (processedCount === files.length) {
+            setUploadedImages(prev => {
+              const updatedImages = [...prev, ...newImages].slice(0, 10) // Max 10 images
+              
+              // Automatically set the first image as main if no main image is selected
+              if (mainImageIndex === -1 && updatedImages.length > 0) {
+                setMainImageIndex(0)
+              }
+              
+              return updatedImages
+            })
+            setIsUploading(false)
           }
-        } catch (error) {
-          console.error('Error fetching user UUID:', error)
-          setUserId(profile.userId) // Fallback to stored userId
         }
-        
-        console.log('Authenticated user found:', profile.email)
-      } else if (savedUserId) {
-        // User has old system ID - still allow them to use it
-        setUserId(savedUserId)
-        console.log('Legacy user found:', savedUserId)
+        reader.readAsDataURL(file)
       } else {
-        // No authentication found - redirect to sign in
-        console.log('No authentication found, redirecting to auth')
-        window.location.href = '/auth'
-        return
-      }
-    }
-    
-    checkAuth()
-  }, [])
-
-  // Load pins from localStorage when component mounts
-  useEffect(() => {
-    const loadPinsFromStorage = () => {
-      try {
-        // Check if user just created a pack successfully
-        const packJustCreated = localStorage.getItem('pinpacks_pack_just_created')
-        if (packJustCreated) {
-          // Clear the flag and don't load any pins
-          localStorage.removeItem('pinpacks_pack_just_created')
-          localStorage.removeItem('pinpacks_create_pins')
-          localStorage.removeItem('pinpacks_create_pack_details')
-          console.log('🧹 Detected pack was just created, clearing all data for fresh start')
-          return
+        processedCount++
+        if (processedCount === files.length) {
+          setIsUploading(false)
         }
+      }
+    })
+  }
 
-        const savedPins = localStorage.getItem('pinpacks_create_pins')
-        if (savedPins) {
-          const pins: Pin[] = JSON.parse(savedPins)
-          setPins(pins)
-          console.log(' Loaded pins from localStorage:', pins.length, pins.map(p => p.title || 'Untitled'))
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    handleImageUpload(e.dataTransfer.files)
+  }
+
+  const removeImage = (index: number) => {
+    setUploadedImages(prev => {
+      const updatedImages = prev.filter((_, i) => i !== index)
+      
+      // Adjust main image index if needed
+      if (mainImageIndex === index) {
+        // If main image was removed, set the first remaining image as main
+        if (updatedImages.length > 0) {
+          setMainImageIndex(0)
         } else {
-          console.log('ℹ️ No saved pins found in localStorage')
+          setMainImageIndex(-1) // No images left
         }
-      } catch (error) {
-        console.error('❌ Error loading pins from localStorage:', error)
+      } else if (mainImageIndex > index) {
+        setMainImageIndex(mainImageIndex - 1) // Adjust index for remaining images
       }
-    }
-
-    loadPinsFromStorage()
-  }, [])
-
-  // Load pack details from localStorage when component mounts
-  useEffect(() => {
-    const loadPackDetailsFromStorage = () => {
-      try {
-        const savedPackDetails = localStorage.getItem('pinpacks_create_pack_details')
-        if (savedPackDetails) {
-          const details = JSON.parse(savedPackDetails)
-          
-          // Load pack details
-          if (details.packTitle) setPackTitle(details.packTitle)
-          if (details.packDescription) setPackDescription(details.packDescription)
-          if (details.price) setPrice(details.price)
-          if (details.country) {
-            setCountry(details.country)
-            // Load cities for the saved country
-            const cities = getCitiesForCountry(details.country)
-            setAvailableCities(cities)
-            setFilteredCities(cities)
-          }
-          if (details.city) setCity(details.city)
-          if (details.selectedCategories) setSelectedCategories(details.selectedCategories)
-          
-          // Load maps list reference if it exists
-          if (details.mapsListReference) {
-            setMapsListReference(details.mapsListReference)
-          }
-          
-          console.log(' Loaded pack details from localStorage:', details)
-        } else {
-          console.log('ℹ️ No saved pack details found in localStorage')
-        }
-      } catch (error) {
-        console.error('❌ Error loading pack details from localStorage:', error)
-      }
-    }
-
-    loadPackDetailsFromStorage()
-  }, [])
-
-  // Save pack details to localStorage whenever they change
-  useEffect(() => {
-    const savePackDetailsToStorage = () => {
-      try {
-        const packDetails = {
-          packTitle,
-          packDescription,
-          price,
-          country,
-          city,
-          selectedCategories,
-          mapsListReference
-        }
-        
-        localStorage.setItem('pinpacks_create_pack_details', JSON.stringify(packDetails))
-        console.log('💾 Saved pack details to localStorage')
-      } catch (error) {
-        console.error('❌ Error saving pack details to localStorage:', error)
-      }
-    }
-
-    // Only save if we have some meaningful data
-    if (packTitle || packDescription || price || country || city || selectedCategories.length > 0 || mapsListReference) {
-      savePackDetailsToStorage()
-    }
-  }, [packTitle, packDescription, price, country, city, selectedCategories, mapsListReference])
-
-  // Function to validate single place URLs and provide helpful guidance
-  const validateSinglePlaceUrl = (url: string): { isValid: boolean; errorMessage?: string; guidance?: string; warning?: string } => {
-    // Check if it's a Google Maps list URL (which we don't want for single places)
-    const isListUrl = url.includes('/lists/') || 
-                     url.includes('list/') ||
-                     url.includes('/maps/list/')
-    
-    if (isListUrl) {
-      return {
-        isValid: false,
-        errorMessage: 'This is a Google Maps List URL',
-        guidance: `This URL appears to be a Google Maps list or collection, not a single place.
-
-How to get the correct URL:
-1. Go to Google Maps
-2. Search for the specific place you want
-3. Click on the place name/listing (not a list)
-4. Click "Share" and copy the link
-5. The URL should look like: https://maps.app.goo.gl/... or https://maps.google.com/maps?cid=...
-
-For Google Maps lists, use the "Google Maps List URL" field above instead.`
-      }
-    }
-    
-    // Check if it's a valid Google Maps place URL
-    const isValidGoogleMapsUrl = 
-      url.includes('maps.google.com') ||
-      url.includes('goo.gl') ||
-      url.includes('maps.app.goo.gl') ||
-      url.includes('google.com/maps') ||
-      url.includes('maps.google.') ||
-      url.includes('plus.codes') ||
-      (url.includes('@') && url.includes('google.')) ||
-      url.includes('/maps/place/') ||
-      url.includes('/maps?') ||
-      (url.includes('google.') && url.includes('/maps'))
-
-    if (!isValidGoogleMapsUrl) {
-      return {
-        isValid: false,
-        errorMessage: 'Not a valid Google Maps URL',
-        guidance: `This doesn't appear to be a Google Maps URL.
-
-How to get the correct URL:
-1. Go to Google Maps (maps.google.com)
-2. Search for the place you want to add
-3. Click on the place name/listing
-4. Click the "Share" button
-5. Click "Copy link"
-6. Paste the URL here
-
-The URL should start with:
-• https://maps.app.goo.gl/ (recommended)
-• https://maps.google.com/
-• https://goo.gl/maps/
-• https://www.google.com/maps/`
-      }
-    }
-    
-    // Check for search URLs (which are not single places)
-    const isSearchUrl = url.includes('/maps/search/') || 
-                       url.includes('?q=') ||
-                       url.includes('search?')
-    
-    if (isSearchUrl) {
-      return {
-        isValid: false,
-        errorMessage: 'This is a search URL, not a specific place',
-        guidance: `This URL appears to be a search result, not a specific place.
-
-How to get the correct URL:
-1. In Google Maps, search for your place
-2. From the search results, click on the specific place name
-3. Make sure you're on the place's detail page (not search results)
-4. Click "Share" and copy the link
-5. The URL should show the place name, not search terms
-
-You need to click on the actual place listing, not stay on the search page.`
-      }
-    }
-    
-    // Check if it's the preferred browser URL format (works best with API)
-    const isBrowserUrl = url.includes('/place/') && url.includes('@') && url.includes('data=!')
-    
-    if (isBrowserUrl) {
-      // This is the preferred format - works best with Google Maps API
-      return { isValid: true }
-    }
-    
-    // Check if it's a shortened URL that might not work as well
-    const isShortenedUrl = url.includes('goo.gl') || url.includes('maps.app.goo.gl')
-    
-    if (isShortenedUrl) {
-      return {
-        isValid: true,
-        warning: `For best results, use the browser URL format
-
-While this URL will work, for more reliable data fetching:
-
-1. Open this place in Google Maps
-2. Copy the URL from your browser's address bar (not the Share button)
-3. Use that URL instead
-
-The browser URL format provides more detailed information.`
-      }
-    }
-    
-    return { isValid: true }
+      
+      return updatedImages
+    })
   }
 
-  const addSinglePlace = async () => {
-    if (!singlePlaceUrl) {
-      console.log('No place URL provided')
-      return
-    }
-
-    // Check if Google Maps list URL has been added first
-    if (!mapsListReference) {
-      console.log('Maps list reference required before adding individual places')
-      return
-    }
-
-    setIsImporting(true)
-    
-    try {
-      // Validate the URL first
-      const validation = validateSinglePlaceUrl(singlePlaceUrl)
-      
-      if (!validation.isValid) {
-        console.log('Invalid URL:', validation.errorMessage)
-        return
-      }
-
-      // Import single place using the enhanced API integration
-      try {
-        const importedPlace = await importSinglePlace(singlePlaceUrl)
-        
-        // Check for duplicates before adding
-        const isDuplicate = pins.some(existingPin => {
-          // Check by Google Maps URL (most reliable)
-          if (existingPin.google_maps_url === importedPlace.google_maps_url) {
-            return true
-          }
-          
-          // Check by coordinates (in case URLs are different but same place)
-          const coordsMatch = Math.abs(existingPin.latitude - importedPlace.latitude) < 0.0001 && 
-                             Math.abs(existingPin.longitude - importedPlace.longitude) < 0.0001
-          
-          return coordsMatch
-        })
-        
-        if (isDuplicate) {
-          console.log(`Duplicate place: "${importedPlace.title}" is already in pack`)
-          return
-        }
-        
-        // Map the imported place to our Pin interface
-        const newPin: Pin = {
-          title: importedPlace.title,
-          description: importedPlace.description,
-          google_maps_url: importedPlace.google_maps_url,
-          category: importedPlace.category,
-          latitude: importedPlace.latitude,
-          longitude: importedPlace.longitude,
-          rating: importedPlace.rating,
-          rating_count: importedPlace.rating_count,
-          business_type: importedPlace.business_type,
-          place_city: importedPlace.city,
-          place_country: importedPlace.country,
-          zip_code: importedPlace.zip_code,
-          address: importedPlace.address,
-          phone: importedPlace.phone,
-          website: importedPlace.website,
-          current_opening_hours: importedPlace.current_opening_hours,
-          business_status: importedPlace.business_status,
-          reviews: importedPlace.reviews,
-          needs_manual_edit: importedPlace.needs_manual_edit
-        }
-        
-        // Add the imported place to our pins
-        setPins(currentPins => [...currentPins, newPin])
-        
-        console.log(`Successfully imported "${importedPlace.title}"`)
-      } catch (apiError) {
-        console.warn('API import failed, falling back to basic method:', apiError)
-        
-        // Fallback to basic coordinate extraction
-        const coords = extractCoordinates(singlePlaceUrl)
-        
-        const basicPin: Pin = {
-          title: 'Imported Place',
-          description: '',
-          google_maps_url: singlePlaceUrl,
-          category: 'other',
-          latitude: coords.latitude,
-          longitude: coords.longitude
-        }
-        
-        setPins(currentPins => [...currentPins, basicPin])
-        console.log('Place imported with basic details')
-      }
-      
-      // Clear the URL field
-      setSinglePlaceUrl('')
-      
-    } catch (err) {
-      console.error('Import error:', err)
-    } finally {
-      setIsImporting(false)
-    }
+  const setMainImage = (index: number) => {
+    setMainImageIndex(index)
   }
 
-  // Enhanced function to import maps list URLs as references for buyers
-  const importFromGoogleMapsList = async () => {
-    if (!googleMapsListUrl) {
-      console.log('No Google Maps list URL provided')
-      return
-    }
-
-    setIsImporting(true)
-    
-    try {
-      // Validate that it's a Google Maps URL
-      const isValidGoogleMapsUrl = 
-        googleMapsListUrl.includes('maps.google.com') ||
-        googleMapsListUrl.includes('goo.gl') ||
-        googleMapsListUrl.includes('maps.app.goo.gl') ||
-        googleMapsListUrl.includes('google.com/maps') ||
-        googleMapsListUrl.includes('maps.google.') ||
-        (googleMapsListUrl.includes('google.') && googleMapsListUrl.includes('/maps'))
-
-      if (!isValidGoogleMapsUrl) {
-        throw new Error('Please enter a valid Google Maps URL')
-      }
-
-      // Validate and check if it's a maps list
-      const validation = await validateMapsListUrl(googleMapsListUrl)
-      
-      if (!validation.is_list) {
-        console.log('URL is not a valid Google Maps list')
-        return
-      }
-
-      // Store the maps list reference
-      setMapsListReference({
-        original_url: googleMapsListUrl,
-        expanded_url: validation.expanded_url,
-        title: validation.title
-      })
-
-      console.log(`Maps list added successfully: ${validation.title}`)
-      
-      // Clear the URL field
-      setGoogleMapsListUrl('')
-      
-    } catch (err) {
-      console.error('Maps list import error:', err)
-    } finally {
-      setIsImporting(false)
-    }
+  const openFileDialog = () => {
+    fileInputRef.current?.click()
   }
 
-  // Handle edit requests
-  const handleEditRequest = (field: string, currentValue: string, requestedValue: string) => {
-    // For now, we'll just log the edit request and show confirmation
-    // In a real app, you'd send this to your backend for review
-    console.log('Edit request:', { field, currentValue, requestedValue })
-    
-    // Show confirmation to user
-    console.log(
-      `Edit Request Submitted! 📝\n\n` +
-      `Field: ${field}\n` +
-      `Current: ${currentValue}\n` +
-      `Requested: ${requestedValue}\n\n` +
-      `Your request will be reviewed and applied if approved.\n\n` +
-      `Note: In a production app, this would be saved to the database for admin review.`
-    )
-    
-    // TODO: Implement database storage for edit requests
-    // This would require:
-    // 1. Finding the pin_id for the place being edited
-    // 2. Saving to place_edit_requests table:
-    /*
-    const editRequestData = {
-      pin_id: pinId, // Need to determine this
-      user_id: userId,
-      field_name: field,
-      current_value: currentValue,
-      requested_value: requestedValue,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    }
-    
-    await supabase
-      .from('place_edit_requests')
-      .insert([editRequestData])
-    */
-  }
-
-  // Function to extract coordinates from Google Maps URL
-  const extractCoordinates = (url: string) => {
-    console.log('Extracting coordinates from URL:', url)
-    
-    try {
-      // Multiple patterns to match different Google Maps URL formats
-      const patterns = [
-        // Standard @lat,lng format (most common)
-        /@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Place ID format with coordinates (!3d and !4d)
-        /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/,
-        // Direct coordinates in URL (lat,lng format)
-        /(?:^|[^\d])(-?\d+\.\d+),(-?\d+\.\d+)(?:[^\d]|$)/,
-        // Query parameter format (?q=lat,lng)
-        /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Center parameter format
-        /[?&]center=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
-        // Location parameter format
-        /[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/
-      ]
-      
-      for (const pattern of patterns) {
-        const match = url.match(pattern)
-        if (match) {
-          const lat = parseFloat(match[1])
-          const lng = parseFloat(match[2])
-          
-          // Validate coordinates are within reasonable ranges
-          if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-            console.log('Found coordinates:', { latitude: lat, longitude: lng })
-            return { latitude: lat, longitude: lng }
-          }
-        }
-      }
-      
-      console.log('No coordinates found in URL, using default')
-      return { latitude: 0, longitude: 0 }
-    } catch (err) {
-      console.error('Error extracting coordinates:', err)
-      return { latitude: 0, longitude: 0 }
-    }
-  }
-
-  // Function to fetch place information from Google Maps URL
-  const fetchPlaceInfo = async (index: number, url: string) => {
-    if (!url.trim()) {
-      console.log('No Google Maps URL provided')
-      return
-    }
-
-    // Set loading state
-    updatePin(index, { fetching: true })
-
-    try {
-      console.log('=== DEBUG: Starting fetchPlaceInfo ===')
-      console.log('URL:', url)
-      
-      // Check for shortened URLs
-      if (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) {
-        console.log('Shortened URL detected, proceeding with limited information')
-      }
-      
-      // Use the existing importSinglePlace function
-      console.log('=== DEBUG: Calling importSinglePlace ===')
-      const placeInfo = await importSinglePlace(url)
-      
-      console.log('=== DEBUG: Fetched place info ===', placeInfo)
-      
-      // Use the city and country from the enhanced fetch, fallback to address parsing
-      let city = placeInfo.city || ''
-      let country = placeInfo.country || ''
-      
-      // Fallback to manual parsing if not provided
-      if (!city || !country) {
-        if (placeInfo.address) {
-          const addressParts = placeInfo.address.split(',').map(part => part.trim())
-          if (addressParts.length >= 2) {
-            city = city || addressParts[addressParts.length - 3] || addressParts[0] || ''
-            country = country || addressParts[addressParts.length - 1] || ''
-          }
-        }
-      }
-      
-      // Update the pin with fetched information
-      const updatedPin = {
-        title: placeInfo.title || '',
-        category: placeInfo.category || 'restaurant',
-        latitude: placeInfo.latitude || 0,
-        longitude: placeInfo.longitude || 0,
-        rating: placeInfo.rating || undefined,
-        rating_count: placeInfo.rating_count || undefined,
-        business_type: placeInfo.business_type || undefined,
-        place_city: city,
-        place_country: country,
-        google_maps_url: url,
-        fetching: false
-      }
-      
-      console.log('=== DEBUG: Updating pin with ===', updatedPin)
-      updatePin(index, updatedPin)
-
-      // Log success based on the type of URL and data fetched
-      if (placeInfo.needs_manual_edit) {
-        console.log('Place added with limited information from shortened URL')
-      } else {
-        console.log(`Place information fetched successfully: ${placeInfo.title || 'Unknown place'}`)
-      }
-      
-    } catch (error) {
-      console.error('=== DEBUG: Error in fetchPlaceInfo ===', error)
-      
-      // Fallback to basic coordinate extraction
-      const coords = extractCoordinates(url)
-      updatePin(index, {
-        google_maps_url: url,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        fetching: false
-      })
-      
-      console.log('Could not fetch detailed place information, using basic coordinates')
-    }
-  }
-
-  // Note: addPin function removed - users can only add places via Google Maps URL import
-
-  // Function to remove a pin
-  const removePin = (index: number) => {
-    setPins(pins.filter((_, i) => i !== index))
-  }
-
-  // Function to update a pin
-  const updatePin = (index: number, updatedPin: Partial<Pin>) => {
-    const newPins = [...pins]
-    newPins[index] = { ...newPins[index], ...updatedPin }
-    setPins(newPins)
-    
-    // Save to localStorage so individual place pages can access the data
-    try {
-      localStorage.setItem('pinpacks_create_pins', JSON.stringify(newPins))
-    } catch (error) {
-      console.error('Error saving pins to localStorage:', error)
-    }
-  }
-
-  // Save pins to localStorage whenever pins change (but not on initial load)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  
-  useEffect(() => {
-    if (isInitialLoad) {
-      setIsInitialLoad(false)
-      return // Don't save on initial mount
-    }
-    
-    try {
-      localStorage.setItem('pinpacks_create_pins', JSON.stringify(pins))
-      console.log('💾 Saved pins to localStorage:', pins.length, pins.map(p => p.title || 'Untitled'))
-    } catch (error) {
-      console.error('❌ Error saving pins to localStorage:', error)
-    }
-  }, [pins, isInitialLoad])
-
-  // Function to create the pin pack
-  const createPinPack = async () => {
-    if (!packTitle.trim() || !city.trim() || !country.trim() || pins.length === 0) {
-      console.log('Missing required fields or no pins added')
-      return
-    }
-
-    // Check if all places are complete (have description and photo)
-    const incompletePlaces = getIncompletePlaces()
-    if (incompletePlaces.length > 0) {
-      const incompleteList = incompletePlaces.map(item => {
-        const placeName = item.pin.title || `Place ${item.index + 1}`
-        const missingItems = item.missing.join(' and ')
-        return `• ${placeName}: missing ${missingItems}`
-      }).join('\n')
-      
-      console.log('Incomplete places found:', incompletePlaces)
-      
-      // Show completion error modal instead of console.log
-      setShowCompletionError({
-        show: true,
-        incompletePlaces: incompletePlaces
-      })
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      // Create pin pack data
-      const pinPackData = {
-        title: packTitle.trim(),
-        description: packDescription.trim(),
-        city: city.trim(),
-        country: country.trim(),
-        price: price === '' ? 0 : Number(price),
-        creator_id: userId,
-        pin_count: pins.length,
-        categories: selectedCategories, // Add categories as JSONB array
-        maps_list_reference: mapsListReference ? JSON.stringify(mapsListReference) : null,
-        created_at: new Date().toISOString()
-      }
-
-      console.log('Creating pin pack:', pinPackData)
-
-      // Insert pin pack
-      const { data: packResponse, error: packError } = await supabase
-        .from('pin_packs')
-        .insert([pinPackData])
-        .select()
-
-      if (packError) {
-        console.error('Error creating pin pack:', packError)
-        throw packError
-      }
-
-      const newPackId = packResponse[0].id
-      console.log('Pin pack created with ID:', newPackId)
-
-      // Insert pins first (without pack_id since it's not in the schema)
-      const pinData = pins.map(pin => ({
-        title: pin.title.trim(),
-        description: pin.description.trim(),
-        google_maps_url: pin.google_maps_url.trim(),
-        category: pin.category,
-        latitude: pin.latitude,
-        longitude: pin.longitude,
-        
-        // Enhanced place information
-        address: pin.address || null,
-        city: pin.place_city || null,
-        country: pin.place_country || null,
-        zip_code: pin.zip_code || null,
-        business_type: pin.business_type || null,
-        phone: pin.phone || null,
-        website: pin.website || null,
-        rating: pin.rating || null,
-        rating_count: pin.rating_count || null,
-        business_status: pin.business_status || null,
-        current_opening_hours: pin.current_opening_hours || null,
-        reviews: pin.reviews || null,
-        needs_manual_edit: pin.needs_manual_edit || false,
-        
-        // Include photos array (now supported by database)
-        photos: pin.photos || [],
-        
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }))
-
-      console.log('Creating pins:', pinData)
-
-      const { data: createdPins, error: pinsError } = await supabase
-        .from('pins')
-        .insert(pinData)
-        .select()
-
-      if (pinsError) {
-        console.error('Error creating pins:', pinsError)
-        throw pinsError
-      }
-
-      console.log('Pins created:', createdPins)
-
-      // Now create the relationships in pin_pack_pins junction table
-      const relationshipData = createdPins.map(pin => ({
-        pin_pack_id: newPackId,
-        pin_id: pin.id,
-        created_at: new Date().toISOString()
-      }))
-
-      console.log('Creating pin-pack relationships:', relationshipData)
-
-      const { error: relationshipError } = await supabase
-        .from('pin_pack_pins')
-        .insert(relationshipData)
-
-      if (relationshipError) {
-        console.error('Error creating pin-pack relationships:', relationshipError)
-        throw relationshipError
-      }
-
-      // Store the created pack title for the success modal
-      setCreatedPackTitle(packTitle.trim())
-      
-      // Clear form first
-      setPackTitle('')
-      setPackDescription('')
-      setCity('')
-      setCountry('')
-      setPrice('')
-      setSelectedCategories([])
-      setPins([])
-      setMapsListReference(null)
-      
-      // Clear localStorage and set flag for next visit
-      try {
-        localStorage.removeItem('pinpacks_create_pack_details')
-        localStorage.removeItem('pinpacks_create_pins')
-        localStorage.setItem('pinpacks_pack_just_created', 'true')
-        console.log('🧹 Cleared localStorage after successful pack creation and set flag for next visit')
-      } catch (error) {
-        console.error('❌ Error clearing localStorage:', error)
-      }
-      
-      console.log('Pin pack created successfully')
-      
-      // Show success modal instead of immediately navigating
-      setShowSuccessModal(true)
-      
-    } catch (err) {
-      console.error('Error creating pin pack:', err)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Handle success modal actions
-  const handleViewMyPacks = () => {
-    setShowSuccessModal(false)
-    router.push('/manage')
-  }
-
-  const handleCreateAnotherPack = () => {
-    setShowSuccessModal(false)
-    // Form is already cleared, just reset any modal states
-    setCreatedPackTitle('')
-    // Scroll to top for better UX
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-    // Handle country search/filter
+  // Country and city functions
   const handleCountrySearch = (searchTerm: string) => {
     setCountrySearchTerm(searchTerm)
     setSelectedCountryIndex(-1) // Reset selection when typing
@@ -970,19 +223,17 @@ The browser URL format provides more detailed information.`
     // If user starts typing, clear the selected country to allow editing
     if (country && searchTerm !== country) {
       setCountry('')
-      setCity('') // Also clear city when country changes
-      setCitySearchTerm('')
+      setCity('') // Clear city when country changes
       setAvailableCities([])
       setFilteredCities([])
     }
     
-    // If user clears the field completely, reset everything
+    // If user clears the field completely, reset country
     if (!searchTerm.trim()) {
       setFilteredCountries(availableCountries)
       if (country) {
         setCountry('')
         setCity('')
-        setCitySearchTerm('')
         setAvailableCities([])
         setFilteredCities([])
       }
@@ -998,7 +249,6 @@ The browser URL format provides more detailed information.`
     }
   }
 
-  // Handle city search/filter
   const handleCitySearch = (searchTerm: string) => {
     setCitySearchTerm(searchTerm)
     setSelectedCityIndex(-1) // Reset selection when typing
@@ -1026,7 +276,6 @@ The browser URL format provides more detailed information.`
     }
   }
 
-  // Handle country selection and update available cities
   const handleCountrySelect = (selectedCountry: string) => {
     setCountry(selectedCountry)
     setCountrySearchTerm('') // Clear search term
@@ -1042,7 +291,6 @@ The browser URL format provides more detailed information.`
     setFilteredCities(cities)
   }
 
-  // Handle city selection
   const handleCitySelect = (selectedCity: string) => {
     setCity(selectedCity)
     setCitySearchTerm('') // Clear search term
@@ -1050,27 +298,25 @@ The browser URL format provides more detailed information.`
     setShowCityDropdown(false)
   }
 
-  // Category selection functions
-  const handleCategoryToggle = (category: string) => {
-    setSelectedCategories(prev => {
-      if (prev.includes(category)) {
-        // Remove category if already selected
-        return prev.filter(c => c !== category)
-      } else {
-        // Add category if not already selected and under limit
-        if (prev.length < 3) {
-          return [...prev, category]
-        }
-        return prev // Don't add if already at limit
-      }
-    })
+  // Places input functions
+  const handlePlacesInputChange = (value: string) => {
+    setPlacesInput(value)
   }
 
-  const removeCategory = (categoryToRemove: string) => {
-    setSelectedCategories(prev => prev.filter(c => c !== categoryToRemove))
+  const handlePlacesSelect = async (option: string) => {
+    // This function is no longer needed since we removed the dropdown
+    // Keeping it for potential future use
   }
 
-  // Handle country keyboard navigation
+  const handleGoogleMapsUrlChange = (value: string) => {
+    setSinglePlaceUrl(value)
+  }
+
+  const handleGoogleMapsListUrlChange = (value: string) => {
+    setGoogleMapsListUrl(value)
+  }
+
+  // Keyboard navigation for country dropdown
   const handleCountryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const isDropdownVisible = showCountryDropdown
     const suggestionsCount = filteredCountries.length
@@ -1101,7 +347,7 @@ The browser URL format provides more detailed information.`
     }
   }
 
-  // Handle city keyboard navigation
+  // Keyboard navigation for city dropdown
   const handleCityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const isDropdownVisible = showCityDropdown
     const suggestionsCount = filteredCities.length
@@ -1158,682 +404,888 @@ The browser URL format provides more detailed information.`
     }
   }, [country, city])
 
-  // Function to validate maps list URLs (simplified approach)
-  const validateMapsListUrl = async (url: string): Promise<{expanded_url: string, is_list: boolean, title: string}> => {
-    try {
-      // First, check if it's a full URL that clearly contains list indicators
-      const isFullListUrl = url.includes('/lists/') || 
-                           url.includes('list/') ||
-                           url.includes('/maps/list/')
+  // Check for authenticated user
+  useEffect(() => {
+    const checkAuth = async () => {
+      const userProfile = localStorage.getItem('pinpacks_user_profile')
+      const savedUserId = localStorage.getItem('pinpacks_user_id')
       
-      if (isFullListUrl) {
-        // For full list URLs, we can be confident it's a list
-        let title = 'Google Maps List'
-        const listMatch = url.match(/lists\/([^\/\?&]+)/)
-        if (listMatch) {
-          title = `Maps List ${listMatch[1].substring(0, 10)}...`
-        }
-        
-        return {
-          expanded_url: url,
-          is_list: true,
-          title: title
-        }
-      }
-      
-      // Check for Google Maps URLs with encoded data (potential lists/collections)
-      const hasEncodedData = url.includes('google.') && 
-                             url.includes('/maps') && 
-                             url.includes('data=!') &&
-                             (url.includes('!2s') || url.includes('!4m')) // Common patterns in list URLs
-      
-      if (hasEncodedData) {
-        // This might be a Google Maps list/collection with encoded data
-        return {
-          expanded_url: url,
-          is_list: true,
-          title: 'Google Maps Collection (Encoded)'
-        }
-      }
-      
-      // For shortened URLs, we'll use a client-side redirect check
-      const isShortenedGoogleMaps = (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) &&
-                                   (url.includes('google') || url.includes('maps'))
-      
-      if (isShortenedGoogleMaps) {
-        // Try to check if it redirects to a list by making a fetch request
-        // This might work in some cases, but we'll handle failures gracefully
+      if (userProfile) {
+        const profile = JSON.parse(userProfile)
         try {
-          const response = await fetch(url, { 
-            method: 'HEAD', 
-            mode: 'no-cors' // This avoids CORS but limits what we can see
-          })
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('id, email')
+            .eq('email', profile.email)
+            .single()
           
-          // Even with no-cors, we can't access the response, but if it doesn't throw, it's valid
-          return {
-            expanded_url: url, // Keep original URL since we can't see the redirect
-            is_list: true, // Assume shortened Google Maps URLs could be lists
-            title: 'Google Maps List (Shortened)'
+          if (userData && !error) {
+            setUserId(userData.id)
+          } else {
+            setUserId(profile.userId)
           }
-        } catch (fetchError) {
-          // If fetch fails, still allow it but with a note
-          return {
-            expanded_url: url,
-            is_list: true, // Assume it's valid
-            title: 'Google Maps List (Shortened)'
-          }
+        } catch (error) {
+          setUserId(profile.userId)
         }
+      } else if (savedUserId) {
+        setUserId(savedUserId)
+      } else {
+        window.location.href = '/auth'
+        return
       }
-      
-      // If it's not recognizable as a Google Maps URL, reject it
-      throw new Error('Not a valid Google Maps list URL')
-      
+    }
+    
+    checkAuth()
+  }, [])
+
+  // Google Maps API functions
+  const fetchPlaceDetails = async (url: string) => {
+    try {
+      // Extract a searchable query from the URL
+      const query = extractQueryFromUrl(url)
+      if (!query) {
+        throw new Error('Could not extract searchable information from URL')
+      }
+
+      // Use Google Maps Places API to search for the place
+      const response = await fetch(`/api/places/details?query=${encodeURIComponent(query)}`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch place details')
+      }
+
+      const placeData = await response.json()
+      return placeData
     } catch (error) {
-      console.error('Error validating URL:', error)
-      throw error
+      console.error('Error fetching place details:', error)
+      return null
     }
   }
 
+  const extractQueryFromUrl = (url: string): string | null => {
+    console.log('Extracting query from URL:', url)
+    
+    try {
+      // Handle different Google Maps URL formats
+      const urlObj = new URL(url)
+      console.log('URL hostname:', urlObj.hostname)
+      console.log('URL pathname:', urlObj.pathname)
+      
+      // For short URLs like maps.app.goo.gl, try to get the query parameter
+      if (urlObj.hostname.includes('maps.app.goo.gl')) {
+        // For short URLs, we'll use the path as a query
+        const path = urlObj.pathname.replace('/', '')
+        if (path) {
+          console.log('Extracted from short URL:', path)
+          return path
+        }
+      }
+      
+      // For regular Google Maps URLs (google.com, google.de, etc.)
+      if (urlObj.hostname.includes('google')) {
+        // Extract place name from the URL path
+        const pathParts = urlObj.pathname.split('/')
+        console.log('Path parts:', pathParts)
+        
+        // Look for the 'place' segment and get the next part
+        const placeIndex = pathParts.findIndex(part => part === 'place')
+        console.log('Place index:', placeIndex)
+        
+        if (placeIndex !== -1 && placeIndex + 1 < pathParts.length) {
+          const placeName = pathParts[placeIndex + 1]
+          console.log('Place name found:', placeName)
+          
+          if (placeName && !placeName.startsWith('@')) {
+            // Decode the place name (replace + with spaces and decode URI)
+            const decodedName = decodeURIComponent(placeName.replace(/\+/g, ' '))
+            console.log('Decoded place name:', decodedName)
+            return decodedName
+          }
+        }
+        
+        // Fallback: try to extract any meaningful text from the path
+        const meaningfulParts = pathParts.filter(part => 
+          part && 
+          part !== 'maps' && 
+          part !== 'place' && 
+          !part.startsWith('@') && 
+          !part.startsWith('data=') &&
+          part.length > 2
+        )
+        console.log('Meaningful parts:', meaningfulParts)
+        
+        if (meaningfulParts.length > 0) {
+          const fallbackName = decodeURIComponent(meaningfulParts[0].replace(/\+/g, ' '))
+          console.log('Fallback name:', fallbackName)
+          return fallbackName
+        }
+      }
+      
+      // If we can't extract anything specific, use the full URL as a fallback
+      console.log('Using full URL as fallback')
+      return url
+    } catch (error) {
+      console.error('Error parsing URL:', error)
+      // If URL parsing fails, return the original string
+      return url
+    }
+  }
+
+  // Check if URL is already imported
+  const isUrlAlreadyImported = (url: string): boolean => {
+    return pins.some(pin => pin.google_maps_url === url)
+  }
+
+  // Add single place from Google Maps URL with API integration
+  const addSinglePlace = async () => {
+    if (!singlePlaceUrl.trim()) return
+
+    // Check if URL is already imported
+    if (isUrlAlreadyImported(singlePlaceUrl)) {
+      showToast('This place has already been imported. Please try a different URL.', 'info')
+      return
+    }
+
+    setIsFetchingPlaceDetails(true)
+    try {
+      // Fetch place details from Google Maps API
+      const placeDetails = await fetchPlaceDetails(singlePlaceUrl)
+      
+      let pinData: Pin
+      
+      if (placeDetails) {
+        // Use fetched data from Google Maps API
+        pinData = {
+          title: placeDetails.name || 'Imported Place',
+          description: placeDetails.formatted_address || 'Place imported from Google Maps',
+          google_maps_url: singlePlaceUrl,
+          category: 'other',
+          latitude: placeDetails.geometry?.location?.lat || 0,
+          longitude: placeDetails.geometry?.location?.lng || 0,
+          photos: uploadedImages,
+          rating: placeDetails.rating,
+          rating_count: placeDetails.user_ratings_total,
+          business_type: placeDetails.types?.[0] || 'establishment'
+        }
+      } else {
+        // Fallback to basic pin if API fails
+        pinData = {
+          title: 'Imported Place',
+          description: 'Place imported from Google Maps',
+          google_maps_url: singlePlaceUrl,
+          category: 'other',
+          latitude: 0,
+          longitude: 0,
+          photos: uploadedImages
+        }
+      }
+      
+      setPins(prev => [...prev, pinData])
+      setSinglePlaceUrl('')
+      showToast('Place imported successfully!', 'success')
+      
+    } catch (error) {
+      console.error('Error adding place:', error)
+      showToast('Error importing place. Please try again.', 'error')
+    } finally {
+      setIsFetchingPlaceDetails(false)
+    }
+  }
+
+  // Check if URL is a Google Maps list URL
+  const isGoogleMapsListUrl = (url: string): boolean => {
+    try {
+      const urlObj = new URL(url)
+      // Check if it's a Google Maps short URL (maps.app.goo.gl)
+      if (urlObj.hostname === 'maps.app.goo.gl') {
+        return true
+      }
+      // Check if it's a regular Google Maps URL with list indicators
+      if (urlObj.hostname.includes('google') && urlObj.pathname.includes('maps')) {
+        // Look for list indicators in the URL
+        const listIndicators = ['/list/', '/saved/', '/collections/']
+        return listIndicators.some(indicator => urlObj.pathname.includes(indicator))
+      }
+      return false
+    } catch (error) {
+      return false
+    }
+  }
+
+  // Import from Google Maps list
+  const importFromGoogleMapsList = async () => {
+    if (!googleMapsListUrl.trim()) return
+
+    // Validate that it's a Google Maps list URL
+    if (!isGoogleMapsListUrl(googleMapsListUrl)) {
+      showToast('This doesn\'t look like a Google Maps list URL. Please use a list URL like maps.app.goo.gl/...', 'error')
+      return
+    }
+
+    // Check if list URL is already imported
+    const isListAlreadyImported = googleMapsList !== null
+    if (isListAlreadyImported) {
+      showToast('This Google Maps list has already been imported. Please try a different list.', 'info')
+      return
+    }
+
+    try {
+      // Create a new list entry
+      const newList = {
+        id: Date.now().toString(),
+        title: 'Imported Google Maps List',
+        url: googleMapsListUrl,
+        description: 'List imported from Google Maps'
+      }
+      
+      setGoogleMapsList(newList)
+      setGoogleMapsListUrl('')
+      showToast('Google Maps list imported successfully!', 'success')
+      
+    } catch (error) {
+      console.error('Error importing from list:', error)
+      showToast('Error importing Google Maps list. Please try again.', 'error')
+    }
+  }
+
+  // Remove a pin
+  const removePin = (index: number) => {
+    setPins(pins.filter((_, i) => i !== index))
+  }
+
+  // Remove a Google Maps list
+  const removeGoogleMapsList = () => {
+    setGoogleMapsList(null)
+  }
+
+  // Category selection functions
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev => {
+      if (prev.includes(category)) {
+        return prev.filter(c => c !== category)
+      } else if (prev.length < 3) {
+        return [...prev, category]
+      } else {
+        showToast('You can only select up to 3 categories', 'info')
+        return prev
+      }
+    })
+  }
+
+  const isCategorySelected = (category: string) => {
+    return selectedCategories.includes(category)
+  }
+
+  // Create the pin pack
+  const createPinPack = async () => {
+    if (!packTitle.trim()) {
+      console.log('Missing pack title')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // Create pin pack data
+      const pinPackData = {
+        title: packTitle.trim(),
+        description: packDescription.trim() || 'A curated collection of amazing places',
+        city: city.trim() || 'Unknown',
+        country: country.trim() || 'Unknown',
+        price: price === '' ? 0 : Number(price),
+        creator_id: userId,
+        pin_count: pins.length,
+        categories: selectedCategories,
+        created_at: new Date().toISOString()
+      }
+
+      // Insert pin pack
+      const { data: packResponse, error: packError } = await supabase
+        .from('pin_packs')
+        .insert([pinPackData])
+        .select()
+
+      if (packError) {
+        console.error('Error creating pin pack:', packError)
+        throw packError
+      }
+
+      const newPackId = packResponse[0].id
+
+      // If there are pins, create them
+      if (pins.length > 0) {
+        const pinData = pins.map(pin => ({
+          title: pin.title.trim(),
+          description: pin.description.trim() || 'Amazing place to visit',
+          google_maps_url: pin.google_maps_url.trim(),
+          category: pin.category || 'other',
+          latitude: pin.latitude || 0,
+          longitude: pin.longitude || 0,
+          photos: uploadedImages, // Use uploadedImages directly instead of pin.photos
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }))
+
+        const { data: createdPins, error: pinsError } = await supabase
+          .from('pins')
+          .insert(pinData)
+          .select()
+
+        if (pinsError) {
+          console.error('Error creating pins:', pinsError)
+          throw pinsError
+        }
+
+        // Create relationships
+        const relationshipData = createdPins.map(pin => ({
+          pin_pack_id: newPackId,
+          pin_id: pin.id,
+          created_at: new Date().toISOString()
+        }))
+
+        const { error: relationshipError } = await supabase
+          .from('pin_pack_pins')
+          .insert(relationshipData)
+
+        if (relationshipError) {
+          console.error('Error creating relationships:', relationshipError)
+          throw relationshipError
+        }
+      }
+
+      // Update pin count
+      await supabase
+        .from('pin_packs')
+        .update({ pin_count: pins.length })
+        .eq('id', newPackId)
+
+      // Show success modal
+      setCreatedPackTitle(packTitle.trim())
+      setShowSuccessModal(true)
+      showToast(`Pack "${packTitle.trim()}" created successfully with ${pins.length} places and ${uploadedImages.length} photos!`, 'success')
+
+      // Clear form data
+      setPackTitle('')
+      setPackDescription('')
+      setCity('')
+      setCountry('')
+      setPrice('')
+      setSelectedCategories([])
+      setPins([])
+      setGoogleMapsList(null)
+      setUploadedImages([])
+      setMainImageIndex(-1)
+      setSinglePlaceUrl('')
+      setGoogleMapsListUrl('')
+      setPlacesInput('')
+
+    } catch (error) {
+      console.error('Error creating pack:', error)
+      showToast('Failed to create pack. Please try again.', 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleViewMyPacks = () => {
+    setShowSuccessModal(false)
+    router.push('/manage')
+  }
+
+  const handleCreateAnotherPack = () => {
+    setShowSuccessModal(false)
+    // Form is already cleared, just stay on the page
+  }
+
   return (
-    <div className="min-h-screen bg-gray-25">
-      <div 
-        className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 ${
-          showCompletionError.show ? 'pointer-events-none' : ''
-        }`}
-      >
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-500 mb-6">
-            <Sparkles className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Create Your Pin Pack
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
-            Share your favorite local spots with travelers around the world
-          </p>
-
-        </div>
-
-        {/* Main Form */}
-        <div className="space-y-8">
-          {/* Pack Details Card - Now includes Add Place functionality */}
-          <div className="card-airbnb p-8">
-            <div className="flex items-center mb-6">
-              <Globe className="h-6 w-6 text-coral-500 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-900">Pack Details</h2>
+    <div className="min-h-screen bg-white">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          
+          {/* Left Column - Upload Images */}
+          <div className="space-y-6">
+            {/* Back Navigation */}
+            <div className="flex items-center">
+              <button 
+                onClick={() => router.push('/manage')}
+                className="flex items-center text-gray-600 hover:text-gray-900 text-sm"
+              >
+                <svg className="h-4 w-4 mr-1 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                Go
+              </button>
             </div>
-            
-            <div className="grid md:grid-cols-2 gap-6">
+
+            {/* Upload Images Section */}
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">Upload Images</h2>
+              
+              {/* Main Upload Area */}
+              <div 
+                className={`border-2 border-dashed border-sky-200 bg-sky-50 rounded-xl mb-6 cursor-pointer hover:border-sky-300 hover:bg-sky-100 transition-colors ${
+                  mainImageIndex >= 0 && uploadedImages[mainImageIndex] 
+                    ? 'p-0 h-96' // No padding, fixed height when showing main image
+                    : 'p-12 text-center' // Padding and center text when showing upload interface
+                }`}
+                onClick={openFileDialog}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                {isUploading ? (
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                      <svg className="h-8 w-8 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Uploading...</h3>
+                  </div>
+                ) : mainImageIndex >= 0 && uploadedImages[mainImageIndex] ? (
+                  // Show main image
+                  <div className="relative w-full h-full rounded-lg overflow-hidden">
+                    <img 
+                      src={uploadedImages[mainImageIndex]} 
+                      alt="Main image"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <div className="bg-white bg-opacity-90 rounded-lg px-4 py-2">
+                        <p className="text-sm font-medium text-gray-900">Click to upload more images</p>
+                      </div>
+                    </div>
+                    <div className="absolute top-2 right-2 bg-white bg-opacity-90 rounded-full px-2 py-1">
+                      <span className="text-xs font-medium text-gray-900">Main</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Add Images</h3>
+                    <p className="text-gray-500 text-sm">or Drag & Drop</p>
+                  </>
+                )}
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => handleImageUpload(e.target.files)}
+                className="hidden"
+              />
+
+              {/* Image Grid - 10 slots */}
+              <div className="grid grid-cols-5 gap-4">
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => (
+                  <div key={index} className="aspect-square rounded-lg border-2 border-dashed border-sky-200 flex items-center justify-center relative overflow-hidden">
+                    {uploadedImages[index] ? (
+                      <>
+                        <img 
+                          src={uploadedImages[index]} 
+                          alt={`Uploaded image ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeImage(index)
+                          }}
+                          className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                          title="Remove image"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        
+                      </>
+                    ) : (
+                      <div className="text-center">
+                        <span className="text-sky-400 text-xs">Image {index + 1}</span>
+                        {uploadedImages.length > 0 && (
+                          <button
+                            onClick={openFileDialog}
+                            className="block mt-1 text-sky-500 hover:text-sky-600 text-xs"
+                          >
+                            Add more
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Google Maps List Section */}
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">Google Maps List</h2>
+              
+              {/* Import from Google Maps List */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Pack Title *
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Import from Google Maps List
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={googleMapsListUrl}
+                    onChange={(e) => handleGoogleMapsListUrlChange(e.target.value)}
+                    placeholder={googleMapsList ? "List already imported" : "Paste Google Maps list URL (e.g., maps.app.goo.gl/...)"}
+                    disabled={googleMapsList !== null}
+                    className={`w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
+                      googleMapsList ? 'bg-gray-100 cursor-not-allowed' : ''
+                    }`}
+                  />
+                  {googleMapsListUrl && !googleMapsList && (
+                    <button
+                      onClick={importFromGoogleMapsList}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-sky-500 text-white p-1 rounded hover:bg-sky-600 transition-colors"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {googleMapsListUrl && !googleMapsList && (
+                  <p className="text-xs text-gray-500 mt-1">Click the download button to import this list</p>
+                )}
+                {googleMapsList && (
+                  <p className="text-xs text-gray-500 mt-1">Only one list per pack allowed. Remove the current list to add a different one.</p>
+                )}
+                {!googleMapsList && (
+                  <p className="text-xs text-gray-500 mt-1">Only Google Maps list URLs are accepted (e.g., maps.app.goo.gl/...)</p>
+                )}
+              </div>
+
+              {/* Google Maps List Display */}
+              {googleMapsList && (
+                <div className="border border-gray-200 rounded-lg p-4 bg-blue-50 mt-4">
+                  <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                    <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m-6 3l6-3" />
+                    </svg>
+                    Google Maps List
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-3">This is a single Google Maps list imported into your pack.</p>
+                  <div className="p-3 bg-white rounded-lg border border-blue-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-medium text-gray-900">{googleMapsList.title}</p>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-1">{googleMapsList.description}</p>
+                        <p className="text-xs text-gray-500 truncate">{googleMapsList.url}</p>
+                      </div>
+                      <button
+                        onClick={removeGoogleMapsList}
+                        className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                        title="Remove list"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Create Your Pack */}
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">Create Your Pack</h2>
+            
+            <div className="space-y-6">
+              {/* Pack Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pack Title
                 </label>
                 <input
                   type="text"
                   value={packTitle}
                   onChange={(e) => setPackTitle(e.target.value)}
-                  placeholder="Best coffee shops in Barcelona"
-                  className="input-airbnb w-full"
+                  placeholder="Enter pack title..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                 />
               </div>
-              
+
+              {/* Price */}
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Price (EUR)
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Price ($USD)
                 </label>
                 <input
                   type="number"
                   value={price}
                   onChange={(e) => {
                     const inputValue = e.target.value
-                    // Allow empty string or valid numbers up to 10
                     if (inputValue === '' || (Number(inputValue) >= 0 && Number(inputValue) <= 10)) {
                       setPrice(inputValue)
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    // Prevent entering letters, 'e', '+', '-' and other non-numeric characters
-                    if (
-                      !['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'Home', 'End', 'ArrowLeft', 'ArrowRight', 'Clear', 'Copy', 'Paste'].includes(e.key) &&
-                      !e.ctrlKey && 
-                      !e.metaKey &&
-                      (e.key.length === 1 && !/[0-9]/.test(e.key))
-                    ) {
-                      e.preventDefault()
                     }
                   }}
                   min="0"
                   max="10"
                   step="1"
                   placeholder="0"
-                  className="input-airbnb w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <p className="text-xs text-gray-500 mt-1">Maximum price is €10</p>
               </div>
 
-              {/* Country dropdown with search */}
-              <div className="relative country-dropdown">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Country *
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={countrySearchTerm || country}
-                    onChange={(e) => handleCountrySearch(e.target.value)}
-                    onKeyDown={handleCountryKeyDown}
-                    onFocus={() => {
-                      setShowCountryDropdown(true)
-                      // Always show all countries when focusing, regardless of current state
-                      setFilteredCountries(availableCountries)
-                    }}
-                    placeholder="Start typing to search countries..."
-                    className="input-airbnb w-full pr-10"
-                  />
-                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
-                </div>
-                {/* Country dropdown list */}
-                {showCountryDropdown && filteredCountries.length > 0 && (
-                  <div 
-                    ref={countryDropdownRef}
-                    className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"
-                  >
-                    {filteredCountries.map((countryOption, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleCountrySelect(countryOption)}
-                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl border-l-4 transition-all duration-200 ${
-                          selectedCountryIndex === index 
-                            ? 'bg-coral-50 border-coral-500 text-coral-900' 
-                            : 'hover:bg-gray-100 hover:text-gray-900 border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center">
-                          <Globe className="h-4 w-4 text-gray-400 mr-3" />
-                          <span className="text-gray-900">{countryOption}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <textarea
+                  value={packDescription}
+                  onChange={(e) => setPackDescription(e.target.value)}
+                  rows={4}
+                  placeholder="Describe your pack..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                />
               </div>
 
-              {/* City dropdown with search */}
-              <div className="relative city-dropdown">
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  City *
+              {/* Categories */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Categories (up to 3)
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={citySearchTerm || city}
-                    onChange={(e) => handleCitySearch(e.target.value)}
-                    onKeyDown={handleCityKeyDown}
-                    onFocus={() => {
-                      if (availableCities.length > 0) {
-                        setShowCityDropdown(true)
-                        // Always show all cities when focusing, regardless of current state
-                        setFilteredCities(availableCities)
-                      }
-                    }}
-                    disabled={!country}
-                    placeholder={country ? "Start typing to search cities..." : "Select a country first"}
-                    className="input-airbnb w-full pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <ChevronDown className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 transition-transform ${showCityDropdown ? 'rotate-180' : ''}`} />
-                </div>
-                {/* City dropdown list */}
-                {showCityDropdown && filteredCities.length > 0 && (
-                  <div 
-                    ref={cityDropdownRef}
-                    className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"
-                  >
-                    {filteredCities.map((cityOption, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleCitySelect(cityOption)}
-                        className={`w-full text-left px-4 py-3 first:rounded-t-xl last:rounded-b-xl border-l-4 transition-all duration-200 ${
-                          selectedCityIndex === index 
-                            ? 'bg-coral-50 border-coral-500 text-coral-900' 
-                            : 'hover:bg-gray-100 hover:text-gray-900 border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center">
-                          <MapPin className="h-4 w-4 text-gray-400 mr-3" />
-                          <span className="text-gray-900">{cityOption}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Description */}
-            <div className="mt-6">
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Description
-              </label>
-              <textarea
-                value={packDescription}
-                onChange={(e) => setPackDescription(e.target.value)}
-                placeholder="Describe what makes these places special and why travelers should visit them..."
-                rows={2}
-                className="input-airbnb w-full resize-none"
-              />
-            </div>
-
-            {/* Categories Selection */}
-            <div className="mt-6">
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Categories (Select up to 3)
-              </label>
-              <div className="space-y-3">
-                {/* Selected Categories Display */}
-                {selectedCategories.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {selectedCategories.map((category) => (
-                      <div
-                        key={category}
-                        className="inline-flex items-center bg-coral-100 text-coral-800 px-3 py-1 rounded-full text-sm font-medium"
-                      >
-                        <span>{category}</span>
-                        <button
-                          onClick={() => removeCategory(category)}
-                          className="ml-2 text-coral-600 hover:text-coral-800 transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Category Selection Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {availableCategories.map((category) => (
                     <button
                       key={category}
-                      onClick={() => handleCategoryToggle(category)}
-                      disabled={!selectedCategories.includes(category) && selectedCategories.length >= 3}
-                      className={`px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${
-                        selectedCategories.includes(category)
-                          ? 'bg-coral-500 text-white border-coral-500'
-                          : selectedCategories.length >= 3
-                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-coral-300'
+                      type="button"
+                      onClick={() => toggleCategory(category)}
+                      className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                        isCategorySelected(category)
+                          ? 'bg-sky-500 text-white border-sky-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-sky-300'
                       }`}
                     >
                       {category}
                     </button>
                   ))}
                 </div>
-                
-                {/* Helper text */}
-                <p className="text-xs text-gray-500">
-                  {selectedCategories.length === 0 
-                    ? 'Select categories to help travelers find your pack'
-                    : selectedCategories.length >= 3
-                    ? 'Maximum 3 categories selected'
-                    : `${3 - selectedCategories.length} more categories available`
-                  }
-                </p>
+                {selectedCategories.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Selected: {selectedCategories.join(', ')}
+                  </p>
+                )}
               </div>
-            </div>
 
-            {/* Add Place Section - Now integrated here */}
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-gray-900">Add Places</h3>
-              </div>
-              
-              <div className="space-y-4">
-                {/* Maps List URL Input */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Step 1: Add Google Maps List URL
-                    {mapsListReference && (
-                      <span className="ml-2 text-xs bg-coral-100 text-coral-800 px-2 py-1 rounded-full">Added</span>
+                              {/* Country and City - Dependent dropdowns */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="relative country-dropdown">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={countrySearchTerm || country}
+                      onChange={(e) => handleCountrySearch(e.target.value)}
+                      onKeyDown={handleCountryKeyDown}
+                      onFocus={() => setShowCountryDropdown(true)}
+                      placeholder="Select country..."
+                      className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                    />
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    {showCountryDropdown && (
+                      <div 
+                        ref={countryDropdownRef}
+                        className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                      >
+                        {filteredCountries.map((countryOption, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleCountrySelect(countryOption)}
+                            className={`w-full text-left px-4 py-3 first:rounded-t-lg last:rounded-b-lg hover:bg-gray-100 transition-colors ${
+                              selectedCountryIndex === index ? 'bg-gray-100 font-medium' : ''
+                            }`}
+                            onMouseEnter={() => setSelectedCountryIndex(index)}
+                          >
+                            {countryOption}
+                          </button>
+                        ))}
+                      </div>
                     )}
-                  </label>
-                  <div className="flex gap-3">
+                  </div>
+                  <div className="relative city-dropdown">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      City
+                    </label>
                     <input
-                      type="url"
-                      value={googleMapsListUrl}
-                      onChange={(e) => setGoogleMapsListUrl(e.target.value)}
-                      placeholder="https://maps.google.com/maps/lists/"
-                      className="input-airbnb flex-1"
-                    />
-                    <button
-                      onClick={importFromGoogleMapsList}
-                      disabled={!googleMapsListUrl.trim() || isImporting}
-                      className="btn-primary px-6 disabled:opacity-50"
-                    >
-                      {isImporting ? 'Adding...' : 'Add List'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Single Place URL Input */}
-                <div className={!mapsListReference ? 'opacity-50' : ''}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Step 2: Add Individual Places
-                  </label>
-                  <div className="flex gap-3">
-                    <input
-                      type="url"
-                      value={singlePlaceUrl}
-                      onChange={(e) => setSinglePlaceUrl(e.target.value)}
-                      placeholder={mapsListReference ? "https://www.google.de/maps/place/place_name/@latitude,longitude..." : "Complete Step 1 first to add individual places"}
-                      disabled={!mapsListReference}
-                      className="input-airbnb flex-1"
-                    />
-                    <button
-                      onClick={addSinglePlace}
-                      disabled={!singlePlaceUrl.trim() || isImporting || !mapsListReference}
-                      className="btn-primary px-6 disabled:opacity-50"
-                    >
-                      {isImporting ? 'Adding...' : 'Add Place'}
-                    </button>
-                  </div>
-                  
-                  {/* URL validation feedback */}
-                  {singlePlaceUrl && (() => {
-                    const validation = validateSinglePlaceUrl(singlePlaceUrl)
-                    return (
-                      <div className="mt-3">
-                        {!validation.isValid && (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <div className="flex items-start">
-                              <div className="flex-shrink-0">
-                                <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center">
-                                  <span className="text-gray-600 text-xs font-bold">!</span>
-                                </div>
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium text-gray-900">
-                                  {validation.errorMessage}
-                                </h4>
-                                {validation.guidance && (
-                                  <div className="mt-2 text-sm text-gray-700 whitespace-pre-line">
-                                    {validation.guidance}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {validation.isValid && validation.warning && (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <div className="flex items-start">
-                              <div className="flex-shrink-0">
-                                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center">
-                                  <span className="text-blue-600 text-xs font-bold">i</span>
-                                </div>
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium text-blue-900">
-                                  {validation.warning}
-                                </h4>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {validation.isValid && !validation.warning && (
-                          <div className="bg-coral-50 border border-coral-200 rounded-lg p-3">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0">
-                                <div className="w-4 h-4 bg-coral-100 rounded-full flex items-center justify-center">
-                                  <span className="text-coral-600 text-xs font-bold">✓</span>
-                                </div>
-                              </div>
-                              <div className="ml-2">
-                                <span className="text-sm text-coral-700">
-                                  Valid single place URL
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            {/* Maps List Reference Display */}
-            {mapsListReference && (
-              <div className="mt-6 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center">
-                    <h4 className="text-sm font-semibold text-gray-900">Maps List Reference</h4>
-                  </div>
-                  <button
-                    onClick={() => setMapsListReference(null)}
-                    className="text-red-500 hover:text-red-700 transition-colors p-1"
-                    title="Remove maps list reference"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-800 font-medium">{mapsListReference.title}</p>
-                  <a 
-                    href={mapsListReference.original_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800 underline"
-                  >
-                    <ExternalLink className="h-3 w-3 mr-1" />
-                    View Maps List
-                  </a>
-        
-                </div>
-              </div>
-            )}
-
-          </div>
-
-          {/* Pins Section */}
-          <div className="card-airbnb p-8" data-places-section>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center">
-                <MapPin className="h-6 w-6 text-coral-500 mr-3" />
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Places ({pins.length})
-                </h2>
-              </div>
-            </div>
-
-            {pins.length === 0 ? (
-              <div className="text-center py-12">
-                <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No places yet</h3>
-                <p className="text-gray-600 mb-6">
-                  Paste a Google Maps place URL above to add your first place. 
-                  The system will automatically fetch all the place details for you!
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {pins.map((pin, index) => {
-                  const isComplete = isPlaceComplete(pin)
-                  const hasDescription = !!(pin.description && pin.description.trim().length > 0)
-                  const hasPhoto = !!(pin.photos && pin.photos.length > 0)
-                  
-                  return (
-                    <div 
-                      key={index} 
-                      className={`border rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer relative ${
-                        isComplete ? 'border-coral-200 hover:border-coral-300' : 'border-gray-200 hover:border-gray-300'
+                      type="text"
+                      value={citySearchTerm || city}
+                      onChange={(e) => handleCitySearch(e.target.value)}
+                      onKeyDown={handleCityKeyDown}
+                      onFocus={() => country && setShowCityDropdown(true)}
+                      placeholder={country ? "Select city..." : "Select country first"}
+                      disabled={!country}
+                      className={`w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
+                        !country ? 'bg-gray-100 cursor-not-allowed' : ''
                       }`}
-                      onClick={() => {
-                        console.log('Navigating to place:', index)
-                        router.push(`/create/place/${index}`)
-                      }}
-                    >
-                      {/* Completion Status Badge */}
-                      <div className="absolute top-3 right-3 z-10">
-                        {isComplete ? (
-                          <div className="bg-coral-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-                            Complete
-                          </div>
-                        ) : (
-                          <div className="bg-gray-400 text-white text-xs px-2 py-1 rounded-full font-medium">
-                            Incomplete
-                          </div>
-                        )}
+                    />
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    {showCityDropdown && country && (
+                      <div 
+                        ref={cityDropdownRef}
+                        className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                      >
+                        {filteredCities.map((cityOption, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleCitySelect(cityOption)}
+                            className={`w-full text-left px-4 py-3 first:rounded-t-lg last:rounded-b-lg hover:bg-gray-100 transition-colors ${
+                              selectedCityIndex === index ? 'bg-gray-100 font-medium' : ''
+                            }`}
+                            onMouseEnter={() => setSelectedCityIndex(index)}
+                          >
+                            {cityOption}
+                          </button>
+                        ))}
                       </div>
+                    )}
+                  </div>
+                </div>
 
-                      {/* Place Card Header */}
-                      <div className="p-4">
+             
+
+              
+              {/* Add Places */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Add Places
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={placesInput}
+                    onChange={(e) => handlePlacesInputChange(e.target.value)}
+                    placeholder="Paste Google Maps URL to import place details..."
+                    className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                  />
+                  {placesInput && placesInput.trim() !== '' && (
+                    <button
+                      onClick={async () => {
+                        // Check if URL is already imported
+                        if (isUrlAlreadyImported(placesInput)) {
+                          showToast('This place has already been imported. Please try a different URL.', 'info')
+                          return
+                        }
+
+                        setIsFetchingPlaceDetails(true)
+                        try {
+                          const placeDetails = await fetchPlaceDetails(placesInput)
+                          if (placeDetails) {
+                            const newPin: Pin = {
+                              title: placeDetails.name || 'Imported Place',
+                              description: placeDetails.formatted_address || 'Place imported from Google Maps',
+                              google_maps_url: placesInput,
+                              category: 'other',
+                              latitude: placeDetails.geometry?.location?.lat || 0,
+                              longitude: placeDetails.geometry?.location?.lng || 0,
+                              photos: uploadedImages,
+                              rating: placeDetails.rating,
+                              rating_count: placeDetails.user_ratings_total,
+                              business_type: placeDetails.types?.[0] || 'establishment'
+                            }
+                            setPins(prev => [...prev, newPin])
+                            setPlacesInput('')
+                            showToast('Place imported successfully!', 'success')
+                          } else {
+                            showToast('Failed to fetch place details. Please check the URL and try again.', 'error')
+                          }
+                        } catch (error) {
+                          console.error('Error fetching place details:', error)
+                          showToast('Error fetching place details. Please try again.', 'error')
+                        } finally {
+                          setIsFetchingPlaceDetails(false)
+                        }
+                      }}
+                      disabled={isFetchingPlaceDetails}
+                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
+                        isFetchingPlaceDetails 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-sky-500 text-white hover:bg-sky-600'
+                      }`}
+                      title={isFetchingPlaceDetails ? "Fetching place details..." : "Fetch place information"}
+                    >
+                      {isFetchingPlaceDetails ? (
+                        <svg className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+                {placesInput && placesInput.trim() !== '' && (
+                  <p className="text-xs text-gray-500 mt-1">Click the download button to fetch and import this place</p>
+                )}
+              </div>
+
+              {/* Added Places Display */}
+              {pins.length > 0 && (
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">Added Places ({pins.length})</h4>
+                  <div className="space-y-3">
+                    {pins.map((pin, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border">
                         <div className="flex items-start justify-between">
-                          <div className="flex-1 pr-20">
-                            <h3 className="font-semibold text-gray-900 text-lg mb-1 line-clamp-1">
-                              {pin.title || `Place ${index + 1}`}
-                            </h3>
-                            <p className="text-gray-600 text-sm line-clamp-2 mb-2">
-                              {pin.address || 'No address available'}
-                            </p>
-                            
-                            {/* Completion indicators */}
-                            <div className="flex items-center gap-3 mb-2">
-                              <div className="flex items-center">
-                                <div className={`w-2 h-2 rounded-full mr-1 ${hasDescription ? 'bg-coral-500' : 'bg-gray-300'}`}></div>
-                                <span className="text-xs text-gray-600">Description</span>
-                              </div>
-                              <div className="flex items-center">
-                                <div className={`w-2 h-2 rounded-full mr-1 ${hasPhoto ? 'bg-coral-500' : 'bg-gray-300'}`}></div>
-                                <span className="text-xs text-gray-600">Photo</span>
-                              </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-gray-900">{pin.title || 'Untitled Place'}</p>
+                              {pin.rating && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-yellow-500">★</span>
+                                  <span className="text-sm text-gray-600">{pin.rating}</span>
+                                  {pin.rating_count && (
+                                    <span className="text-xs text-gray-500">({pin.rating_count})</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            
-                            {/* Rating - only show if available */}
-                            {pin.rating && (
-                              <div className="flex items-center">
-                                <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                                <span className="text-sm font-medium text-gray-900">
-                                  {pin.rating}/5
-                                </span>
-                                {pin.rating_count && (
-                                  <span className="text-xs text-gray-500 ml-1">
-                                    ({pin.rating_count})
-                                  </span>
-                                )}
-                              </div>
+                            {pin.description && (
+                              <p className="text-sm text-gray-600 mb-1">{pin.description}</p>
                             )}
+                            {pin.business_type && (
+                              <span className="inline-block bg-sky-100 text-sky-800 text-xs px-2 py-1 rounded-full mb-2">
+                                {pin.business_type}
+                              </span>
+                            )}                            
                           </div>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              removePin(index)
-                            }}
-                            className="text-gray-400 hover:text-gray-600 transition-colors absolute top-4 right-16"
+                            onClick={() => removePin(index)}
+                            className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                            title="Remove place"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                                </div>
-      </div>
-
-      {/* Completion Error Modal */}
-      {showCompletionError.show && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[9999] p-4 pointer-events-none"
-          onClick={(e) => {
-            // Only close if clicking on the backdrop itself, not on child elements
-            if (e.target === e.currentTarget) {
-              setShowCompletionError({ show: false, incompletePlaces: [] })
-            }
-          }}
-        >
-          <div 
-            className="bg-white rounded-lg shadow-2xl max-w-md w-full border border-gray-300 relative z-[10000] pointer-events-none"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6 pointer-events-none">
-              <div className="flex items-center mb-4">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mr-3">
-                  <span className="text-gray-600 font-bold">!</span>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Complete All Places First
-                </h3>
-              </div>
-              
-              <p className="text-gray-600 mb-4">
-                Before creating your pack, each place needs a description and photo. 
-                The following places are incomplete:
-              </p>
-              
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 max-h-48 overflow-y-auto pointer-events-auto">
-                {showCompletionError.incompletePlaces.map((item, index) => (
-                  <div key={index} className="flex items-start mb-3 last:mb-0">
-                    <div className="flex-1 cursor-pointer" onClick={() => {
-                      setShowCompletionError({ show: false, incompletePlaces: [] })
-                      router.push(`/create/place/${item.index}`)
-                    }}>
-                      <p className="font-medium text-gray-900 hover:text-coral-600 transition-colors">
-                        {item.pin.title || `Place ${item.index + 1}`}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Missing: {item.missing.join(' and ')}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setShowCompletionError({ show: false, incompletePlaces: [] })
-                        router.push(`/create/place/${item.index}`)
-                      }}
-                      className="text-coral-600 hover:text-coral-800 text-sm font-medium ml-3"
-                    >
-                      Edit
-                    </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              
-              <div className="flex justify-end gap-3 pointer-events-auto">
-                <button
-                  onClick={() => setShowCompletionError({ show: false, incompletePlaces: [] })}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-})}
-              </div>
-            )}
-          </div>
-
-          {/* Submit Button */}
-          <div className="text-center">
-            <button
-              onClick={createPinPack}
-              disabled={isSubmitting || !packTitle.trim() || !city.trim() || !country.trim() || pins.length === 0}
-              className="btn-primary px-12 py-4 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Creating Pin Pack...
-                </div>
-              ) : (
-                <div className="flex items-center">
-                  <Save className="h-5 w-5 mr-2" />
-                  Create Pin Pack
                 </div>
               )}
-            </button>
+
+              {/* Save Pack Button */}
+              <button
+                onClick={createPinPack}
+                disabled={isSubmitting || !packTitle.trim()}
+                className="w-full bg-gray-900 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Saving...' : 'Save Pack'}
+              </button>
+              
+              {!packTitle.trim() && (
+                <p className="text-xs text-gray-500 text-center">Please enter a pack title to save</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1841,48 +1293,35 @@ The browser URL format provides more detailed information.`
       {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 shadow-2xl transform transition-all">
-            <div className="text-center">
-              {/* Success Icon */}
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              
-              {/* Success Message */}
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Pack Created Successfully!</h2>
-              <p className="text-gray-600 mb-6">
-                <span className="font-semibold text-coral-500">"{createdPackTitle}"</span> has been created and is now available for travelers to discover.
-              </p>
-              
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                <button
-                  onClick={handleViewMyPacks}
-                  className="w-full btn-primary py-3 text-lg"
-                >
-                  <Package className="h-5 w-5 mr-2 inline" />
-                  View My Packs
-                </button>
-                
-                <button
-                  onClick={handleCreateAnotherPack}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-lg transition-colors text-lg"
-                >
-                  <Plus className="h-5 w-5 mr-2 inline" />
-                  Create Another Pack
-                </button>
-              </div>
-              
-              {/* Small tip */}
-              <p className="text-xs text-gray-500 mt-4">
-                You can always manage your packs later from the navigation menu
-              </p>
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">Pack Created Successfully!</h3>
+            <p className="text-gray-600 mb-8">
+              Your pack "{createdPackTitle}" has been created and is now available for travelers to discover.
+            </p>
+            <div className="flex space-x-4">
+              <button
+                onClick={handleViewMyPacks}
+                className="flex-1 bg-gray-900 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors"
+              >
+                View My Packs
+              </button>
+              <button
+                onClick={handleCreateAnotherPack}
+                className="flex-1 bg-sky-500 text-white py-3 px-6 rounded-lg font-medium hover:bg-sky-600 transition-colors"
+              >
+                Create Another
+              </button>
             </div>
           </div>
         </div>
       )}
+
+
     </div>
   )
 } 

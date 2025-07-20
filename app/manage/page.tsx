@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BarChart3, Download, Edit, Eye, MapPin, Star, Trash2, TrendingUp, Users, Calendar, Package, DollarSign } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Download, Calendar, Edit, Eye, Trash2, Plus, TrendingUp, DollarSign, Users, Star, MapPin, Clock, BarChart3, Package } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import { getPackDisplayImage } from '@/lib/utils'
+import { useToast } from '@/components/ui/toast'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 // Interface for pin pack with analytics
 interface PinPackWithAnalytics {
@@ -26,12 +29,17 @@ interface PinPackWithAnalytics {
 }
 
 export default function ManagePage() {
+  const router = useRouter()
+  const { showToast } = useToast()
   // State for user's pin packs
   const [userPacks, setUserPacks] = useState<PinPackWithAnalytics[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userId, setUserId] = useState<string>('')
   const [packImages, setPackImages] = useState<{[key: string]: string}>({})
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string, title: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Check for authenticated user and use email-based system
   useEffect(() => {
@@ -72,13 +80,13 @@ export default function ManagePage() {
       } else {
         // No authentication found - redirect to sign in
         console.log('Please sign in first to view your pin packs')
-        window.location.href = '/auth'
+        router.push('/auth')
         return
       }
     }
     
     checkAuth()
-  }, [])
+  }, [router])
 
   // Load user's pin packs when user ID is available
   useEffect(() => {
@@ -211,61 +219,79 @@ export default function ManagePage() {
 
   // Function to delete a pin pack
   const deletePinPack = async (packId: string, packTitle: string) => {
-    const confirmed = confirm(
-      `⚠️ Are you sure you want to delete "${packTitle}"?\n\n` +
-      `This will permanently remove:\n` +
-      `• The pin pack and all its pins\n` +
-      `• All download history and analytics\n` +
-      `• All ratings and reviews\n\n` +
-      `This action cannot be undone!`
-    )
+    setPendingDelete({ id: packId, title: packTitle })
+    setShowConfirm(true)
+  }
 
-    if (!confirmed) return
+  // Function to handle delete button click
+  const handleDeleteClick = (packId: string, packTitle: string) => {
+    setPendingDelete({ id: packId, title: packTitle })
+    setShowConfirm(true)
+  }
 
+  // Function to actually delete the pack
+  const confirmDeletePack = async () => {
+    if (!pendingDelete) return
+    setIsDeleting(true)
     try {
-      console.log('Deleting pin pack:', packId)
-      
       // Delete related data first
-      // 1. Delete pin-pack relationships
-      await supabase
+      const packId = pendingDelete.id
+      const packTitle = pendingDelete.title
+      const { error: relationshipDeleteError } = await supabase
         .from('pin_pack_pins')
         .delete()
         .eq('pin_pack_id', packId)
-
-      // 2. Delete pins
-      await supabase
-        .from('pins')
-        .delete()
-        .eq('pack_id', packId)
-
-      // 3. Delete downloads
-      await supabase
+      if (relationshipDeleteError) {
+        console.error('Error deleting pin relationships:', relationshipDeleteError)
+        throw relationshipDeleteError
+      }
+      const { data: pinRelationships, error: relationshipError } = await supabase
+        .from('pin_pack_pins')
+        .select('pin_id')
+        .eq('pin_pack_id', packId)
+      if (relationshipError) {
+        console.error('Error getting pin relationships:', relationshipError)
+        throw relationshipError
+      }
+      if (pinRelationships && pinRelationships.length > 0) {
+        const pinIds = pinRelationships.map(rel => rel.pin_id)
+        const { error: pinsDeleteError } = await supabase
+          .from('pins')
+          .delete()
+          .in('id', pinIds)
+        if (pinsDeleteError) {
+          console.error('Error deleting pins:', pinsDeleteError)
+          throw pinsDeleteError
+        }
+      }
+      const { error: downloadsDeleteError } = await supabase
         .from('pack_downloads')
         .delete()
         .eq('pin_pack_id', packId)
-
-      // 4. Delete the pin pack itself
+      if (downloadsDeleteError) {
+        console.error('Error deleting downloads:', downloadsDeleteError)
+      }
       const { error: deleteError } = await supabase
         .from('pin_packs')
         .delete()
         .eq('id', packId)
-
       if (deleteError) throw deleteError
-
-      // Update local state
       setUserPacks(userPacks.filter(pack => pack.id !== packId))
-      console.log('Pin pack deleted successfully! 🗑️')
-      
+      showToast(`"${packTitle}" has been deleted successfully!`, 'success')
     } catch (error) {
       console.error('Error deleting pin pack:', error)
-      console.log('Failed to delete pin pack. Please try again.')
+      showToast(`Failed to delete "${pendingDelete?.title}". Please try again or contact support if the issue persists.`, 'error')
+    } finally {
+      setIsDeleting(false)
+      setShowConfirm(false)
+      setPendingDelete(null)
     }
   }
 
   // Function to edit pin pack - opens edit page in new tab
   const editPinPack = (pack: PinPackWithAnalytics) => {
     // Open the edit page in a new tab for comprehensive editing
-    window.open(`/edit/${pack.id}`, '_blank')
+    router.push(`/edit/${pack.id}`)
   }
 
   // Function to update pin pack
@@ -283,10 +309,10 @@ export default function ManagePage() {
         pack.id === packId ? { ...pack, ...updates } : pack
       ))
       
-      console.log('Pin pack updated successfully! ')
+      showToast('Pin pack updated successfully!', 'success')
     } catch (error) {
       console.error('Error updating pin pack:', error)
-      console.log('Failed to update pin pack. Please try again.')
+      showToast('Failed to update pin pack. Please try again.', 'error')
     }
   }
 
@@ -436,7 +462,7 @@ export default function ManagePage() {
               <div 
                 key={pack.id} 
                 className="card-airbnb group cursor-pointer"
-                onClick={() => window.open(`/pack/${pack.id}`, '_blank')}
+                onClick={() => router.push(`/pack/${pack.id}`)}
               >
                 {/* Pack Image with Google Maps Background */}
                 <div className="relative h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
@@ -538,7 +564,7 @@ export default function ManagePage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        window.open(`/pack/${pack.id}`, '_blank')
+                        router.push(`/pack/${pack.id}`)
                       }}
                       className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center"
                     >
@@ -548,7 +574,7 @@ export default function ManagePage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        deletePinPack(pack.id, pack.title)
+                        handleDeleteClick(pack.id, pack.title)
                       }}
                       className="px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
                     >
@@ -561,6 +587,16 @@ export default function ManagePage() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        open={showConfirm}
+        title={`Delete "${pendingDelete?.title}"?`}
+        message={`This will permanently remove the pin pack and all its pins, downloads, and ratings. This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeletePack}
+        onCancel={() => { setShowConfirm(false); setPendingDelete(null) }}
+        loading={isDeleting}
+      />
     </div>
   )
 } 
