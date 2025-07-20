@@ -4,6 +4,17 @@ import { MapPin, Users, Shield, Globe, Heart, Search, Star } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+// Utility function to ensure hydration-safe rendering
+const useHydrationSafe = () => {
+  const [isHydrated, setIsHydrated] = useState(false)
+  
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+  
+  return isHydrated
+}
+
 // Interface for packs with cover photos
 interface PinPackWithPhoto {
   id: string
@@ -26,6 +37,7 @@ export default function LandingPage() {
   // State for real packs
   const [realPacks, setRealPacks] = useState<PinPackWithPhoto[]>([])
   const [loadingPacks, setLoadingPacks] = useState(true)
+  const isHydrated = useHydrationSafe()
 
   // Function to get Google Maps rating for a location
   const getGoogleMapsRating = (city: string, country: string, packTitle: string) => {
@@ -53,61 +65,41 @@ export default function LandingPage() {
     return !hasOwnReviews || !hasSignificantDownloads
   }
 
-  // Function to fetch real packs from database
+  // Function to fetch real packs from database - OPTIMIZED
   const loadRealPacks = async () => {
     try {
       setLoadingPacks(true)
       
-      // Get all pin packs ordered by rating and download count
+      // Get all pin packs with a single optimized query
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
-        .select('*')
+        .select(`
+          *,
+          pin_pack_pins!inner(
+            pins!inner(
+              photos
+            )
+          )
+        `)
         .order('average_rating', { ascending: false })
         .order('download_count', { ascending: false })
         .limit(5) // Get top 5 packs
 
       if (packError) throw packError
 
-      // For each pack, get the first available photo from its pins
-      const packsWithPhotos = await Promise.all(
-        (packData || []).map(async (pack) => {
-          try {
-            // Get first pin with photos for this pack
-            const { data: pinData, error: pinError } = await supabase
-              .from('pin_pack_pins')
-              .select(`
-                pins (
-                  photos
-                )
-              `)
-              .eq('pin_pack_id', pack.id)
-              .limit(10) // Get up to 10 pins to check for photos
-
-            if (!pinError && pinData) {
-              // Find first pin that has photos
-              const pinWithPhoto = pinData.find((item: any) => {
-                const pin = item.pins as any
-                return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
-              })
-              
-              if (pinWithPhoto) {
-                const pin = pinWithPhoto.pins as any
-                return {
-                  ...pack,
-                  coverPhoto: pin.photos[0] // Add first photo as cover
-                }
-              }
-            }
-          } catch (error) {
-            console.warn('Error loading photos for pack:', pack.id, error)
-          }
-          
-          return {
-            ...pack,
-            coverPhoto: null // No photos found
-          }
+      // Process packs with photos in a single pass
+      const packsWithPhotos = (packData || []).map((pack: any) => {
+        // Find first pin with photos
+        const pinWithPhoto = pack.pin_pack_pins?.find((item: any) => {
+          const pin = item.pins
+          return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
         })
-      )
+        
+        return {
+          ...pack,
+          coverPhoto: pinWithPhoto?.pins?.photos?.[0] || null
+        }
+      })
 
       setRealPacks(packsWithPhotos)
     } catch (err) {
@@ -122,11 +114,36 @@ export default function LandingPage() {
     loadRealPacks()
   }, [])
 
+
+
+  // Preload critical images for better performance
+  useEffect(() => {
+    if (!isHydrated) return
+    
+    const preloadImages = [
+      '/clouds-hero-bg.jpg',
+      '/Nightlife.jpg',
+      '/Food.jpg',
+      '/Family.jpg',
+      '/Adventure.jpg',
+      '/Romantic.jpg',
+      '/Hidden_Gems.jpg'
+    ]
+    
+    preloadImages.forEach(src => {
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'image'
+      link.href = src
+      document.head.appendChild(link)
+    })
+  }, [isHydrated])
+
   return (
     <div className="min-h-screen bg-white">
       {/* New Hero Section with Dark Cloudy Background */}
       <div className="relative h-screen -mt-20 flex items-center justify-center overflow-hidden z-0">
-        {/* Cloud background image */}
+        {/* Cloud background image with optimized loading */}
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
@@ -209,8 +226,9 @@ export default function LandingPage() {
                 <img 
                   src="/Nightlife.jpg"
                   alt="Nightlife"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
-                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
+                  loading="eager"
+                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4">
@@ -228,8 +246,9 @@ export default function LandingPage() {
                 <img 
                   src="/Food.jpg"
                   alt="Food"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
-                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
+                  loading="eager"
+                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -247,8 +266,9 @@ export default function LandingPage() {
                 <img 
                   src="/Family.jpg"
                   alt="Family"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
-                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
+                  loading="eager"
+                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -268,8 +288,9 @@ export default function LandingPage() {
                 <img 
                   src="/Adventure.jpg"
                   alt="Adventure"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
-                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
+                  loading="eager"
+                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4">
@@ -287,8 +308,9 @@ export default function LandingPage() {
                 <img 
                   src="/Romantic.jpg"
                   alt="Romantic"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
-                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
+                  loading="eager"
+                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -306,8 +328,9 @@ export default function LandingPage() {
                 <img 
                   src="/Hidden_Gems.jpg"
                   alt="Hidden Gems"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 "
-                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
+                  loading="eager"
+                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -329,11 +352,14 @@ export default function LandingPage() {
           </div>
 
           {loadingPacks ? (
-            // Loading state
+            // Loading state with proper aspect ratios to prevent layout shifts
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               {[...Array(5)].map((_, index) => (
                 <div key={index} className="animate-pulse">
-                  <div className="bg-gray-200 h-48 rounded-2xl mb-4"></div>
+                  <div 
+                    className="bg-gray-200 h-48 rounded-2xl mb-4" 
+                    style={{ aspectRatio: '4/3' }}
+                  ></div>
                   <div className="bg-gray-200 h-4 rounded mb-2"></div>
                   <div className="bg-gray-200 h-3 rounded w-2/3"></div>
                 </div>
@@ -350,6 +376,13 @@ export default function LandingPage() {
                         src={pack.coverPhoto}
                         alt={pack.title}
                         className="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          // Fallback to placeholder if image fails to load
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          target.nextElementSibling?.classList.remove('hidden')
+                        }}
                       />
                     ) : (
                       <div 
@@ -361,6 +394,16 @@ export default function LandingPage() {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
                       </div>
                     )}
+                    
+                    {/* Fallback placeholder for failed images */}
+                    <div 
+                      className="absolute inset-0 bg-cover bg-center bg-no-repeat hidden"
+                      style={{
+                        backgroundImage: `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200"><rect width="100%" height="100%" fill="%23f8fafc"/><circle cx="80" cy="60" r="20" fill="%23e2e8f0" opacity="0.8"/><circle cx="220" cy="80" r="15" fill="%23cbd5e1" opacity="0.7"/><circle cx="150" cy="140" r="25" fill="%23e2e8f0" opacity="0.6"/></svg>')`
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+                    </div>
                   </div>
                   
                   {/* Enhanced card content */}

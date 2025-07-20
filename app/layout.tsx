@@ -3,6 +3,15 @@ import './globals.css'
 import Navigation from '@/components/Navigation'
 import PinCloudLogo from '@/components/PinCloudLogo'
 import { ToastProvider } from '@/components/ui/toast'
+import { Inter } from 'next/font/google'
+
+// Optimize font loading
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+  preload: true
+})
 
 export const metadata: Metadata = {
   title: 'PinCloud - Local Travel Pins by Locals',
@@ -15,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-gray-25 font-sans">
         <ToastProvider>
           {/* Main application wrapper */}
@@ -122,8 +131,8 @@ export default function RootLayout({
                     &copy; 2024 PinCloud. Connecting travelers with local insights.
                   </div>
                   <div className="flex space-x-6 text-sm text-gray-600">
-                    <a href="#" className="hover:text-gray-900 transition-colors">Privacy</a>
-                    <a href="#" className="hover:text-gray-900 transition-colors">Terms</a>
+                    <a href="/privacy" className="hover:text-gray-900 transition-colors">Privacy</a>
+                    <a href="/terms" className="hover:text-gray-900 transition-colors">Terms</a>
                     <a href="#" className="hover:text-gray-900 transition-colors">Sitemap</a>
                   </div>
                 </div>

@@ -8,6 +8,7 @@ import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
 import { useToast } from '@/components/ui/toast'
 import { Toaster } from '@/components/ui/toaster'
+import { aggregateAndStorePackReviews } from '@/lib/reviews'
 
 // Interface for a single pin
 interface Pin {
@@ -123,10 +124,20 @@ export default function CreatePackPage() {
     }
   }, [isEditMode, editPackId])
 
+  // Debug function to test Google Maps list loading
+  const debugGoogleMapsList = () => {
+    console.log('Current googleMapsList state:', googleMapsList)
+    console.log('Current googleMapsListUrl state:', googleMapsListUrl)
+    console.log('Is edit mode:', isEditMode)
+    console.log('Edit pack ID:', editPackId)
+  }
+
   // Function to load existing pack data for editing
   const loadExistingPackData = async () => {
     try {
-      // Get the pack details
+      console.log('Loading pack data for editing:', editPackId)
+      
+      // Get the pack details including maps_list_reference and categories
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
         .select('*')
@@ -136,6 +147,8 @@ export default function CreatePackPage() {
       if (packError) throw packError
       if (!packData) throw new Error('Pack not found')
 
+      console.log('Pack data loaded:', packData)
+
       // Set form data
       setPackTitle(packData.title || '')
       setPackDescription(packData.description || '')
@@ -144,6 +157,29 @@ export default function CreatePackPage() {
       setPrice(packData.price?.toString() || '')
       setNumberOfPlaces(packData.pin_count?.toString() || '')
       setSelectedCategories(packData.categories || [])
+
+      // Load Google Maps list reference if it exists
+      console.log('Checking for maps_list_reference:', packData.maps_list_reference)
+      console.log('Type of maps_list_reference:', typeof packData.maps_list_reference)
+      
+      if (packData.maps_list_reference && typeof packData.maps_list_reference === 'object') {
+        console.log('Loading Google Maps list:', packData.maps_list_reference)
+        console.log('Available keys:', Object.keys(packData.maps_list_reference))
+        
+        const mapsListData = packData.maps_list_reference
+        setGoogleMapsList({
+          id: editPackId || '',
+          title: mapsListData.title || mapsListData.name || 'Google Maps List',
+          url: mapsListData.original_url || mapsListData.expanded_url || mapsListData.url || '',
+          description: mapsListData.description || 'Imported from Google Maps'
+        })
+        setGoogleMapsListUrl(mapsListData.original_url || mapsListData.expanded_url || mapsListData.url || '')
+        console.log('Google Maps list set successfully')
+      } else {
+        console.log('No maps_list_reference found or invalid format')
+        setGoogleMapsList(null)
+        setGoogleMapsListUrl('')
+      }
 
       // Load pins for this pack
       const { data: packPinsData, error: pinsError } = await supabase
@@ -166,6 +202,8 @@ export default function CreatePackPage() {
       if (pinsError) {
         console.warn('Error loading pins:', pinsError)
         setPins([])
+        setUploadedImages([])
+        setMainImageIndex(-1)
       } else {
         const pinsData = packPinsData?.map((item: any) => ({
           id: item.pins.id,
@@ -180,16 +218,30 @@ export default function CreatePackPage() {
         })) || []
         
         setPins(pinsData)
+        console.log('Pins loaded:', pinsData)
+
+        // Collect all photos from pins and set as uploaded images
+        const allPhotos: string[] = []
+        pinsData.forEach(pin => {
+          if (pin.photos && Array.isArray(pin.photos)) {
+            allPhotos.push(...pin.photos)
+          }
+        })
+
+        // Remove duplicates and set uploaded images
+        const uniquePhotos = Array.from(new Set(allPhotos))
+        setUploadedImages(uniquePhotos)
+        
+        // Set main image index to the first image if available
+        if (uniquePhotos.length > 0) {
+          setMainImageIndex(0)
+          console.log('Set main image index to 0, total images:', uniquePhotos.length)
+        } else {
+          setMainImageIndex(-1)
+        }
+
+        console.log('Uploaded images set:', uniquePhotos)
       }
-
-      // Load existing photos (you'll need to implement this based on your photo storage)
-      // For now, we'll set an empty array and let users add new photos
-      setUploadedImages([])
-      setMainImageIndex(-1)
-
-      // Load Google Maps list (you'll need to implement this based on your storage)
-      // For now, we'll set it to null and let users add a new one
-      setGoogleMapsList(null)
 
     } catch (error) {
       console.error('Error loading pack data:', error)
@@ -688,16 +740,26 @@ export default function CreatePackPage() {
   const isGoogleMapsListUrl = (url: string): boolean => {
     try {
       const urlObj = new URL(url)
+      
       // Check if it's a Google Maps short URL (maps.app.goo.gl)
       if (urlObj.hostname === 'maps.app.goo.gl') {
         return true
       }
+      
       // Check if it's a regular Google Maps URL with list indicators
       if (urlObj.hostname.includes('google') && urlObj.pathname.includes('maps')) {
         // Look for list indicators in the URL
-        const listIndicators = ['/list/', '/saved/', '/collections/']
+        const listIndicators = ['/list/', '/saved/', '/collections/', '/maps/list/', '/maps/saved/', '/maps/collections/']
         return listIndicators.some(indicator => urlObj.pathname.includes(indicator))
       }
+      
+      // Check for other Google Maps domains
+      if (urlObj.hostname === 'www.google.com' || urlObj.hostname === 'google.com') {
+        if (urlObj.pathname.includes('/maps/') && (urlObj.pathname.includes('/list/') || urlObj.pathname.includes('/saved/') || urlObj.pathname.includes('/collections/'))) {
+          return true
+        }
+      }
+      
       return false
     } catch (error) {
       return false
@@ -812,8 +874,21 @@ export default function CreatePackPage() {
       return
     }
 
+    // Validate Google Maps List URL - required for all packs
+    // For existing packs, if they don't have a maps_list_reference, they need to add one
     if (!googleMapsList) {
-      showToast('Please import a Google Maps list for your pack', 'error')
+      if (!googleMapsListUrl || googleMapsListUrl.trim() === '') {
+        showToast('Google Maps List URL is required. Please enter a valid Google Maps list URL.', 'error')
+        return
+      }
+      
+      // Additional validation for URL format
+      if (!isGoogleMapsListUrl(googleMapsListUrl.trim())) {
+        showToast('Please enter a valid Google Maps list URL. It should be a list URL like maps.app.goo.gl/... or google.com/maps/... with /list/, /saved/, or /collections/', 'error')
+        return
+      }
+      
+      showToast('Please import the Google Maps list by clicking "Import List" after entering the URL.', 'error')
       return
     }
 
@@ -836,6 +911,14 @@ export default function CreatePackPage() {
 
   // Create new pack
   const createNewPack = async () => {
+    // Prepare maps list reference data
+    const mapsListReference = googleMapsList ? {
+      original_url: googleMapsList.url,
+      expanded_url: googleMapsList.url, // For now, use the same URL
+      title: googleMapsList.title,
+      description: googleMapsList.description
+    } : null
+
     // Create pin pack data
     const pinPackData = {
       title: packTitle.trim(),
@@ -846,6 +929,7 @@ export default function CreatePackPage() {
       creator_id: userId,
       pin_count: pins.length,
       categories: selectedCategories,
+      maps_list_reference: mapsListReference,
       created_at: new Date().toISOString()
     }
 
@@ -909,6 +993,21 @@ export default function CreatePackPage() {
       .update({ pin_count: pins.length })
       .eq('id', newPackId)
 
+    // Aggregate and store reviews for the pack (this happens in the background)
+    try {
+      console.log('Starting review aggregation for new pack:', newPackId)
+      // Convert pins to match the reviews utility interface
+      const pinsForReviews = pins.map(pin => ({
+        ...pin,
+        id: pin.id || `temp-${Date.now()}-${Math.random()}`
+      }))
+      await aggregateAndStorePackReviews(newPackId, pinsForReviews, supabase)
+      console.log('Review aggregation completed successfully')
+    } catch (error) {
+      console.warn('Review aggregation failed, but pack was created successfully:', error)
+      // Don't fail the pack creation if review aggregation fails
+    }
+
     // Show success modal
     setCreatedPackTitle(packTitle.trim())
     setShowSuccessModal(true)
@@ -920,6 +1019,14 @@ export default function CreatePackPage() {
 
   // Update existing pack
   const updateExistingPack = async () => {
+    // Prepare maps list reference data
+    const mapsListReference = googleMapsList ? {
+      original_url: googleMapsList.url,
+      expanded_url: googleMapsList.url, // For now, use the same URL
+      title: googleMapsList.title,
+      description: googleMapsList.description
+    } : null
+
     // Update pin pack data
     const { error: packError } = await supabase
       .from('pin_packs')
@@ -931,6 +1038,7 @@ export default function CreatePackPage() {
         price: price === '' ? 0 : Number(price),
         pin_count: pins.length,
         categories: selectedCategories,
+        maps_list_reference: mapsListReference,
         updated_at: new Date().toISOString()
       })
       .eq('id', editPackId)
@@ -1001,6 +1109,21 @@ export default function CreatePackPage() {
         console.error('Error creating relationships:', relationshipError)
         throw relationshipError
       }
+    }
+
+    // Aggregate and store reviews for the updated pack (this happens in the background)
+    try {
+      console.log('Starting review aggregation for updated pack:', editPackId)
+      // Convert pins to match the reviews utility interface
+      const pinsForReviews = pins.map(pin => ({
+        ...pin,
+        id: pin.id || `temp-${Date.now()}-${Math.random()}`
+      }))
+      await aggregateAndStorePackReviews(editPackId!, pinsForReviews, supabase)
+      console.log('Review aggregation completed successfully')
+    } catch (error) {
+      console.warn('Review aggregation failed, but pack was updated successfully:', error)
+      // Don't fail the pack update if review aggregation fails
     }
 
     // Show success message
@@ -1173,7 +1296,7 @@ export default function CreatePackPage() {
               {/* Import from Google Maps List */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Import from Google Maps List
+                  Import from Google Maps List <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -1202,7 +1325,9 @@ export default function CreatePackPage() {
                   <p className="text-xs text-gray-500 mt-1">Only one list per pack allowed. Remove the current list to add a different one.</p>
                 )}
                 {!googleMapsList && (
-                  <p className="text-xs text-gray-500 mt-1">Only Google Maps list URLs are accepted (e.g., maps.app.goo.gl/...)</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {isEditMode ? 'This pack needs a Google Maps list. ' : 'Required: '}Only Google Maps list URLs are accepted (e.g., maps.app.goo.gl/...)
+                  </p>
                 )}
               </div>
 
@@ -1234,6 +1359,21 @@ export default function CreatePackPage() {
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
+              
+              {/* Debug Button - Only show in edit mode */}
+              {isEditMode && (
+                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <button
+                    onClick={debugGoogleMapsList}
+                    className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
+                  >
+                    Debug Google Maps List
+                  </button>
+                  <p className="text-xs text-yellow-700 mt-2">
+                    Click to see current Google Maps list state in console
+                  </p>
                 </div>
               )}
             </div>

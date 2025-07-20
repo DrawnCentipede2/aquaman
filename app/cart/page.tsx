@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Check, XCircle, ShoppingBag } from 'lucide-react'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import { getPackDisplayImage } from '@/lib/utils'
+import CloudLoader from '@/components/CloudLoader'
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<any[]>([])
@@ -155,10 +156,7 @@ export default function CartPage() {
     return (
       <div className="min-h-screen bg-gray-25 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
-          </div>
-          <p className="text-gray-600 text-lg">Loading your cart...</p>
+          <CloudLoader size="lg" text="Loading your cart..." />
         </div>
       </div>
     )

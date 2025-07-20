@@ -8,6 +8,7 @@ import { getPackDisplayImage } from '@/lib/utils'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
+import CloudLoader from '@/components/CloudLoader'
 
 // Extended PinPack type to include cover photo
 interface PinPackWithPhoto extends PinPack {
@@ -44,7 +45,7 @@ export default function BrowsePage() {
   // Debug selectedSuggestionIndex changes
   useEffect(() => {
     selectedIndexRef.current = selectedSuggestionIndex
-    console.log('🔍 selectedSuggestionIndex changed to:', selectedSuggestionIndex)
+            console.log('selectedSuggestionIndex changed to:', selectedSuggestionIndex)
   }, [selectedSuggestionIndex])
   
   // Enhanced filter states
@@ -356,7 +357,7 @@ export default function BrowsePage() {
 
           // Debug key navigation
           if (['ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) {
-            console.log('🔍 Key navigation:', { key: e.key, selectedIndex: selectedIndexRef.current, suggestionsCount })
+            console.log('Key navigation:', { key: e.key, selectedIndex: selectedIndexRef.current, suggestionsCount })
           }
 
           if (e.key === 'ArrowDown') {
@@ -364,7 +365,7 @@ export default function BrowsePage() {
             if (isDropdownVisible && suggestionsCount > 0) {
               const currentIndex = selectedIndexRef.current === -1 ? -1 : selectedIndexRef.current
               const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
-              console.log('🔍 ArrowDown:', { prev: currentIndex, new: newIndex })
+              console.log('ArrowDown:', { prev: currentIndex, new: newIndex })
               selectedIndexRef.current = newIndex
               setSelectedSuggestionIndex(newIndex)
               generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
@@ -374,7 +375,7 @@ export default function BrowsePage() {
             if (isDropdownVisible && suggestionsCount > 0) {
               const currentIndex = selectedIndexRef.current === -1 ? suggestionsCount : selectedIndexRef.current
               const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
-              console.log('🔍 ArrowUp:', { prev: currentIndex, new: newIndex })
+              console.log('ArrowUp:', { prev: currentIndex, new: newIndex })
               selectedIndexRef.current = newIndex
               setSelectedSuggestionIndex(newIndex)
               generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
@@ -383,12 +384,12 @@ export default function BrowsePage() {
               e.preventDefault()
               if (isDropdownVisible && suggestionsCount > 0 && selectedIndexRef.current >= 0) {
                 const selectedButton = suggestions[selectedIndexRef.current] as HTMLButtonElement
-                console.log('🔍 Enter: selecting suggestion', selectedIndexRef.current)
+                console.log('Enter: selecting suggestion', selectedIndexRef.current)
                 if (selectedButton) {
                   selectedButton.click()
                 }
               } else {
-                console.log('🔍 Enter: triggering search')
+                console.log('Enter: triggering search')
                 handleSearchClick()
               }
             } else if (e.key === 'Escape') {
@@ -493,8 +494,8 @@ export default function BrowsePage() {
       
       // Americas
       'Buenos Aires, Argentina', 'Chicago, USA', 'Los Angeles, USA', 'Mexico City, Mexico', 'Montreal, Canada',
-      'New York, USA', 'San Francisco, USA', 'São Paulo, Brazil', 'Toronto, Canada', 'Vancouver, Canada',
-      'Miami, USA', 'Las Vegas, USA', 'Rio de Janeiro, Brazil', 'Lima, Peru', 'Bogotá, Colombia',
+      'New York, USA', 'San Francisco, USA',       'Sao Paulo, Brazil', 'Toronto, Canada', 'Vancouver, Canada',
+      'Miami, USA', 'Las Vegas, USA', 'Rio de Janeiro, Brazil', 'Lima, Peru', 'Bogota, Colombia',
       
       // Africa & Middle East
       'Cairo, Egypt', 'Cape Town, South Africa', 'Dubai, UAE', 'Istanbul, Turkey', 'Johannesburg, South Africa',
@@ -601,7 +602,7 @@ export default function BrowsePage() {
         // Check if this suggestion is currently selected via keyboard
         const isSelected = currentSelectedIndex === index
         // Debug: Log suggestion rendering
-        if (index === 0) console.log('🔍 Rendering suggestions with selectedIndex:', currentSelectedIndex)
+        if (index === 0) console.log('Rendering suggestions with selectedIndex:', currentSelectedIndex)
         
         const icon = suggestion.type === 'destination' || suggestion.type === 'city' ? 
           `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1099,7 +1100,7 @@ export default function BrowsePage() {
                 <p className="text-sm text-gray-600">
                   {loading ? 'Loading...' : `${filteredPacks.length} places available`}
                   {searchTerm && !hasSearched && (
-                    <span className="ml-2 text-coral-600 font-medium">• Type and press search to filter results</span>
+                    <span className="ml-2 text-coral-600 font-medium">- Type and press search to filter results</span>
                   )}
                 </p>
               )}
@@ -1486,10 +1487,7 @@ export default function BrowsePage() {
         {/* Loading State */}
         {loading && (
           <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
-            </div>
-            <p className="text-gray-600 text-lg">Finding amazing places...</p>
+            <CloudLoader size="lg" text="Finding amazing places..." />
           </div>
         )}
 

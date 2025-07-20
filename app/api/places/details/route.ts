@@ -48,7 +48,10 @@ export async function GET(request: NextRequest) {
 
       if (detailsData.status === 'OK') {
         console.log('Returning detailed place data')
-        return NextResponse.json(detailsData.result)
+        return NextResponse.json({
+          ...detailsData.result,
+          place_id: place.place_id // Include the place_id for reviews
+        })
       } else {
         // If details fail, return the search result
         console.log('Details failed, returning search result')
@@ -58,7 +61,8 @@ export async function GET(request: NextRequest) {
           geometry: place.geometry,
           rating: place.rating,
           user_ratings_total: place.user_ratings_total,
-          types: place.types
+          types: place.types,
+          place_id: place.place_id // Include the place_id for reviews
         })
       }
     } else {

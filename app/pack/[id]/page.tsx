@@ -16,6 +16,7 @@ import { queryCreatorData } from '@/lib/utils'
 import PayPalCheckout from '@/components/PayPalCheckout'
 import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 import GalleryModal from '@/components/GalleryModal'
+import { generateFallbackReviews, refreshPackReviews } from '@/lib/reviews'
 
 export default function PackDetailPage() {
   const params = useParams()
@@ -96,6 +97,10 @@ export default function PackDetailPage() {
 
   // State for creator profile data
   const [creatorProfile, setCreatorProfile] = useState<any>(null)
+
+  // State for reviews
+  const [reviewsSource, setReviewsSource] = useState<'pack' | 'google' | null>(null)
+  const [isRefreshingReviews, setIsRefreshingReviews] = useState(false)
 
   // Load creator profile data based on creator_id
   useEffect(() => {
@@ -179,6 +184,80 @@ export default function PackDetailPage() {
     return 'Local tourism guide'
   }
 
+  
+
+  // Function to extract a searchable query from Google Maps URL (same as create page)
+  const extractQueryFromUrl = (url: string): string | null => {
+    console.log('Extracting query from URL:', url)
+    
+    try {
+      // Handle different Google Maps URL formats
+      const urlObj = new URL(url)
+      console.log('URL hostname:', urlObj.hostname)
+      console.log('URL pathname:', urlObj.pathname)
+      
+      // For short URLs like maps.app.goo.gl, try to get the query parameter
+      if (urlObj.hostname.includes('maps.app.goo.gl')) {
+        // For short URLs, we'll use the path as a query
+        const path = urlObj.pathname.replace('/', '')
+        if (path) {
+          console.log('Extracted from short URL:', path)
+          return path
+        }
+      }
+      
+      // For regular Google Maps URLs (google.com, google.de, etc.)
+      if (urlObj.hostname.includes('google')) {
+        // Extract place name from the URL path
+        const pathParts = urlObj.pathname.split('/')
+        console.log('Path parts:', pathParts)
+        
+        // Look for the 'place' segment and get the next part
+        const placeIndex = pathParts.findIndex(part => part === 'place')
+        console.log('Place index:', placeIndex)
+        
+        if (placeIndex !== -1 && placeIndex + 1 < pathParts.length) {
+          const placeName = pathParts[placeIndex + 1]
+          console.log('Place name found:', placeName)
+          
+          if (placeName && !placeName.startsWith('@')) {
+            // Decode the place name (replace + with spaces and decode URI)
+            const decodedName = decodeURIComponent(placeName.replace(/\+/g, ' '))
+            console.log('Decoded place name:', decodedName)
+            return decodedName
+          }
+        }
+        
+        // Fallback: try to extract any meaningful text from the path
+        const meaningfulParts = pathParts.filter(part => 
+          part && 
+          part !== 'maps' && 
+          part !== 'place' && 
+          !part.startsWith('@') && 
+          !part.startsWith('data=') &&
+          part.length > 2
+        )
+        console.log('Meaningful parts:', meaningfulParts)
+        
+        if (meaningfulParts.length > 0) {
+          const fallbackName = decodeURIComponent(meaningfulParts[0].replace(/\+/g, ' '))
+          console.log('Fallback name:', fallbackName)
+          return fallbackName
+        }
+      }
+      
+      // If we can't extract anything specific, use the full URL as a fallback
+      console.log('Using full URL as fallback')
+      return url
+    } catch (error) {
+      console.error('Error parsing URL:', error)
+      // If URL parsing fails, return the original string
+      return url
+    }
+  }
+
+
+
 
 
   // Check if creator is verified
@@ -245,6 +324,16 @@ export default function PackDetailPage() {
     checkPurchaseStatus()
   }, [isAuthenticated])
 
+  // Ensure reviews are always set
+  useEffect(() => {
+    if (!loading && pack && reviews.length === 0) {
+      console.log('No reviews found after loading, setting fallback reviews')
+      const fallbackReviews = generateFallbackReviews(pack, pins)
+      setReviews(fallbackReviews)
+      setReviewsSource('pack')
+    }
+  }, [loading, pack, pins, reviews.length])
+
   // Load user's wishlist and cart from browser storage (only when authenticated)
   const loadWishlist = () => {
     if (!isAuthenticated) {
@@ -284,7 +373,7 @@ export default function PackDetailPage() {
       setLoading(true)
       console.log('Loading pack details for ID:', packId) // Debug log
       
-      // First, get the main pack information from database
+      // First, get the main pack information from database (including stored reviews)
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
         .select('*')
@@ -368,6 +457,33 @@ export default function PackDetailPage() {
         })) || []
         
         setPins(pinsData)
+        
+        // Load reviews from stored data (much faster than API calls)
+        try {
+          console.log('Loading reviews from stored data...')
+          console.log('Pack data reviews:', packData.reviews)
+          
+          if (packData.reviews && Array.isArray(packData.reviews) && packData.reviews.length > 0) {
+            console.log('Using stored reviews:', packData.reviews.length)
+            setReviews(packData.reviews)
+            // Determine source based on the first review
+            const firstReview = packData.reviews[0]
+            setReviewsSource(firstReview.source === 'Google Maps' ? 'google' : 'pack')
+          } else {
+            console.log('No stored reviews found, using fallback')
+            // Fallback to generated reviews if no stored reviews
+            const fallbackReviews = generateFallbackReviews(packData, pinsData)
+            console.log('Setting fallback reviews:', fallbackReviews)
+            setReviews(fallbackReviews)
+            setReviewsSource('pack')
+          }
+        } catch (error) {
+          console.warn('Error loading stored reviews, using fallback:', error)
+          const fallbackReviews = generateFallbackReviews(packData, pinsData)
+          console.log('Setting fallback reviews due to error:', fallbackReviews)
+          setReviews(fallbackReviews)
+          setReviewsSource('pack')
+        }
       }
 
       // Find similar packs from the same city or country (excluding current pack)
@@ -426,38 +542,6 @@ export default function PackDetailPage() {
         
         setSimilarPacks(similarPacksWithPhotos)
       }
-
-      // Mock reviews data since we don't have a reviews table yet
-      // This shows realistic reviews that would appear on a pack detail page
-      setReviews([
-        {
-          id: 1,
-          user_name: 'Sarah Chen',
-          user_avatar: 'SC',
-          rating: 5,
-          comment: 'Amazing local spots! Found some hidden gems I never would have discovered on my own.',
-          date: '2024-01-15',
-          verified: true
-        },
-        {
-          id: 2,
-          user_name: 'Miguel Rodriguez',
-          user_avatar: 'MR',
-          rating: 5,
-          comment: 'Perfect for exploring the authentic side of the city. Highly recommend!',
-          date: '2024-01-10',
-          verified: true
-        },
-        {
-          id: 3,
-          user_name: 'Emma Wilson',
-          user_avatar: 'EW',
-          rating: 4,
-          comment: 'Great selection of places. Some were closed when I visited but overall excellent.',
-          date: '2024-01-08',
-          verified: false
-        }
-      ])
 
     } catch (err) {
       console.error('Detailed error loading pack details:', err) // Enhanced debug log
@@ -710,6 +794,37 @@ export default function PackDetailPage() {
   // Navigate to another similar pack's detail page
   const navigateToSimilarPack = (similarPackId: string) => {
     router.push(`/pack/${similarPackId}`)
+  }
+
+  // Refresh reviews for the pack
+  const handleRefreshReviews = async () => {
+    if (!pack || !pins.length) return
+    
+    setIsRefreshingReviews(true)
+    try {
+      console.log('Refreshing reviews for pack:', pack.id)
+      await refreshPackReviews(pack.id, pins, supabase)
+      
+      // Reload the pack data to get updated reviews
+      const { data: updatedPackData, error: packError } = await supabase
+        .from('pin_packs')
+        .select('*')
+        .eq('id', pack.id)
+        .single()
+      
+      if (!packError && updatedPackData) {
+        if (updatedPackData.reviews && Array.isArray(updatedPackData.reviews) && updatedPackData.reviews.length > 0) {
+          setReviews(updatedPackData.reviews)
+          const firstReview = updatedPackData.reviews[0]
+          setReviewsSource(firstReview.source === 'Google Maps' ? 'google' : 'pack')
+          console.log('Reviews refreshed successfully:', updatedPackData.reviews.length)
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing reviews:', error)
+    } finally {
+      setIsRefreshingReviews(false)
+    }
   }
 
   // Open the pack's locations in Google Maps
@@ -1016,12 +1131,6 @@ export default function PackDetailPage() {
               {/* Detailed description of the pack */}
               <div className="prose prose-lg max-w-none text-gray-700 leading-relaxed">
                 <p>{pack.description}</p>
-                
-                <p>Discover the authentic side of {pack.city} through this carefully selected collection of local favorites. 
-                Each location has been personally selected and visited, ensuring you experience the city like a true local.</p>
-                
-                <p>Perfect for travelers who want to go beyond typical tourist attractions and experience the real culture, 
-                food, and atmosphere that makes this place special.</p>
               </div>
             </div>
 
@@ -1131,13 +1240,10 @@ export default function PackDetailPage() {
             {/* Reviews and ratings section */}
             <div className="bg-white rounded-2xl p-8 shadow-sm">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Reviews ({reviews.length})
-                </h2>
-                <div className="flex items-center space-x-2">
-                  <Star className="h-5 w-5 text-yellow-400 fill-current" />
-                  <span className="text-lg font-semibold">4.8</span>
-                  <span className="text-gray-500">({reviews.length} reviews)</span>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Reviews ({reviews.length})
+                  </h2>
                 </div>
               </div>
 
@@ -1145,10 +1251,25 @@ export default function PackDetailPage() {
                 {reviews.map((review) => (
                   <div key={review.id} className="border-b border-gray-200 last:border-b-0 pb-6 last:pb-0">
                     <div className="flex items-start space-x-4">
-                      {/* User avatar with initials */}
-                      <div className="w-10 h-10 bg-coral-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                        {review.user_avatar}
-                      </div>
+                      {/* User avatar with initials or profile photo */}
+                      {review.source === 'Google Maps' ? (
+                        // For Google Maps reviews, always use generic avatar for privacy
+                        <div className="w-10 h-10 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                          GU
+                        </div>
+                      ) : review.profile_photo_url ? (
+                        // For local reviews, show profile photo if available
+                        <img 
+                          src={review.profile_photo_url} 
+                          alt={review.user_name}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        // Fallback to initials for local reviews
+                        <div className="w-10 h-10 bg-coral-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                          {review.user_avatar}
+                        </div>
+                      )}
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center space-x-2">
@@ -1156,6 +1277,11 @@ export default function PackDetailPage() {
                             {review.verified && (
                               <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
                                 Verified
+                              </span>
+                            )}
+                            {review.source === 'Google Maps' && (
+                              <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
+                                Google
                               </span>
                             )}
                           </div>
@@ -1170,7 +1296,17 @@ export default function PackDetailPage() {
                           </div>
                         </div>
                         <p className="text-gray-700 mb-2">{review.comment}</p>
-                        <span className="text-sm text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-500">{new Date(review.date).toLocaleDateString()}</span>
+                          {review.source === 'Google Maps' && (
+                            <span className="text-xs text-blue-600 flex items-center">
+                              <svg className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                              </svg>
+                              Google Maps
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1301,9 +1437,6 @@ export default function PackDetailPage() {
                     <h3 className="text-lg font-bold text-gray-900">
                       {getCreatorName(pack.creator_id)}
                     </h3>
-                    <span className="bg-coral-100 text-coral-700 text-xs font-medium px-2 py-1 rounded-full">
-                      Superhost
-                    </span>
                   </div>
                   
                   {/* Creator stats grid */}
@@ -1363,9 +1496,6 @@ export default function PackDetailPage() {
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-2">
                   <h2 className="text-2xl font-bold text-gray-900">{getCreatorName(pack.creator_id)}</h2>
-                  <span className="bg-coral-100 text-coral-700 text-sm font-medium px-3 py-1 rounded-full">
-                    Superhost
-                  </span>
                 </div>
 
                 <div className="flex items-center text-gray-600 mb-4">

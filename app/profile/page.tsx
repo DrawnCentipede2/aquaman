@@ -170,18 +170,54 @@ export default function ProfilePage() {
 
       console.log('Attempting to save to database:', profileData)
       
-      // Save to database
-      const { data: savedData, error: dbError } = await supabase
+      // First, check if user exists
+      const { data: existingUser, error: checkError } = await supabase
         .from('users')
-        .upsert([profileData], { onConflict: 'email' })
-        .select()
+        .select('id, email')
+        .eq('email', formData.email.trim())
+        .maybeSingle()
 
-      console.log('Database save result:', { savedData, dbError })
+      console.log('Existing user check:', { existingUser, checkError })
 
-      if (dbError) {
-        console.error('Database save error:', dbError)
-        showToast(`Profile save failed: ${dbError.message || 'Unknown database error'}. Please try again or contact support if the issue persists.`, 'error')
+      let saveResult
+      if (existingUser) {
+        // Update existing user
+        console.log('Updating existing user with ID:', existingUser.id)
+        saveResult = await supabase
+          .from('users')
+          .update(profileData)
+          .eq('id', existingUser.id)
+          .select()
+      } else {
+        // Insert new user
+        console.log('Creating new user')
+        saveResult = await supabase
+          .from('users')
+          .insert([profileData])
+          .select()
+      }
+
+      console.log('Database save result:', saveResult)
+
+      if (saveResult.error) {
+        console.error('Database save error:', saveResult.error)
+        showToast(`Profile save failed: ${saveResult.error.message || 'Unknown database error'}. Please try again or contact support if the issue persists.`, 'error')
         return
+      }
+
+      // Verify the data was saved by fetching it back
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', formData.email.trim())
+        .single()
+
+      console.log('Verification query result:', { verifyData, verifyError })
+
+      if (verifyError) {
+        console.warn('Could not verify saved data:', verifyError)
+      } else {
+        console.log('Successfully verified saved data:', verifyData)
       }
 
       // Prepare profile data for localStorage (simplified version)

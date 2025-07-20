@@ -663,7 +663,7 @@ export default function IndividualPlacePage() {
                 {pin.reviews.slice(0, 3).map((review: any, index: number) => (
                   <div key={index} className="border-l-4 border-coral-200 pl-4 py-2">
                     <div className="flex items-center space-x-3 mb-2">
-                      <span className="font-medium text-gray-900">{review.author_name}</span>
+                      <span className="font-medium text-gray-900">Google User</span>
                       <div className="flex items-center">
                         {Array.from({ length: review.rating }, (_, i) => (
                           <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />

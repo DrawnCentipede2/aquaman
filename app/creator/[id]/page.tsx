@@ -1,11 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useParams } from 'next/navigation'
 import { MapPin, Star, Users, Heart, Calendar, Globe, MessageCircle, Shield, ArrowLeft, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { getPackDisplayImage, queryCreatorData } from '@/lib/utils'
+import dynamic from 'next/dynamic'
+
+// Dynamically import non-critical components to reduce initial CSS load
+const DynamicCloudLoader = dynamic(() => import('@/components/CloudLoader'), {
+  ssr: false,
+  loading: () => (
+    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
+    </div>
+  )
+})
 
 export default function CreatorProfilePage() {
   const params = useParams()
@@ -17,11 +28,11 @@ export default function CreatorProfilePage() {
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
   const [packImages, setPackImages] = useState<{[key: string]: string}>({})
 
-  // Static stats to avoid hydration errors
+  // Real stats from database (will be updated when we implement reviews)
   const [creatorStats, setCreatorStats] = useState({
-    reviews: 243,
-    rating: 4.9,
-    yearsCreating: 5
+    reviews: 0,
+    rating: 0,
+    yearsCreating: 0
   })
   
   // State for real creator data from database
@@ -32,15 +43,20 @@ export default function CreatorProfilePage() {
     const loadCreatorData = async () => {
       try {
         setError(null) // Clear any previous errors
+        console.log('Loading creator data for ID:', creatorId)
+        
         // Use shared utility function for consistent querying
-        const { data: creatorData, error, queryType } = await queryCreatorData(creatorId)
+        const { data: creatorData, error, queryType } = await queryCreatorData(creatorId, 'name, email, bio, verified, city, country, occupation, social_links, profile_picture, created_at')
+
+        console.log('Creator data query result:', { creatorData, error, queryType })
 
         if (creatorData && !error) {
+          console.log('Setting creator data from database:', creatorData)
           setCreator({
             id: creatorId,
-                         name: creatorData.name || creatorData.email?.split('@')[0].split('.').map((word: string) => 
-               word.charAt(0).toUpperCase() + word.slice(1)
-             ).join(' ') || 'Local Creator',
+            name: creatorData.name || creatorData.email?.split('@')[0].split('.').map((word: string) => 
+              word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ') || 'Local Creator',
             location: `${creatorData.city || 'Barcelona'}, ${creatorData.country || 'Spain'}`,
             profilePicture: creatorData.profile_picture || null,
             bio: creatorData.bio || `Hi! I'm passionate about sharing the authentic side of my beautiful city. Having lived here for several years, I know all the hidden gems that locals love. I specialize in creating selected experiences that show you the real culture, amazing food spots, and unique places that most tourists never discover.
@@ -51,12 +67,13 @@ My packs are carefully crafted based on years of exploration and conversations w
             work: creatorData.occupation || 'Local tourism guide & cultural enthusiast',
             verified: creatorData.verified || false,
             joinDate: creatorData.created_at || '2019-03-15',
-            reviews: creatorStats.reviews,
-            rating: creatorStats.rating,
-            yearsCreating: creatorStats.yearsCreating,
+            reviews: 0, // Will be updated when reviews system is implemented
+            rating: 0, // Will be updated when reviews system is implemented
+            yearsCreating: 0, // Will be calculated from join date when needed
             totalPacks: 0,
             totalDownloads: 0,
-            email: creatorData.email
+            email: creatorData.email,
+            socialLinks: creatorData.social_links || {}
           })
         } else if (error) {
           console.warn('Creator data query failed:', error)
@@ -84,12 +101,13 @@ My packs are carefully crafted based on years of exploration and conversations w
             work: 'Local tourism guide & cultural enthusiast',
             verified: false,
             joinDate: '2019-03-15',
-            reviews: creatorStats.reviews,
-            rating: creatorStats.rating,
-            yearsCreating: creatorStats.yearsCreating,
+            reviews: 0, // Will be updated when reviews system is implemented
+            rating: 0, // Will be updated when reviews system is implemented
+            yearsCreating: 0, // Will be calculated from join date when needed
             totalPacks: 0,
             totalDownloads: 0,
-            email: queryType === 'UUID' ? '' : decodeURIComponent(creatorId)
+            email: queryType === 'UUID' ? '' : decodeURIComponent(creatorId),
+            socialLinks: {}
           })
         }
       } catch (error) {
@@ -114,12 +132,13 @@ My packs are carefully crafted based on years of exploration and conversations w
           work: 'Local guide',
           verified: false,
           joinDate: '2019-03-15',
-          reviews: creatorStats.reviews,
-          rating: creatorStats.rating,
-          yearsCreating: creatorStats.yearsCreating,
+          reviews: 0, // Will be updated when reviews system is implemented
+          rating: 0, // Will be updated when reviews system is implemented
+          yearsCreating: 0, // Will be calculated from join date when needed
           totalPacks: 0,
           totalDownloads: 0,
-          email: isUUIDFallback ? '' : decodedCreatorId
+          email: isUUIDFallback ? '' : decodedCreatorId,
+          socialLinks: {}
         })
       }
     }
@@ -313,9 +332,6 @@ My packs are carefully crafted based on years of exploration and conversations w
             <div className="flex-1">
               <div className="flex items-center space-x-3 mb-2">
                 <h1 className="text-3xl font-bold text-gray-900">{creator.name}</h1>
-                <span className="bg-coral-100 text-coral-700 text-sm font-medium px-3 py-1 rounded-full">
-                  Superhost
-                </span>
               </div>
 
               <div className="flex items-center text-gray-600 mb-4">
@@ -324,18 +340,7 @@ My packs are carefully crafted based on years of exploration and conversations w
               </div>
 
               {/* Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{creator.reviews}</div>
-                  <div className="text-gray-500 text-sm">Reviews</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900 flex items-center justify-center">
-                    {creator.rating.toFixed(1)}
-                    <Star className="h-5 w-5 text-yellow-400 fill-current ml-1" />
-                  </div>
-                  <div className="text-gray-500 text-sm">Rating</div>
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-gray-900">{creatorPacks.length}</div>
                   <div className="text-gray-500 text-sm">Pin Packs</div>
@@ -343,6 +348,10 @@ My packs are carefully crafted based on years of exploration and conversations w
                 <div className="text-center">
                   <div className="text-2xl font-bold text-gray-900">{totalDownloads}</div>
                   <div className="text-gray-500 text-sm">Downloads</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">0</div>
+                  <div className="text-gray-500 text-sm">Reviews</div>
                 </div>
               </div>
 
@@ -368,13 +377,59 @@ My packs are carefully crafted based on years of exploration and conversations w
           <div className="mt-8 pt-8 border-t border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-4">About {creator.name}</h2>
             <div className="prose prose-gray max-w-none">
-                                {creator.bio.split('\n\n').map((paragraph: string, index: number) => (
+              {creator.bio.split('\n\n').map((paragraph: string, index: number) => (
                 <p key={index} className="text-gray-600 leading-relaxed mb-4">
                   {paragraph}
                 </p>
               ))}
             </div>
           </div>
+
+          {/* Social Links Section */}
+          {creator.socialLinks && (creator.socialLinks.website || creator.socialLinks.instagram || creator.socialLinks.twitter) && (
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Connect with {creator.name}</h2>
+              <div className="flex flex-wrap gap-4">
+                {creator.socialLinks.website && (
+                  <a
+                    href={creator.socialLinks.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Globe className="h-4 w-4 text-gray-600" />
+                    <span className="text-gray-700 font-medium">Website</span>
+                  </a>
+                )}
+                {creator.socialLinks.instagram && (
+                  <a
+                    href={`https://instagram.com/${creator.socialLinks.instagram.replace('@', '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-lg transition-colors text-white"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                    <span className="font-medium">Instagram</span>
+                  </a>
+                )}
+                {creator.socialLinks.twitter && (
+                  <a
+                    href={`https://twitter.com/${creator.socialLinks.twitter.replace('@', '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors text-white"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                    </svg>
+                    <span className="font-medium">Twitter</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Creator Reviews Section */}
@@ -384,116 +439,23 @@ My packs are carefully crafted based on years of exploration and conversations w
               Reviews for {creator.name}
             </h2>
             <div className="flex items-center space-x-2">
-              <Star className="h-5 w-5 text-yellow-400 fill-current" />
-              <span className="text-lg font-semibold">{creator.rating.toFixed(1)}</span>
-              <span className="text-gray-500">({creator.reviews} reviews)</span>
+              <Star className="h-5 w-5 text-gray-300 fill-current" />
+              <span className="text-lg font-semibold text-gray-400">-</span>
+              <span className="text-gray-500">(0 reviews)</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Review 1 */}
-            <div className="border border-gray-200 rounded-xl p-6">
-              <div className="flex items-start space-x-4 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  SC
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-gray-900">Sarah Chen</h4>
-                    <div className="flex items-center space-x-1">
-                      {Array.from({ length: 5 }, (_, i) => (
-                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-500 mb-3">March 2024</p>
-                  <p className="text-gray-700 leading-relaxed">
-                    "{creator.name} created the most amazing pin pack for our Berlin trip! Every recommendation was spot-on. 
-                    As a local expert, they really know the hidden gems that tourists never find. Highly recommend working with them!"
-                  </p>
-                </div>
-              </div>
+          {/* No reviews yet message */}
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-6">
+              <MessageCircle className="h-8 w-8 text-gray-400" />
             </div>
-
-            {/* Review 2 */}
-            <div className="border border-gray-200 rounded-xl p-6">
-              <div className="flex items-start space-x-4 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  MR
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-gray-900">Miguel Rodriguez</h4>
-                    <div className="flex items-center space-x-1">
-                      {Array.from({ length: 5 }, (_, i) => (
-                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-500 mb-3">February 2024</p>
-                  <p className="text-gray-700 leading-relaxed">
-                    "Incredible local knowledge! {creator.name} responds quickly to questions and their pack descriptions are so detailed. 
-                    You can tell they really care about giving travelers an authentic experience. Will definitely use their packs again!"
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Review 3 */}
-            <div className="border border-gray-200 rounded-xl p-6">
-              <div className="flex items-start space-x-4 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  EW
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-gray-900">Emma Wilson</h4>
-                    <div className="flex items-center space-x-1">
-                      {Array.from({ length: 4 }, (_, i) => (
-                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
-                      ))}
-                      <Star className="h-4 w-4 text-gray-300 fill-current" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-500 mb-3">January 2024</p>
-                  <p className="text-gray-700 leading-relaxed">
-                    "Really helpful recommendations from a true local. Some places were closed when I visited but overall the pack was great. 
-                    {creator.name} clearly knows the city well and provides good context for each location."
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Review 4 */}
-            <div className="border border-gray-200 rounded-xl p-6">
-              <div className="flex items-start space-x-4 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  JD
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-gray-900">James Davis</h4>
-                    <div className="flex items-center space-x-1">
-                      {Array.from({ length: 5 }, (_, i) => (
-                        <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-500 mb-3">December 2023</p>
-                  <p className="text-gray-700 leading-relaxed">
-                    "Outstanding service! {creator.name} went above and beyond to help us plan our itinerary. 
-                    The pin pack saved us so much research time and led us to places we never would have found otherwise. True professional!"
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Show more reviews button */}
-          <div className="text-center mt-8">
-            <button className="btn-secondary px-6 py-3 hover:border-coral-300 hover:text-coral-600">
-              Show more reviews
-            </button>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              No reviews yet for {creator.name}
+            </h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              Be the first to review this creator's pin packs and help other travelers discover amazing local experiences.
+            </p>
           </div>
         </div>
 
@@ -510,10 +472,13 @@ My packs are carefully crafted based on years of exploration and conversations w
 
           {loading ? (
             <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
-              </div>
-              <p className="text-gray-600">Loading packs...</p>
+              <Suspense fallback={
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coral-100 mb-6">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500"></div>
+                </div>
+              }>
+                <DynamicCloudLoader size="lg" text="Loading packs..." />
+              </Suspense>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
