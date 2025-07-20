@@ -1,18 +1,24 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { MapPin, Save, ArrowLeft, Trash2, Plus, Upload, DollarSign, FileText, Image, X, Tag } from 'lucide-react'
+import { MapPin, Save, ArrowLeft, Trash2, Plus, Upload, DollarSign, FileText, Image, X, Tag, Search, Download, Heart } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { getPackDisplayImage } from '@/lib/utils'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
+import { useToast } from '@/components/ui/toast'
+import { Toaster } from '@/components/ui/toaster'
 
 export default function EditPackPage() {
   const params = useParams()
   const router = useRouter()
   const packId = params.id as string
+  const { showToast } = useToast()
+  
+  // File input ref for image uploads
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // State for the pack being edited
   const [pack, setPack] = useState<PinPack | null>(null)
@@ -39,6 +45,27 @@ export default function EditPackPage() {
 
   // Available categories for packs - now using standardized categories
   const availableCategories = STANDARD_CATEGORIES
+
+  // Photo editing state
+  const [uploadedImages, setUploadedImages] = useState<string[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [mainImageIndex, setMainImageIndex] = useState<number>(-1)
+
+  // Places editing state
+  const [placesInput, setPlacesInput] = useState('')
+  const [isFetchingPlaceDetails, setIsFetchingPlaceDetails] = useState(false)
+
+  // Google Maps list editing state
+  const [googleMapsList, setGoogleMapsList] = useState<{
+    id: string
+    title: string
+    url: string
+    description: string
+  } | null>(null)
+  const [googleMapsListUrl, setGoogleMapsListUrl] = useState('')
+
+  // Number of places state
+  const [numberOfPlaces, setNumberOfPlaces] = useState('')
 
   // Load pack details when component mounts
   useEffect(() => {
@@ -76,9 +103,17 @@ export default function EditPackPage() {
       // Load existing categories
       setSelectedCategories(packData.categories || [])
 
+      // Load number of places
+      setNumberOfPlaces(packData.pin_count?.toString() || '')
+
       // Load pack image
       const imageUrl = await getPackDisplayImage(packId)
       setPackImage(imageUrl)
+
+      // Load existing photos (you'll need to implement this based on your photo storage)
+      // For now, we'll set an empty array and let users add new photos
+      setUploadedImages([])
+      setMainImageIndex(-1)
 
       // Load pins for this pack
       const { data: packPinsData, error: pinsError } = await supabase
@@ -151,8 +186,290 @@ export default function EditPackPage() {
     setSelectedCategories(prev => prev.filter(c => c !== categoryToRemove))
   }
 
+  // Photo handling functions
+  const handleImageUpload = (files: FileList | null) => {
+    if (!files) return
+    
+    setIsUploading(true)
+    const newImages: string[] = []
+    let processedCount = 0
+    
+    Array.from(files).forEach((file) => {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const result = e.target?.result as string
+          newImages.push(result)
+          processedCount++
+          
+          if (processedCount === files.length) {
+            setUploadedImages(prev => {
+              const updatedImages = [...prev, ...newImages].slice(0, 10) // Max 10 images
+              
+              // Automatically set the first image as main if no main image is selected
+              if (mainImageIndex === -1 && updatedImages.length > 0) {
+                setMainImageIndex(0)
+              }
+              
+              return updatedImages
+            })
+            setIsUploading(false)
+          }
+        }
+        reader.readAsDataURL(file)
+      } else {
+        processedCount++
+        if (processedCount === files.length) {
+          setIsUploading(false)
+        }
+      }
+    })
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    handleImageUpload(e.dataTransfer.files)
+  }
+
+  const removeImage = (index: number) => {
+    setUploadedImages(prev => {
+      const updatedImages = prev.filter((_, i) => i !== index)
+      
+      // Adjust main image index if needed
+      if (mainImageIndex === index) {
+        // If main image was removed, set the first remaining image as main
+        if (updatedImages.length > 0) {
+          setMainImageIndex(0)
+        } else {
+          setMainImageIndex(-1) // No images left
+        }
+      } else if (mainImageIndex > index) {
+        // If main image is after the removed image, adjust the index
+        setMainImageIndex(mainImageIndex - 1)
+      }
+      
+      return updatedImages
+    })
+  }
+
+  const setMainImage = (index: number) => {
+    setMainImageIndex(index)
+  }
+
+  const openFileDialog = () => {
+    fileInputRef.current?.click()
+  }
+
+  // Place fetching functions
+  const fetchPlaceDetails = async (url: string) => {
+    try {
+      // Extract place ID from Google Maps URL
+      const placeId = extractQueryFromUrl(url)
+      if (!placeId) return null
+
+      // Call Google Places API (you'll need to implement this)
+      const response = await fetch(`/api/places/details?placeId=${placeId}`)
+      if (!response.ok) return null
+
+      const data = await response.json()
+      return data
+    } catch (error) {
+      console.error('Error fetching place details:', error)
+      return null
+    }
+  }
+
+  const extractQueryFromUrl = (url: string): string | null => {
+    try {
+      const urlObj = new URL(url)
+      
+      // Handle different Google Maps URL formats
+      if (urlObj.hostname === 'maps.app.goo.gl') {
+        // Short URL - we'll need to follow the redirect
+        return null // For now, return null as we need to handle redirects
+      }
+      
+      if (urlObj.hostname.includes('google.com') && urlObj.pathname.includes('/maps/place/')) {
+        // Regular Google Maps URL
+        const pathParts = urlObj.pathname.split('/')
+        const placeIndex = pathParts.findIndex(part => part === 'place')
+        if (placeIndex !== -1 && pathParts[placeIndex + 1]) {
+          return pathParts[placeIndex + 1]
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Error extracting place ID:', error)
+      return null
+    }
+  }
+
+  const isUrlAlreadyImported = (url: string): boolean => {
+    return pins.some(pin => pin.google_maps_url === url)
+  }
+
+  const handlePlacesInputChange = (value: string) => {
+    setPlacesInput(value)
+  }
+
+  const addSinglePlace = async () => {
+    if (!placesInput.trim()) return
+
+    // Check if URL is already imported
+    if (isUrlAlreadyImported(placesInput)) {
+      showToast('This place has already been imported. Please try a different URL.', 'info')
+      return
+    }
+
+    setIsFetchingPlaceDetails(true)
+    try {
+      // Fetch place details from Google Maps API
+      const placeDetails = await fetchPlaceDetails(placesInput)
+      
+      let pinData: any
+      
+      if (placeDetails) {
+        // Use fetched data from Google Maps API
+        pinData = {
+          title: placeDetails.name || 'Imported Place',
+          description: placeDetails.formatted_address || 'Place imported from Google Maps',
+          google_maps_url: placesInput,
+          category: 'other',
+          latitude: placeDetails.geometry?.location?.lat || 0,
+          longitude: placeDetails.geometry?.location?.lng || 0,
+          rating: placeDetails.rating,
+          rating_count: placeDetails.user_ratings_total,
+          business_type: placeDetails.types?.[0] || 'establishment'
+        }
+      } else {
+        // Fallback to basic pin if API fails
+        pinData = {
+          title: 'Imported Place',
+          description: 'Place imported from Google Maps',
+          google_maps_url: placesInput,
+          category: 'other',
+          latitude: 0,
+          longitude: 0
+        }
+      }
+      
+      setPins(prev => [...prev, pinData])
+      setPlacesInput('')
+      showToast('Place imported successfully!', 'success')
+      
+    } catch (error) {
+      console.error('Error adding place:', error)
+      showToast('Error importing place. Please try again.', 'error')
+    } finally {
+      setIsFetchingPlaceDetails(false)
+    }
+  }
+
+  // Google Maps list functions
+  const isGoogleMapsListUrl = (url: string): boolean => {
+    try {
+      const urlObj = new URL(url)
+      // Check if it's a Google Maps short URL (maps.app.goo.gl)
+      if (urlObj.hostname === 'maps.app.goo.gl') {
+        return true
+      }
+      // Check if it's a regular Google Maps URL with list indicators
+      if (urlObj.hostname.includes('google') && urlObj.pathname.includes('maps')) {
+        // Look for list indicators in the URL
+        const listIndicators = ['/list/', '/saved/', '/collections/']
+        return listIndicators.some(indicator => urlObj.pathname.includes(indicator))
+      }
+      return false
+    } catch (error) {
+      return false
+    }
+  }
+
+  const importFromGoogleMapsList = async () => {
+    if (!googleMapsListUrl.trim()) return
+
+    // Validate that it's a Google Maps list URL
+    if (!isGoogleMapsListUrl(googleMapsListUrl)) {
+      showToast('This doesn\'t look like a Google Maps list URL. Please use a list URL like maps.app.goo.gl/...', 'error')
+      return
+    }
+
+    // Check if list URL is already imported
+    const isListAlreadyImported = googleMapsList !== null
+    if (isListAlreadyImported) {
+      showToast('This Google Maps list has already been imported. Please try a different list.', 'info')
+      return
+    }
+
+    try {
+      // Create a new list entry
+      const newList = {
+        id: Date.now().toString(),
+        title: 'Imported Google Maps List',
+        url: googleMapsListUrl,
+        description: 'List imported from Google Maps'
+      }
+      
+      setGoogleMapsList(newList)
+      setGoogleMapsListUrl('')
+      showToast('Google Maps list imported successfully!', 'success')
+      
+    } catch (error) {
+      console.error('Error importing from list:', error)
+      showToast('Error importing Google Maps list. Please try again.', 'error')
+    }
+  }
+
+  const removeGoogleMapsList = () => {
+    setGoogleMapsList(null)
+  }
+
   // Save pack changes
   const saveChanges = async () => {
+    // Validation checks
+    if (!formData.title.trim()) {
+      showToast('Please enter a pack title', 'error')
+      return
+    }
+
+    if (!numberOfPlaces || Number(numberOfPlaces) < 1) {
+      showToast('Please specify the number of places in your pack', 'error')
+      return
+    }
+
+    if (uploadedImages.length === 0) {
+      showToast('Please upload at least one photo for your pack', 'error')
+      return
+    }
+
+    if (pins.length === 0) {
+      showToast('Please add at least one place to your pack', 'error')
+      return
+    }
+
+    if (pins.length !== Number(numberOfPlaces)) {
+      showToast(`You specified ${numberOfPlaces} places but added ${pins.length} places. Please add the correct number of places.`, 'error')
+      return
+    }
+
+    // Check that all places have valid Google Maps URLs
+    const placesWithValidUrls = pins.filter(pin => pin.google_maps_url && pin.google_maps_url.trim() !== '')
+    if (placesWithValidUrls.length !== Number(numberOfPlaces)) {
+      const missingUrls = Number(numberOfPlaces) - placesWithValidUrls.length
+      showToast(`Missing URLs for ${missingUrls} place(s). Please ensure all places have valid Google Maps URLs.`, 'error')
+      return
+    }
+
+    if (!googleMapsList) {
+      showToast('Please import a Google Maps list for your pack', 'error')
+      return
+    }
+
     try {
       setSaving(true)
       setError(null)
@@ -168,7 +485,8 @@ export default function EditPackPage() {
           city: formData.city,
           country: formData.country,
           creator_location: formData.creator_location,
-          categories: selectedCategories
+          categories: selectedCategories,
+          pin_count: Number(numberOfPlaces)
         })
         .eq('id', packId)
 
@@ -373,23 +691,47 @@ export default function EditPackPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price (USD)
-                  </label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Price (USD)
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={formData.price}
+                        onChange={(e) => handleInputChange('price', parseFloat(e.target.value) || 0)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <p className="text-sm text-gray-500 mt-2">Set to 0 for free packs</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Number of Places
+                    </label>
                     <input
                       type="number"
-                      min="0"
+                      value={numberOfPlaces}
+                      onChange={(e) => {
+                        const inputValue = e.target.value
+                        if (inputValue === '' || (Number(inputValue) >= 1 && Number(inputValue) <= 20)) {
+                          setNumberOfPlaces(inputValue)
+                        }
+                      }}
+                      min="1"
+                      max="20"
                       step="1"
-                      value={formData.price}
-                      onChange={(e) => handleInputChange('price', parseFloat(e.target.value) || 0)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
-                      placeholder="0"
+                      placeholder="5"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-coral-500 focus:border-coral-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
+                    <p className="text-sm text-gray-500 mt-2">Maximum 20 places</p>
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">Set to 0 for free packs</p>
                 </div>
 
                 {/* Categories Section */}
@@ -428,6 +770,157 @@ export default function EditPackPage() {
               </div>
             </div>
 
+            {/* Photo Editing Section */}
+            <div className="bg-white rounded-2xl p-8 shadow-sm">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                <Image className="h-6 w-6 mr-3 text-coral-500" />
+                Photos
+              </h2>
+              
+              {/* Main Upload Area */}
+              <div 
+                className={`border-2 border-dashed border-sky-200 bg-sky-50 rounded-xl mb-6 cursor-pointer hover:border-sky-300 hover:bg-sky-100 transition-colors ${
+                  mainImageIndex >= 0 && uploadedImages[mainImageIndex] 
+                    ? 'p-0 h-96' // No padding, fixed height when showing main image
+                    : 'p-12 text-center' // Padding and center text when showing upload interface
+                }`}
+                onClick={openFileDialog}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                {isUploading ? (
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                      <svg className="h-8 w-8 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Uploading...</h3>
+                  </div>
+                ) : mainImageIndex >= 0 && uploadedImages[mainImageIndex] ? (
+                  // Show main image
+                  <div className="relative w-full h-full rounded-lg overflow-hidden">
+                    <img 
+                      src={uploadedImages[mainImageIndex]} 
+                      alt="Main image"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <div className="bg-white bg-opacity-90 rounded-lg px-4 py-2">
+                        <p className="text-sm font-medium text-gray-900">Click to upload more images</p>
+                      </div>
+                    </div>
+                    <div className="absolute top-2 right-2 bg-white bg-opacity-90 rounded-full px-2 py-1">
+                      <span className="text-xs font-medium text-gray-900">Main</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Add Images</h3>
+                    <p className="text-gray-500 text-sm">or Drag & Drop</p>
+                  </>
+                )}
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => handleImageUpload(e.target.files)}
+                className="hidden"
+              />
+
+              {/* Image Grid */}
+              {uploadedImages.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {uploadedImages.map((image, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={image}
+                        alt={`Upload ${index + 1}`}
+                        className={`w-full h-24 object-cover rounded-lg cursor-pointer transition-all ${
+                          mainImageIndex === index 
+                            ? 'ring-2 ring-coral-500 ring-offset-2' 
+                            : 'hover:opacity-80'
+                        }`}
+                        onClick={() => setMainImage(index)}
+                      />
+                      
+                      {/* Remove button */}
+                      <button
+                        onClick={() => removeImage(index)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      
+                      {/* Main image indicator */}
+                      {mainImageIndex === index && (
+                        <div className="absolute top-1 left-1 bg-coral-500 text-white text-xs px-2 py-1 rounded-full">
+                          Main
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+
+
+            {/* Google Maps List Section */}
+            <div className="bg-white rounded-2xl p-8 shadow-sm">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                <Download className="h-6 w-6 mr-3 text-coral-500" />
+                Google Maps List
+              </h2>
+              
+              {!googleMapsList ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Google Maps List URL
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={googleMapsListUrl}
+                      onChange={(e) => setGoogleMapsListUrl(e.target.value)}
+                      placeholder="Paste Google Maps list URL..."
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
+                    />
+                    <button
+                      onClick={importFromGoogleMapsList}
+                      className="px-4 py-3 bg-coral-500 text-white rounded-lg hover:bg-coral-600 transition-colors"
+                    >
+                      Import
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900">{googleMapsList.title}</h4>
+                      <p className="text-sm text-gray-600">{googleMapsList.description}</p>
+                    </div>
+                    <button
+                      onClick={removeGoogleMapsList}
+                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Places in Pack */}
             <div className="bg-white rounded-2xl p-8 shadow-sm">
               <div className="flex items-center justify-between mb-6">
@@ -437,17 +930,44 @@ export default function EditPackPage() {
                 </h2>
               </div>
 
+              {/* Add Places Section */}
+              <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Add Places</h3>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={placesInput}
+                    onChange={(e) => handlePlacesInputChange(e.target.value)}
+                    placeholder="Paste Google Maps place URL..."
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
+                  />
+                  <button
+                    onClick={addSinglePlace}
+                    disabled={isFetchingPlaceDetails || !placesInput.trim()}
+                    className="px-4 py-3 bg-coral-500 text-white rounded-lg hover:bg-coral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  >
+                    {isFetchingPlaceDetails ? (
+                      <>
+                        <svg className="h-4 w-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Place
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
               {pins.length === 0 ? (
                 <div className="text-center py-12">
                   <MapPin className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No places yet</h3>
-                  <p className="text-gray-500 mb-6">Add some amazing places to your pack</p>
-                  <button
-                    onClick={() => router.push('/create')}
-                    className="btn-primary"
-                  >
-                    Add Your First Place
-                  </button>
+                  <p className="text-gray-500 mb-6">Add some amazing places to your pack using the form above</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -607,6 +1127,7 @@ export default function EditPackPage() {
           </div>
         </div>
       </div>
+      <Toaster />
     </div>
   )
 } 

@@ -288,10 +288,10 @@ export default function ManagePage() {
     }
   }
 
-  // Function to edit pin pack - opens edit page in new tab
+  // Function to edit pin pack - opens create page in edit mode
   const editPinPack = (pack: PinPackWithAnalytics) => {
-    // Open the edit page in a new tab for comprehensive editing
-    router.push(`/edit/${pack.id}`)
+    // Open the create page in edit mode for comprehensive editing
+    router.push(`/create?edit=${pack.id}`)
   }
 
   // Function to update pin pack

@@ -1030,8 +1030,9 @@ export default function PackDetailPage() {
               {(() => {
                 // Calculate how many places to show in preview based on total count
                 const getPreviewCount = (totalPlaces: number) => {
-                  if (totalPlaces <= 3) return 1;  // Show 1 if 3 or fewer
-                  if (totalPlaces <= 6) return 2;  // Show 2 if 4-6 places
+                  if (totalPlaces <= 3) return 0;  // Show 0 if 3 or fewer
+                  if (totalPlaces >= 3 && totalPlaces <= 5) return 1;  // Show 1 if 3-5 places
+                  if (totalPlaces >= 6 && totalPlaces <= 10) return 2;  // Show 2 if 6-10 places
                   return Math.min(Math.ceil(totalPlaces * 0.3), 3); // Show ~30% but cap at 3
                 };
 

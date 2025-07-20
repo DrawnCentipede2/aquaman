@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MapPin, Plus, Trash2, Save, X, ChevronDown, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
 import { useToast } from '@/components/ui/toast'
+import { Toaster } from '@/components/ui/toaster'
 
 // Interface for a single pin
 interface Pin {
+  id?: string
   title: string
   description: string
   google_maps_url: string
@@ -24,7 +26,12 @@ interface Pin {
 
 export default function CreatePackPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { showToast } = useToast()
+  
+  // Edit mode detection
+  const editPackId = searchParams.get('edit')
+  const isEditMode = !!editPackId
   
   // State for form data
   const [packTitle, setPackTitle] = useState('')
@@ -32,6 +39,7 @@ export default function CreatePackPage() {
   const [city, setCity] = useState('')
   const [country, setCountry] = useState('')
   const [price, setPrice] = useState('')
+  const [numberOfPlaces, setNumberOfPlaces] = useState('')
   
   // State for pins
   const [pins, setPins] = useState<Pin[]>([])
@@ -97,6 +105,9 @@ export default function CreatePackPage() {
 
   // File input ref for image uploads
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Ref to prevent duplicate category limit toasts
+  const categoryLimitToastRef = useRef(false)
 
   // Load countries on component mount
   useEffect(() => {
@@ -104,6 +115,88 @@ export default function CreatePackPage() {
     setAvailableCountries(countries)
     setFilteredCountries(countries)
   }, [])
+
+  // Load existing pack data if in edit mode
+  useEffect(() => {
+    if (isEditMode && editPackId) {
+      loadExistingPackData()
+    }
+  }, [isEditMode, editPackId])
+
+  // Function to load existing pack data for editing
+  const loadExistingPackData = async () => {
+    try {
+      // Get the pack details
+      const { data: packData, error: packError } = await supabase
+        .from('pin_packs')
+        .select('*')
+        .eq('id', editPackId)
+        .single()
+
+      if (packError) throw packError
+      if (!packData) throw new Error('Pack not found')
+
+      // Set form data
+      setPackTitle(packData.title || '')
+      setPackDescription(packData.description || '')
+      setCity(packData.city || '')
+      setCountry(packData.country || '')
+      setPrice(packData.price?.toString() || '')
+      setNumberOfPlaces(packData.pin_count?.toString() || '')
+      setSelectedCategories(packData.categories || [])
+
+      // Load pins for this pack
+      const { data: packPinsData, error: pinsError } = await supabase
+        .from('pin_pack_pins')
+        .select(`
+          pins (
+            id,
+            title,
+            description,
+            google_maps_url,
+            category,
+            latitude,
+            longitude,
+            photos,
+            created_at
+          )
+        `)
+        .eq('pin_pack_id', editPackId)
+
+      if (pinsError) {
+        console.warn('Error loading pins:', pinsError)
+        setPins([])
+      } else {
+        const pinsData = packPinsData?.map((item: any) => ({
+          id: item.pins.id,
+          title: item.pins.title,
+          description: item.pins.description,
+          google_maps_url: item.pins.google_maps_url,
+          category: item.pins.category,
+          latitude: item.pins.latitude,
+          longitude: item.pins.longitude,
+          photos: item.pins.photos || [],
+          created_at: item.pins.created_at
+        })) || []
+        
+        setPins(pinsData)
+      }
+
+      // Load existing photos (you'll need to implement this based on your photo storage)
+      // For now, we'll set an empty array and let users add new photos
+      setUploadedImages([])
+      setMainImageIndex(-1)
+
+      // Load Google Maps list (you'll need to implement this based on your storage)
+      // For now, we'll set it to null and let users add a new one
+      setGoogleMapsList(null)
+
+    } catch (error) {
+      console.error('Error loading pack data:', error)
+      showToast('Failed to load pack data for editing', 'error')
+      router.push('/manage')
+    }
+  }
 
   // Sync refs with state for keyboard navigation
   useEffect(() => {
@@ -661,11 +754,19 @@ export default function CreatePackPage() {
   const toggleCategory = (category: string) => {
     setSelectedCategories(prev => {
       if (prev.includes(category)) {
+        // Reset toast flag when removing a category
+        categoryLimitToastRef.current = false
         return prev.filter(c => c !== category)
       } else if (prev.length < 3) {
+        // Reset toast flag when adding a category
+        categoryLimitToastRef.current = false
         return [...prev, category]
       } else {
-        showToast('You can only select up to 3 categories', 'info')
+        // Only show toast if we haven't shown it recently
+        if (!categoryLimitToastRef.current) {
+          showToast('You can only select up to 3 categories', 'info')
+          categoryLimitToastRef.current = true
+        }
         return prev
       }
     })
@@ -675,114 +776,256 @@ export default function CreatePackPage() {
     return selectedCategories.includes(category)
   }
 
-  // Create the pin pack
+  // Create or update the pin pack
   const createPinPack = async () => {
+    // Validation checks
     if (!packTitle.trim()) {
-      console.log('Missing pack title')
+      showToast('Please enter a pack title', 'error')
+      return
+    }
+
+    if (!numberOfPlaces || Number(numberOfPlaces) < 1) {
+      showToast('Please specify the number of places in your pack', 'error')
+      return
+    }
+
+    if (uploadedImages.length === 0) {
+      showToast('Please upload at least one photo for your pack', 'error')
+      return
+    }
+
+    if (pins.length === 0) {
+      showToast('Please add at least one place to your pack', 'error')
+      return
+    }
+
+    if (pins.length !== Number(numberOfPlaces)) {
+      showToast(`You specified ${numberOfPlaces} places but added ${pins.length} places. Please add the correct number of places.`, 'error')
+      return
+    }
+
+    // Check that all places have valid Google Maps URLs
+    const placesWithValidUrls = pins.filter(pin => pin.google_maps_url && pin.google_maps_url.trim() !== '')
+    if (placesWithValidUrls.length !== Number(numberOfPlaces)) {
+      const missingUrls = Number(numberOfPlaces) - placesWithValidUrls.length
+      showToast(`Missing URLs for ${missingUrls} place(s). Please ensure all places have valid Google Maps URLs.`, 'error')
+      return
+    }
+
+    if (!googleMapsList) {
+      showToast('Please import a Google Maps list for your pack', 'error')
       return
     }
 
     setIsSubmitting(true)
     try {
-      // Create pin pack data
-      const pinPackData = {
+      if (isEditMode && editPackId) {
+        // Update existing pack
+        await updateExistingPack()
+      } else {
+        // Create new pack
+        await createNewPack()
+      }
+    } catch (error) {
+      console.error('Error saving pack:', error)
+      showToast(`Failed to ${isEditMode ? 'update' : 'create'} pack. Please try again.`, 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Create new pack
+  const createNewPack = async () => {
+    // Create pin pack data
+    const pinPackData = {
+      title: packTitle.trim(),
+      description: packDescription.trim() || 'A curated collection of amazing places',
+      city: city.trim() || 'Unknown',
+      country: country.trim() || 'Unknown',
+      price: price === '' ? 0 : Number(price),
+      creator_id: userId,
+      pin_count: pins.length,
+      categories: selectedCategories,
+      created_at: new Date().toISOString()
+    }
+
+    // Insert pin pack
+    const { data: packResponse, error: packError } = await supabase
+      .from('pin_packs')
+      .insert([pinPackData])
+      .select()
+
+    if (packError) {
+      console.error('Error creating pin pack:', packError)
+      throw packError
+    }
+
+    const newPackId = packResponse[0].id
+
+    // If there are pins, create them
+    if (pins.length > 0) {
+      const pinData = pins.map(pin => ({
+        title: pin.title.trim(),
+        description: pin.description.trim() || 'Amazing place to visit',
+        google_maps_url: pin.google_maps_url.trim(),
+        category: pin.category || 'other',
+        latitude: pin.latitude || 0,
+        longitude: pin.longitude || 0,
+        photos: pin.photos || [], // Use the pin's own photos instead of all uploadedImages
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }))
+
+      const { data: createdPins, error: pinsError } = await supabase
+        .from('pins')
+        .insert(pinData)
+        .select()
+
+      if (pinsError) {
+        console.error('Error creating pins:', pinsError)
+        throw pinsError
+      }
+
+      // Create relationships
+      const relationshipData = createdPins.map(pin => ({
+        pin_pack_id: newPackId,
+        pin_id: pin.id,
+        created_at: new Date().toISOString()
+      }))
+
+      const { error: relationshipError } = await supabase
+        .from('pin_pack_pins')
+        .insert(relationshipData)
+
+      if (relationshipError) {
+        console.error('Error creating relationships:', relationshipError)
+        throw relationshipError
+      }
+    }
+
+    // Update pin count
+    await supabase
+      .from('pin_packs')
+      .update({ pin_count: pins.length })
+      .eq('id', newPackId)
+
+    // Show success modal
+    setCreatedPackTitle(packTitle.trim())
+    setShowSuccessModal(true)
+    showToast(`Pack "${packTitle.trim()}" created successfully with ${pins.length} places and ${uploadedImages.length} photos!`, 'success')
+
+    // Clear form data
+    clearFormData()
+  }
+
+  // Update existing pack
+  const updateExistingPack = async () => {
+    // Update pin pack data
+    const { error: packError } = await supabase
+      .from('pin_packs')
+      .update({
         title: packTitle.trim(),
         description: packDescription.trim() || 'A curated collection of amazing places',
         city: city.trim() || 'Unknown',
         country: country.trim() || 'Unknown',
         price: price === '' ? 0 : Number(price),
-        creator_id: userId,
         pin_count: pins.length,
         categories: selectedCategories,
-        created_at: new Date().toISOString()
-      }
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', editPackId)
 
-      // Insert pin pack
-      const { data: packResponse, error: packError } = await supabase
-        .from('pin_packs')
-        .insert([pinPackData])
+    if (packError) {
+      console.error('Error updating pin pack:', packError)
+      throw packError
+    }
+
+    // Remove existing pins and relationships
+    const { error: deleteRelationshipsError } = await supabase
+      .from('pin_pack_pins')
+      .delete()
+      .eq('pin_pack_id', editPackId)
+
+    if (deleteRelationshipsError) {
+      console.error('Error deleting relationships:', deleteRelationshipsError)
+      throw deleteRelationshipsError
+    }
+
+    // Delete existing pins
+    const { error: deletePinsError } = await supabase
+      .from('pins')
+      .delete()
+      .in('id', pins.filter(pin => pin.id).map(pin => pin.id))
+
+    if (deletePinsError) {
+      console.error('Error deleting pins:', deletePinsError)
+      throw deletePinsError
+    }
+
+    // Create new pins
+    if (pins.length > 0) {
+      const pinData = pins.map(pin => ({
+        title: pin.title.trim(),
+        description: pin.description.trim() || 'Amazing place to visit',
+        google_maps_url: pin.google_maps_url.trim(),
+        category: pin.category || 'other',
+        latitude: pin.latitude || 0,
+        longitude: pin.longitude || 0,
+        photos: pin.photos || [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }))
+
+      const { data: createdPins, error: pinsError } = await supabase
+        .from('pins')
+        .insert(pinData)
         .select()
 
-      if (packError) {
-        console.error('Error creating pin pack:', packError)
-        throw packError
+      if (pinsError) {
+        console.error('Error creating pins:', pinsError)
+        throw pinsError
       }
 
-      const newPackId = packResponse[0].id
+      // Create relationships
+      const relationshipData = createdPins.map(pin => ({
+        pin_pack_id: editPackId,
+        pin_id: pin.id,
+        created_at: new Date().toISOString()
+      }))
 
-      // If there are pins, create them
-      if (pins.length > 0) {
-        const pinData = pins.map(pin => ({
-          title: pin.title.trim(),
-          description: pin.description.trim() || 'Amazing place to visit',
-          google_maps_url: pin.google_maps_url.trim(),
-          category: pin.category || 'other',
-          latitude: pin.latitude || 0,
-          longitude: pin.longitude || 0,
-          photos: uploadedImages, // Use uploadedImages directly instead of pin.photos
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }))
+      const { error: relationshipError } = await supabase
+        .from('pin_pack_pins')
+        .insert(relationshipData)
 
-        const { data: createdPins, error: pinsError } = await supabase
-          .from('pins')
-          .insert(pinData)
-          .select()
-
-        if (pinsError) {
-          console.error('Error creating pins:', pinsError)
-          throw pinsError
-        }
-
-        // Create relationships
-        const relationshipData = createdPins.map(pin => ({
-          pin_pack_id: newPackId,
-          pin_id: pin.id,
-          created_at: new Date().toISOString()
-        }))
-
-        const { error: relationshipError } = await supabase
-          .from('pin_pack_pins')
-          .insert(relationshipData)
-
-        if (relationshipError) {
-          console.error('Error creating relationships:', relationshipError)
-          throw relationshipError
-        }
+      if (relationshipError) {
+        console.error('Error creating relationships:', relationshipError)
+        throw relationshipError
       }
-
-      // Update pin count
-      await supabase
-        .from('pin_packs')
-        .update({ pin_count: pins.length })
-        .eq('id', newPackId)
-
-      // Show success modal
-      setCreatedPackTitle(packTitle.trim())
-      setShowSuccessModal(true)
-      showToast(`Pack "${packTitle.trim()}" created successfully with ${pins.length} places and ${uploadedImages.length} photos!`, 'success')
-
-      // Clear form data
-      setPackTitle('')
-      setPackDescription('')
-      setCity('')
-      setCountry('')
-      setPrice('')
-      setSelectedCategories([])
-      setPins([])
-      setGoogleMapsList(null)
-      setUploadedImages([])
-      setMainImageIndex(-1)
-      setSinglePlaceUrl('')
-      setGoogleMapsListUrl('')
-      setPlacesInput('')
-
-    } catch (error) {
-      console.error('Error creating pack:', error)
-      showToast('Failed to create pack. Please try again.', 'error')
-    } finally {
-      setIsSubmitting(false)
     }
+
+    // Show success message
+    showToast(`Pack "${packTitle.trim()}" updated successfully with ${pins.length} places and ${uploadedImages.length} photos!`, 'success')
+    
+    // Redirect to manage page
+    router.push('/manage')
+  }
+
+  // Clear form data
+  const clearFormData = () => {
+    setPackTitle('')
+    setPackDescription('')
+    setCity('')
+    setCountry('')
+    setPrice('')
+    setNumberOfPlaces('')
+    setSelectedCategories([])
+    setPins([])
+    setGoogleMapsList(null)
+    setUploadedImages([])
+    setMainImageIndex(-1)
+    setSinglePlaceUrl('')
+    setGoogleMapsListUrl('')
+    setPlacesInput('')
   }
 
   const handleViewMyPacks = () => {
@@ -818,7 +1061,9 @@ export default function CreatePackPage() {
 
             {/* Upload Images Section */}
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">Upload Images</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">
+                {isEditMode ? 'Edit Pack Images' : 'Upload Images'}
+              </h2>
               
               {/* Main Upload Area */}
               <div 
@@ -996,7 +1241,9 @@ export default function CreatePackPage() {
 
           {/* Right Column - Create Your Pack */}
           <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">Create Your Pack</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">
+              {isEditMode ? 'Edit Your Pack' : 'Create Your Pack'}
+            </h2>
             
             <div className="space-y-6">
               {/* Pack Title */}
@@ -1013,26 +1260,48 @@ export default function CreatePackPage() {
                 />
               </div>
 
-              {/* Price */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price ($USD)
-                </label>
-                <input
-                  type="number"
-                  value={price}
-                  onChange={(e) => {
-                    const inputValue = e.target.value
-                    if (inputValue === '' || (Number(inputValue) >= 0 && Number(inputValue) <= 10)) {
-                      setPrice(inputValue)
-                    }
-                  }}
-                  min="0"
-                  max="10"
-                  step="1"
-                  placeholder="0"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
+              {/* Price and Number of Places */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Price ($USD)
+                  </label>
+                  <input
+                    type="number"
+                    value={price}
+                    onChange={(e) => {
+                      const inputValue = e.target.value
+                      if (inputValue === '' || (Number(inputValue) >= 0 && Number(inputValue) <= 10)) {
+                        setPrice(inputValue)
+                      }
+                    }}
+                    min="0"
+                    max="10"
+                    step="1"
+                    placeholder="0"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Number of Places
+                  </label>
+                  <input
+                    type="number"
+                    value={numberOfPlaces}
+                    onChange={(e) => {
+                      const inputValue = e.target.value
+                      if (inputValue === '' || (Number(inputValue) >= 1 && Number(inputValue) <= 20)) {
+                        setNumberOfPlaces(inputValue)
+                      }
+                    }}
+                    min="1"
+                    max="15"
+                    step="1"
+                    placeholder="5"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
               </div>
 
               {/* Description */}
@@ -1070,11 +1339,6 @@ export default function CreatePackPage() {
                     </button>
                   ))}
                 </div>
-                {selectedCategories.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Selected: {selectedCategories.join(', ')}
-                  </p>
-                )}
               </div>
 
                               {/* Country and City - Dependent dropdowns */}
@@ -1273,20 +1537,33 @@ export default function CreatePackPage() {
                 </div>
               )}
 
-              {/* Save Pack Button */}
-              <button
-                onClick={createPinPack}
-                disabled={isSubmitting || !packTitle.trim()}
-                className="w-full bg-gray-900 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Saving...' : 'Save Pack'}
-              </button>
-              
-              {!packTitle.trim() && (
-                <p className="text-xs text-gray-500 text-center">Please enter a pack title to save</p>
-              )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Save Pack Button - Moved to bottom of page */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 border-t border-gray-200 bg-gray-50">
+        <div className="flex flex-col items-center space-y-4">
+          <button
+            onClick={createPinPack}
+            disabled={isSubmitting}
+            className="w-full max-w-md bg-gray-900 text-white py-4 px-8 rounded-xl font-semibold text-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+          >
+            {isSubmitting ? (
+              <div className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {isEditMode ? 'Updating Pack...' : 'Saving Pack...'}
+              </div>
+            ) : (
+              isEditMode ? 'Update Pack' : 'Save Pack'
+            )}
+          </button>
+          
+
         </div>
       </div>
 
@@ -1321,7 +1598,7 @@ export default function CreatePackPage() {
         </div>
       )}
 
-
+      <Toaster />
     </div>
   )
 } 
