@@ -1278,12 +1278,7 @@ export default function PackDetailPage() {
                               <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
                                 Verified
                               </span>
-                            )}
-                            {review.source === 'Google Maps' && (
-                              <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
-                                Google
-                              </span>
-                            )}
+                            )}                            
                           </div>
                           {/* Star rating */}
                           <div className="flex items-center space-x-1 mb-2">

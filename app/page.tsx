@@ -1,7 +1,8 @@
 'use client'
 
 import { MapPin, Users, Shield, Globe, Heart, Search, Star } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 
 // Utility function to ensure hydration-safe rendering
@@ -14,6 +15,9 @@ const useHydrationSafe = () => {
   
   return isHydrated
 }
+
+// Cache for Google Maps ratings to avoid recalculation
+const ratingCache = new Map()
 
 // Interface for packs with cover photos
 interface PinPackWithPhoto {
@@ -39,71 +43,98 @@ export default function LandingPage() {
   const [loadingPacks, setLoadingPacks] = useState(true)
   const isHydrated = useHydrationSafe()
 
-  // Function to get Google Maps rating for a location
-  const getGoogleMapsRating = (city: string, country: string, packTitle: string) => {
+  // Function to get Google Maps rating for a location - CACHED
+  const getGoogleMapsRating = useCallback((city: string, country: string, packTitle: string) => {
+    const cacheKey = `${city}${country}${packTitle}`
+    
+    if (ratingCache.has(cacheKey)) {
+      return ratingCache.get(cacheKey)
+    }
+    
     // Simulate Google Maps ratings based on location and pack title
-    // In a real implementation, you would call Google Places API
-    const locationHash = `${city}${country}${packTitle}`.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const locationHash = cacheKey.toLowerCase().replace(/[^a-z0-9]/g, '')
     const hashValue = locationHash.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
     
     // Generate realistic ratings between 3.8 and 4.8
     const baseRating = 3.8 + (hashValue % 10) * 0.1
     const reviewCount = 50 + (hashValue % 450) // Between 50-500 reviews
     
-    return {
+    const result = {
       rating: Math.round(baseRating * 10) / 10, // Round to 1 decimal
       reviewCount: reviewCount,
       source: 'Google Maps'
     }
-  }
+    
+    ratingCache.set(cacheKey, result)
+    return result
+  }, [])
 
-  // Function to determine if we should show Google Maps rating
-  const shouldShowGoogleMapsRating = (pack: PinPackWithPhoto) => {
+  // Function to determine if we should show Google Maps rating - MEMOIZED
+  const shouldShowGoogleMapsRating = useCallback((pack: PinPackWithPhoto) => {
     // Show Google Maps rating if pack has no reviews or very few downloads
     const hasOwnReviews = pack.rating_count && pack.rating_count > 0
     const hasSignificantDownloads = pack.download_count && pack.download_count > 10
     return !hasOwnReviews || !hasSignificantDownloads
-  }
+  }, [])
 
-  // Function to fetch real packs from database - OPTIMIZED
+  // Function to fetch real packs from database - HEAVILY OPTIMIZED
   const loadRealPacks = async () => {
     try {
       setLoadingPacks(true)
       
-      // Get all pin packs with a single optimized query
+      // Get packs with their associated pins and photos
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
         .select(`
-          *,
-          pin_pack_pins!inner(
-            pins!inner(
+          id,
+          title,
+          description,
+          price,
+          city,
+          country,
+          created_at,
+          pin_count,
+          download_count,
+          average_rating,
+          rating_count,
+          categories,
+          pin_pack_pins(
+            pins(
               photos
             )
           )
         `)
-        .order('average_rating', { ascending: false })
         .order('download_count', { ascending: false })
+        .order('average_rating', { ascending: false })
         .limit(5) // Get top 5 packs
 
       if (packError) throw packError
 
-      // Process packs with photos in a single pass
+      // Process packs with actual photos from their pins
       const packsWithPhotos = (packData || []).map((pack: any) => {
-        // Find first pin with photos
-        const pinWithPhoto = pack.pin_pack_pins?.find((item: any) => {
-          const pin = item.pins
-          return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
-        })
+        // Find the first pin with photos
+        let coverPhoto = null
+        
+        if (pack.pin_pack_pins && Array.isArray(pack.pin_pack_pins)) {
+          for (const pinPackPin of pack.pin_pack_pins) {
+            if (pinPackPin.pins && pinPackPin.pins.photos && Array.isArray(pinPackPin.pins.photos) && pinPackPin.pins.photos.length > 0) {
+              coverPhoto = pinPackPin.pins.photos[0] // Use the first photo from the first pin
+              break
+            }
+          }
+        }
         
         return {
           ...pack,
-          coverPhoto: pinWithPhoto?.pins?.photos?.[0] || null
+          coverPhoto: coverPhoto
         }
       })
 
       setRealPacks(packsWithPhotos)
     } catch (err) {
       console.error('Error loading real packs:', err)
+      // Fallback to empty array to prevent errors
+      setRealPacks([])
     } finally {
       setLoadingPacks(false)
     }
@@ -116,21 +147,17 @@ export default function LandingPage() {
 
 
 
-  // Preload critical images for better performance
+  // Preload only critical images for better performance
   useEffect(() => {
     if (!isHydrated) return
     
-    const preloadImages = [
+    // Only preload the hero background and first category image
+    const criticalImages = [
       '/clouds-hero-bg.jpg',
-      '/Nightlife.jpg',
-      '/Food.jpg',
-      '/Family.jpg',
-      '/Adventure.jpg',
-      '/Romantic.jpg',
-      '/Hidden_Gems.jpg'
+      '/Nightlife.jpg'
     ]
     
-    preloadImages.forEach(src => {
+    criticalImages.forEach(src => {
       const link = document.createElement('link')
       link.rel = 'preload'
       link.as = 'image'
@@ -138,6 +165,23 @@ export default function LandingPage() {
       document.head.appendChild(link)
     })
   }, [isHydrated])
+
+  // Skeleton loading component for better perceived performance
+  const PackSkeleton = () => (
+    <div className="group cursor-pointer animate-pulse">
+      <div className="relative h-48 rounded-2xl overflow-hidden bg-gray-200">
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-300 via-transparent to-transparent"></div>
+      </div>
+      <div className="mt-4 space-y-2">
+        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+        <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+      </div>
+    </div>
+  )
+
+  // Memoized skeleton array
+  const skeletonPacks = useMemo(() => Array(5).fill(null).map((_, i) => <PackSkeleton key={i} />), [])
 
   return (
     <div className="min-h-screen bg-white">
@@ -223,12 +267,13 @@ export default function LandingPage() {
               onClick={() => window.location.href = '/browse?category=Nightlife'}
             >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                <img 
+                <Image 
                   src="/Nightlife.jpg"
                   alt="Nightlife"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
-                  loading="eager"
-                  fetchPriority="high"
+                  fill
+                  sizes="(max-width: 768px) 33vw, 25vw"
+                  className="object-cover transition-transform duration-300"
+                  priority
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4">
@@ -243,12 +288,12 @@ export default function LandingPage() {
               onClick={() => window.location.href = `/browse?category=${encodeURIComponent('Food & Drink')}`}
             >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                <img 
+                <Image 
                   src="/Food.jpg"
                   alt="Food"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
-                  loading="eager"
-                  fetchPriority="high"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -263,12 +308,12 @@ export default function LandingPage() {
               onClick={() => window.location.href = '/browse?category=Family'}
             >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                <img 
+                <Image 
                   src="/Family.jpg"
                   alt="Family"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
-                  loading="eager"
-                  fetchPriority="high"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 50vw"
+                  className="object-cover transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -285,12 +330,12 @@ export default function LandingPage() {
               onClick={() => window.location.href = '/browse?category=Adventure'}
             >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                <img 
+                <Image 
                   src="/Adventure.jpg"
                   alt="Adventure"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
-                  loading="eager"
-                  fetchPriority="high"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 50vw"
+                  className="object-cover transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4">
@@ -305,12 +350,12 @@ export default function LandingPage() {
               onClick={() => window.location.href = '/browse?category=Romantic'}
             >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                <img 
+                <Image 
                   src="/Romantic.jpg"
                   alt="Romantic"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
-                  loading="eager"
-                  fetchPriority="high"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -321,16 +366,16 @@ export default function LandingPage() {
 
             {/* Hidden Gems - Bottom half (6 cols, 1 row) */}
             <div 
-              className="col-span-1 md:col-span-3 row-span-1 group cursor-pointer"
-              onClick={() => window.location.href = '/browse?category=Cultural'}
+              className="col-span-6 md:col-span-3 row-span-1 group cursor-pointer"
+              onClick={() => window.location.href = '/browse?category=Hidden_Gems'}
             >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
-                <img 
+                <Image 
                   src="/Hidden_Gems.jpg"
                   alt="Hidden Gems"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300"
-                  loading="eager"
-                  fetchPriority="high"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-2 left-2 right-2">
@@ -354,16 +399,7 @@ export default function LandingPage() {
           {loadingPacks ? (
             // Loading state with proper aspect ratios to prevent layout shifts
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-              {[...Array(5)].map((_, index) => (
-                <div key={index} className="animate-pulse">
-                  <div 
-                    className="bg-gray-200 h-48 rounded-2xl mb-4" 
-                    style={{ aspectRatio: '4/3' }}
-                  ></div>
-                  <div className="bg-gray-200 h-4 rounded mb-2"></div>
-                  <div className="bg-gray-200 h-3 rounded w-2/3"></div>
-                </div>
-              ))}
+              {skeletonPacks}
             </div>
           ) : realPacks.length > 0 ? (
             // Real packs grid
@@ -372,17 +408,12 @@ export default function LandingPage() {
                 <div key={pack.id} className="group cursor-pointer" onClick={() => window.location.href = `/pack/${pack.id}`}>
                   <div className="relative h-48 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 transform hover:scale-105">
                     {pack.coverPhoto ? (
-                      <img 
+                      <Image 
                         src={pack.coverPhoto}
                         alt={pack.title}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          // Fallback to placeholder if image fails to load
-                          const target = e.target as HTMLImageElement
-                          target.style.display = 'none'
-                          target.nextElementSibling?.classList.remove('hidden')
-                        }}
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 20vw"
+                        className="object-cover"
                       />
                     ) : (
                       <div 
@@ -419,35 +450,34 @@ export default function LandingPage() {
                       {pack.city}, {pack.country}
                     </p>
                     
-                                         {/* Rating details */}
-                     <div className="flex items-center justify-between">
-                       <div className="flex items-center space-x-2">
-                         <div className="flex items-center">
-                           <span className="text-yellow-400 text-sm mr-1">★</span>
-                           {shouldShowGoogleMapsRating(pack) ? (
-                             <div className="flex items-center">
-                               <span className="text-sm font-medium text-gray-700">
-                                 {getGoogleMapsRating(pack.city, pack.country, pack.title).rating}
-                               </span>
-                               <span className="text-xs text-gray-400 ml-1">
-                                 (Google)
-                               </span>
-                             </div>
-                           ) : (
-                             <span className="text-sm font-medium text-gray-700">
-                               {pack.average_rating ? pack.average_rating.toFixed(1) : ((pack.download_count || 0) % 50 + 350) / 100}
-                             </span>
-                           )}
-                         </div>
-                         <span className="text-xs text-gray-500">
-                           {shouldShowGoogleMapsRating(pack) 
-                             ? `(${getGoogleMapsRating(pack.city, pack.country, pack.title).reviewCount} reviews)`
-                             : `(${Math.floor((pack.download_count || 0) / 10) + 15} reviews)`
-                           }
-                         </span>
-                       </div>
-                      
-                     </div>
+                    {/* Rating details */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center">
+                          <span className="text-yellow-400 text-sm mr-1">★</span>
+                          {shouldShowGoogleMapsRating(pack) ? (
+                            <div className="flex items-center">
+                              <span className="text-sm font-medium text-gray-700">
+                                {getGoogleMapsRating(pack.city, pack.country, pack.title).rating}
+                              </span>
+                              <span className="text-xs text-gray-400 ml-1">
+                                (Google)
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-medium text-gray-700">
+                              {pack.average_rating ? pack.average_rating.toFixed(1) : ((pack.download_count || 0) % 50 + 350) / 100}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {shouldShowGoogleMapsRating(pack) 
+                            ? `(${getGoogleMapsRating(pack.city, pack.country, pack.title).reviewCount} reviews)`
+                            : `(${Math.floor((pack.download_count || 0) / 10) + 15} reviews)`
+                          }
+                        </span>
+                      </div>
+                    </div>
                     
                     {/* Categories (if available) */}
                     {pack.categories && pack.categories.length > 0 && (

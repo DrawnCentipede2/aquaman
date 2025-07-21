@@ -3,6 +3,7 @@ import './globals.css'
 import Navigation from '@/components/Navigation'
 import PinCloudLogo from '@/components/PinCloudLogo'
 import { ToastProvider } from '@/components/ui/toast'
+import PerformanceMonitor from '@/components/PerformanceMonitor'
 import { Inter } from 'next/font/google'
 
 // Optimize font loading
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-gray-25 font-sans">
+        <PerformanceMonitor />
         <ToastProvider>
           {/* Main application wrapper */}
           <div className="flex flex-col min-h-screen">
