@@ -1,10 +1,27 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Navigation from '@/components/Navigation'
-import PinCloudLogo from '@/components/PinCloudLogo'
-import { ToastProvider } from '@/components/ui/toast'
-import PerformanceMonitor from '@/components/PerformanceMonitor'
+import dynamic from 'next/dynamic'
 import { Inter } from 'next/font/google'
+
+// Lazy load heavy components to reduce initial bundle size
+const Navigation = dynamic(() => import('@/components/Navigation'), {
+  ssr: true,
+  loading: () => <div className="h-20 bg-white shadow-card border-b border-gray-100" />
+})
+
+const PinCloudLogo = dynamic(() => import('@/components/PinCloudLogo'), {
+  ssr: true
+})
+
+const ToastProvider = dynamic(() => import('@/components/ui/toast').then(mod => ({ default: mod.ToastProvider })), {
+  ssr: true
+})
+
+// Only load PerformanceMonitor in development or when explicitly needed
+const PerformanceMonitor = dynamic(() => import('@/components/PerformanceMonitor'), {
+  ssr: false,
+  loading: () => null
+})
 
 // Optimize font loading
 const inter = Inter({ 
@@ -27,7 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-gray-25 font-sans">
-        <PerformanceMonitor />
+        {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
         <ToastProvider>
           {/* Main application wrapper */}
           <div className="flex flex-col min-h-screen">
@@ -60,7 +77,7 @@ export default function RootLayout({
 
                   {/* Center Search Bar - Only show on browse page */}
                   <div className="flex-1 max-w-2xl mx-8 hidden md:block" id="header-search-container">
-                    {/* This will be populated by the browse page */}
+                    {/* Search bar will be dynamically inserted here by the browse page */}
                   </div>
                   
                   {/* Navigation */}

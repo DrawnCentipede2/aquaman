@@ -1361,21 +1361,6 @@ export default function CreatePackPage() {
                   </div>
                 </div>
               )}
-              
-              {/* Debug Button - Only show in edit mode */}
-              {isEditMode && (
-                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <button
-                    onClick={debugGoogleMapsList}
-                    className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
-                  >
-                    Debug Google Maps List
-                  </button>
-                  <p className="text-xs text-yellow-700 mt-2">
-                    Click to see current Google Maps list state in console
-                  </p>
-                </div>
-              )}
             </div>
           </div>
 

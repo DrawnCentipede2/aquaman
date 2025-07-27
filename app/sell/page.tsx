@@ -216,11 +216,18 @@ export default function SellPage() {
     const isAuthenticated = checkUserAuthentication()
     
     if (isAuthenticated) {
+      // Mark user as creator eligible and registered when they click "Get Started"
+      localStorage.setItem('pinpacks_has_created_packs', 'true')
+      localStorage.setItem('pinpacks_is_registered_creator', 'true')
+      
+      // Trigger storage event to update navigation immediately
+      window.dispatchEvent(new Event('storage'))
+      
       // User has account → redirect to manage page
       window.location.href = '/manage'
     } else {
-      // User doesn't have account → redirect to sign up
-      window.location.href = '/signup'
+      // User doesn't have account → redirect to sign up with parameter to indicate they came from sell page
+      window.location.href = '/signup?from=sell'
     }
   }
 

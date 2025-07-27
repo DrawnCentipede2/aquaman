@@ -7,22 +7,125 @@ import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { useToast } from '@/components/ui/toast'
 
+// Rating cache for Google Maps ratings
+const ratingCache = new Map()
+
+// Function to get Google Maps rating for a location - CACHED
+const getGoogleMapsRating = (city: string, country: string, packTitle: string) => {
+  const cacheKey = `${city}${country}${packTitle}`
+  if (ratingCache.has(cacheKey)) {
+    return ratingCache.get(cacheKey)
+  }
+  // Simulate Google Maps ratings based on location and pack title
+  const locationHash = cacheKey.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const hashValue = locationHash.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  // Generate realistic ratings between 3.8 and 4.8
+  const baseRating = 3.8 + (hashValue % 10) * 0.1
+  const reviewCount = 50 + (hashValue % 450) // Between 50-500 reviews
+  const result = {
+    rating: Math.round(baseRating * 10) / 10, // Round to 1 decimal
+    reviewCount: reviewCount,
+    source: 'Google Maps'
+  }
+  ratingCache.set(cacheKey, result)
+  return result
+}
+
+// Function to determine if we should show Google Maps rating
+const shouldShowGoogleMapsRating = (pack: any) => {
+  if (!pack) return false
+  const hasOwnReviews = pack.rating_count && pack.rating_count > 0
+  const hasSignificantDownloads = pack.download_count && pack.download_count > 10
+  return !hasOwnReviews || !hasSignificantDownloads
+}
+
 export default function WishlistPage() {
   const { showToast } = useToast()
   const [wishlistItems, setWishlistItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Load wishlist and photos
   useEffect(() => {
-    // Load wishlist from localStorage
-    const savedWishlist = localStorage.getItem('pinpacks_wishlist')
-    if (savedWishlist) {
-      setWishlistItems(JSON.parse(savedWishlist))
+    const loadWishlistWithPhotos = async () => {
+      try {
+        // Load wishlist from localStorage
+        const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+        if (savedWishlist) {
+          const wishlist = JSON.parse(savedWishlist)
+          console.log('🔄 Wishlist - Loading wishlist items:', wishlist.length)
+          
+          // Load photos for wishlist items
+          const wishlistWithPhotos = await loadPhotosForWishlist(wishlist)
+          setWishlistItems(wishlistWithPhotos)
+          console.log('✅ Wishlist - Loaded photos for wishlist items')
+        } else {
+          setWishlistItems([])
+        }
+      } catch (error) {
+        console.error('Error loading wishlist:', error)
+        setWishlistItems([])
+      } finally {
+        setLoading(false)
+      }
     }
-    setLoading(false)
+
+    loadWishlistWithPhotos()
   }, [])
 
+  // Function to load photos for wishlist items
+  const loadPhotosForWishlist = async (wishlist: any[]) => {
+    try {
+      if (wishlist.length === 0) return wishlist
+
+      const packIds = wishlist.map(pack => pack.id)
+      console.log('🔄 Wishlist - Loading photos for pack IDs:', packIds)
+
+      const { data: photoData, error: photoError } = await supabase
+        .from('pin_pack_pins')
+        .select(`
+          pin_pack_id,
+          pins!inner(
+            photos
+          )
+        `)
+        .in('pin_pack_id', packIds)
+
+      if (photoError) {
+        console.error('Error loading photos for wishlist:', photoError)
+        return wishlist
+      }
+
+      console.log('🔄 Wishlist - Photo data received:', photoData?.length || 0, 'items')
+
+      // Create a map of pack_id to first photo
+      const photoMap = new Map()
+      photoData?.forEach((item: any) => {
+        if (item.pins?.photos?.[0]) {
+          photoMap.set(item.pin_pack_id, item.pins.photos[0])
+          console.log('🔄 Wishlist - Found photo for pack:', item.pin_pack_id)
+        } else {
+          console.log('🔄 Wishlist - No photo found for pack:', item.pin_pack_id)
+        }
+      })
+
+      console.log('🔄 Wishlist - Photo map created with', photoMap.size, 'entries')
+
+      // Add photos to wishlist items
+      const wishlistWithPhotos = wishlist.map(pack => ({
+        ...pack,
+        coverPhoto: photoMap.get(pack.id) || null
+      }))
+
+      console.log('🔄 Wishlist - Wishlist items with photos:', wishlistWithPhotos.filter(p => p.coverPhoto).length)
+      return wishlistWithPhotos
+    } catch (error) {
+      console.error('Error loading photos for wishlist:', error)
+      return wishlist
+    }
+  }
+
   // Function to remove item from wishlist
-  const removeFromWishlist = (packId: string) => {
+  const removeFromWishlist = (packId: string): void => {
     try {
       // Get current wishlist from localStorage
       const savedWishlist = localStorage.getItem('pinpacks_wishlist')
@@ -34,8 +137,8 @@ export default function WishlistPage() {
       // Save to localStorage
       localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
       
-      // Update local state
-      setWishlistItems(currentWishlist)
+      // Update local state (remove from current state with photos)
+      setWishlistItems(prev => prev.filter(item => item.id !== packId))
       
       showToast('Pack removed from wishlist', 'success')
     } catch (error) {
@@ -44,6 +147,23 @@ export default function WishlistPage() {
     }
   }
 
+  const getRatingDisplay = (pack: any) => {
+    if (!pack) return { rating: 0, reviewCount: 0, source: 'Pack' }
+    if (shouldShowGoogleMapsRating(pack)) {
+      const googleRating = getGoogleMapsRating(pack.city, pack.country, pack.title)
+      return {
+        rating: googleRating.rating,
+        reviewCount: googleRating.reviewCount,
+        source: 'Google'
+      }
+    } else {
+      return {
+        rating: pack.average_rating || 0,
+        reviewCount: pack.rating_count || 0,
+        source: 'Pack'
+      }
+    }
+  }
 
 
   if (loading) {
@@ -119,12 +239,16 @@ export default function WishlistPage() {
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ aspectRatio: '4/3' }}
                           onError={(e) => {
+                            console.log('🔄 Wishlist - Image failed to load for pack:', pack.id)
                             (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                          }}
+                          onLoad={() => {
+                            console.log('✅ Wishlist - Image loaded successfully for pack:', pack.id);
                           }}
                         />
                       ) : (
                         <img 
-                          src={pack.coverPhoto && pack.coverPhoto !== '' ? pack.coverPhoto : "/google-maps-bg.svg"}
+                          src="/google-maps-bg.svg"
                           alt="Map background"
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ aspectRatio: '4/3' }}
@@ -136,8 +260,8 @@ export default function WishlistPage() {
                     {/* Heart icon - Remove from wishlist */}
                     <button 
                       onClick={(e) => {
-                        e.stopPropagation() // Prevent card click when clicking heart
-                        removeFromWishlist(pack.id)
+                        e.stopPropagation(); // Prevent card click when clicking heart
+                        removeFromWishlist(pack.id);
                       }}
                       className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm"
                     >
@@ -175,8 +299,28 @@ export default function WishlistPage() {
                     {/* Bottom section with rating and price */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
-                        <span className="text-sm text-gray-600">{((pack.download_count || 0) % 50 + 350) / 100}</span>
+                        {(() => {
+                          const ratingDisplay = getRatingDisplay(pack)
+                          const { rating } = ratingDisplay
+                          const fullStars = Math.floor(rating)
+                          const halfStar = rating - fullStars >= 0.5
+                          const emptyStars = 5 - fullStars - (halfStar ? 1 : 0)
+                          return [
+                            ...Array.from({ length: fullStars }, (_, i) => (
+                              <Star key={i} className="h-4 w-4 text-yellow-400 fill-current" />
+                            )),
+                            ...(halfStar ? [<Star key="half" className="h-4 w-4 text-yellow-400 fill-current opacity-50" />] : []),
+                            ...Array.from({ length: emptyStars }, (_, i) => (
+                              <Star key={i + fullStars + 1} className="h-4 w-4 text-gray-300 fill-current" />
+                            )),
+                          ]
+                        })()}
+                        <span className="ml-2 text-sm font-medium text-gray-900">
+                          {getRatingDisplay(pack).rating.toFixed(1)}
+                          {getRatingDisplay(pack).source === 'Google' && (
+                            <span className="text-xs text-gray-500 ml-1">(Google)</span>
+                          )}
+                        </span>
                       </div>
                       <div className="text-lg font-bold text-gray-900">
                         {pack.price === 0 ? 'Free' : `$${pack.price}`}

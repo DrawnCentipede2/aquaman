@@ -203,15 +203,28 @@ export default function PinventoryPage() {
       
       purchasedPackIds.push(...databasePackIds)
       
-      // 2. Get from localStorage (old purchases and free packs)
+      // 2. Get from localStorage ONLY if user has legacy purchases
+      // For new accounts, we should only rely on database orders
       const localStorageIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
       console.log('🔍 Found localStorage pack IDs:', localStorageIds)
       
-      // Clean up invalid UUIDs from localStorage
-      const validLocalIds = localStorageIds.filter((id: string) => {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-        return typeof id === 'string' && uuidRegex.test(id)
-      })
+      // Only include localStorage IDs if user has database orders OR if this is a legacy user
+      // This prevents new accounts from seeing old localStorage data
+      let validLocalIds: string[] = []
+      
+      if (databasePackIds.length > 0) {
+        // User has database orders, so they might have legacy localStorage purchases too
+        validLocalIds = localStorageIds.filter((id: string) => {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          return typeof id === 'string' && uuidRegex.test(id)
+        })
+        console.log('🔍 User has database orders, including valid localStorage IDs:', validLocalIds)
+      } else {
+        // New account with no database orders - clear localStorage to prevent showing old data
+        console.log('🔍 New account detected (no database orders), clearing localStorage purchases')
+        localStorage.removeItem('pinpacks_purchased')
+        validLocalIds = []
+      }
       
       // Merge both sources and remove duplicates
       purchasedPackIds = Array.from(new Set([...purchasedPackIds, ...validLocalIds]))

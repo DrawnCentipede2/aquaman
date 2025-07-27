@@ -266,7 +266,7 @@ export default function LandingPage() {
               className="col-span-2 md:col-span-3 row-span-2 group cursor-pointer"
               onClick={() => window.location.href = '/browse?category=Nightlife'}
             >
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:scale-105 transition-all duration-300">
                 <Image 
                   src="/Nightlife.jpg"
                   alt="Nightlife"
@@ -287,7 +287,7 @@ export default function LandingPage() {
               className="col-span-6 md:col-span-3 row-span-1 group cursor-pointer"
               onClick={() => window.location.href = `/browse?category=${encodeURIComponent('Food & Drink')}`}
             >
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:scale-105 transition-all duration-300">
                 <Image 
                   src="/Food.jpg"
                   alt="Food"
@@ -307,7 +307,7 @@ export default function LandingPage() {
               className="col-span-6 md:col-span-6 row-span-1 group cursor-pointer"
               onClick={() => window.location.href = '/browse?category=Family'}
             >
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:scale-105 transition-all duration-300">
                 <Image 
                   src="/Family.jpg"
                   alt="Family"
@@ -329,7 +329,7 @@ export default function LandingPage() {
               className="col-span-6 md:col-span-6 row-span-2 group cursor-pointer"
               onClick={() => window.location.href = '/browse?category=Adventure'}
             >
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:scale-105 transition-all duration-300">
                 <Image 
                   src="/Adventure.jpg"
                   alt="Adventure"
@@ -349,7 +349,7 @@ export default function LandingPage() {
               className="col-span-6 md:col-span-3 row-span-2 group cursor-pointer"
               onClick={() => window.location.href = '/browse?category=Romantic'}
             >
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:scale-105 transition-all duration-300">
                 <Image 
                   src="/Romantic.jpg"
                   alt="Romantic"
@@ -369,7 +369,7 @@ export default function LandingPage() {
               className="col-span-6 md:col-span-3 row-span-1 group cursor-pointer"
               onClick={() => window.location.href = '/browse?category=Hidden_Gems'}
             >
-              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:scale-105 transition-all duration-300">
                 <Image 
                   src="/Hidden_Gems.jpg"
                   alt="Hidden Gems"

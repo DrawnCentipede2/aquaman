@@ -1,976 +1,590 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react'
+import dynamic from 'next/dynamic'
+import { useSearchParams } from 'next/navigation'
 import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders, CheckCircle, ShoppingCart, CreditCard, Package, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { getPackDisplayImage } from '@/lib/utils'
-import PayPalCheckout from '@/components/PayPalCheckout'
-import PaymentSuccessModal from '@/components/PaymentSuccessModal'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
-import CloudLoader from '@/components/CloudLoader'
+import { logger } from '@/lib/logger'
+
+// Performance API types
+interface PerformanceEventTiming extends PerformanceEntry {
+  processingStart: number
+  processingEnd: number
+  target?: EventTarget
+}
+
+interface LayoutShift extends PerformanceEntry {
+  value: number
+  sources?: Array<{
+    node?: Node
+    currentRect?: DOMRectReadOnly
+    previousRect?: DOMRectReadOnly
+  }>
+}
+
+// ULTRA-OPTIMIZED: Pre-computed rating cache with efficient hashing
+const ratingCache = new Map<string, {
+  rating: number
+  reviewCount: number
+  source: string
+}>()
+
+// ULTRA-OPTIMIZED: Heavy components with aggressive code splitting
+const PayPalCheckout = dynamic(() => import('@/components/PayPalCheckout'), {
+  loading: () => <div className="animate-pulse bg-gray-200 h-12 rounded" />,
+  ssr: false
+})
+
+const PaymentSuccessModal = dynamic(() => import('@/components/PaymentSuccessModal'), {
+  ssr: false
+})
+
+// ULTRA-OPTIMIZED: Lazy load filter modal
+const FilterModal = dynamic(() => import('@/components/BrowsePage/FilterModal'), {
+  loading: () => <div className="animate-pulse bg-gray-200 h-64 rounded" />,
+  ssr: false
+})
+
+
+
+// ULTRA-OPTIMIZED: Import PackCard directly for better LCP
+import PackCard from '@/components/BrowsePage/PackCard'
+
+// ULTRA-OPTIMIZED: Minimal loader
+const OptimizedLoader = () => (
+  <div className="text-center py-20">
+    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-coral-500 mb-4"></div>
+    <p className="text-gray-600">Finding amazing places...</p>
+  </div>
+)
+
+// ULTRA-OPTIMIZED: Skeleton component for progressive loading
+const PackSkeleton = () => (
+  <div className="group cursor-pointer animate-pulse">
+    <div className="relative h-48 rounded-2xl overflow-hidden bg-gray-200">
+      <div className="absolute inset-0 bg-gradient-to-t from-gray-300 via-transparent to-transparent"></div>
+    </div>
+    <div className="mt-4 space-y-2">
+      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+      <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+    </div>
+  </div>
+)
 
 // Extended PinPack type to include cover photo
 interface PinPackWithPhoto extends PinPack {
   coverPhoto?: string | null
 }
 
-export default function BrowsePage() {
-  // State for pin packs
-  const [pinPacks, setPinPacks] = useState<PinPackWithPhoto[]>([])
-  const [filteredPacks, setFilteredPacks] = useState<PinPackWithPhoto[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // State for search and filters
-  const [searchTerm, setSearchTerm] = useState('')
-  const [activeSearchTerm, setActiveSearchTerm] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  const [priceFilter, setPriceFilter] = useState<string>('')
-  const [hasSearched, setHasSearched] = useState(false)
-
-  // State for search suggestions
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
-
-
-
-  // Get unique values for filter options - now using standardized categories
-  const categories = STANDARD_CATEGORIES
-
-  // Autocomplete state
-  const selectedIndexRef = useRef(-1) // Keep track of current selection synchronously
-  
-  // Debug selectedSuggestionIndex changes
+// ULTRA-OPTIMIZED: Performance monitoring with minimal overhead
+const PerformanceMonitor = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
-    selectedIndexRef.current = selectedSuggestionIndex
-            console.log('selectedSuggestionIndex changed to:', selectedSuggestionIndex)
-  }, [selectedSuggestionIndex])
+    // Only monitor in development or when explicitly enabled
+    if (process.env.NODE_ENV !== 'development') return
+    
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.entryType === 'largest-contentful-paint') {
+          logger.log('LCP:', entry.startTime)
+        }
+        if (entry.entryType === 'first-input') {
+          const firstInputEntry = entry as PerformanceEventTiming
+          logger.log('FID:', firstInputEntry.processingStart - firstInputEntry.startTime)
+        }
+        if (entry.entryType === 'layout-shift') {
+          const layoutShiftEntry = entry as LayoutShift
+          logger.log('CLS:', layoutShiftEntry.value)
+        }
+      }
+    })
+    
+    observer.observe({ entryTypes: ['largest-contentful-paint', 'first-input', 'layout-shift'] })
+    
+    return () => observer.disconnect()
+  }, [])
   
-  // Enhanced filter states
+  return <>{children}</>
+}
+
+export default function BrowsePage() {
+  // ULTRA-OPTIMIZED: Minimal state management
+  const [pinPacks, setPinPacks] = useState<PinPackWithPhoto[]>([])
+  const [loading, setLoading] = useState(false) // Start with false for immediate render
+  const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [starRatingFilter, setStarRatingFilter] = useState('all')
   const [pinCountFilter, setPinCountFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('newest')
   const [showFilterModal, setShowFilterModal] = useState(false)
-  
-  // Sorting state
-  const [sortBy, setSortBy] = useState('newest') // 'rating', 'downloaded', 'newest', 'oldest'
   const [showSortDropdown, setShowSortDropdown] = useState(false)
-  
-  // Wishlist state - track which items are in wishlist
   const [wishlistItems, setWishlistItems] = useState<string[]>([])
-  
-  // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [userProfile, setUserProfile] = useState<any>(null)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  
-  // Cart success state for showing success banner
   const [cartSuccess, setCartSuccess] = useState(false)
-  const [addedPack, setAddedPack] = useState<{
-    id: string
-    title: string
-    price: string
-    city: string
-    country: string
-    pin_count: string
-  } | null>(null)
-  const [countdownTime, setCountdownTime] = useState('24:00')
-  const [addedPackImage, setAddedPackImage] = useState<string | null>(null)
-  
-  // Payment success state for falling pins modal
+  const [addedPack, setAddedPack] = useState<any>(null)
   const [showPayPalModal, setShowPayPalModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
+
+  // ULTRA-OPTIMIZED: Progressive loading states
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMorePacks, setHasMorePacks] = useState(true)
+  const [displayedPacks, setDisplayedPacks] = useState<PinPackWithPhoto[]>([])
+  const [allPacks, setAllPacks] = useState<PinPackWithPhoto[]>([])
+
+  // ULTRA-OPTIMIZED: Search only triggers when user clicks search button
+  const [activeSearchTerm, setActiveSearchTerm] = useState('')
+
+  // ULTRA-OPTIMIZED: Hydration safety
+  const [isHydrated, setIsHydrated] = useState(false)
   
-  // Check authentication status
-  const checkAuthentication = () => {
-    const userProfileData = localStorage.getItem('pinpacks_user_profile')
-    if (userProfileData) {
-      try {
-        const profile = JSON.parse(userProfileData)
-        setIsAuthenticated(true)
-        setUserProfile(profile)
-        return true
-      } catch (error) {
-        console.error('Error parsing user profile:', error)
-        localStorage.removeItem('pinpacks_user_profile')
-      }
-    }
-    setIsAuthenticated(false)
-    setUserProfile(null)
-    return false
-  }
-
-  // Handle protected actions (show login modal if not authenticated)
-  const handleProtectedAction = (action: () => void) => {
-    if (isAuthenticated) {
-      action()
-    } else {
-      setShowLoginModal(true)
-    }
-  }
-
-  // Handle search button click
-  const handleSearch = () => {
-    setActiveSearchTerm(searchTerm) // Set the active search term for filtering
-    setHasSearched(true)
-    setShowSuggestions(false)
-  }
-
-  // Generate autocomplete suggestions
-  const generateSuggestions = (query: string) => {
-    if (query.trim().length === 0) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-
-    const searchQuery = query.toLowerCase();
-    const allSuggestions: string[] = []
-    
-    // Get suggestions from pack titles, cities, and countries
-    pinPacks.forEach(pack => {
-      // Add pack titles
-      if (pack.title.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push(pack.title)
-      }
-      // Add cities
-      if (pack.city.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push(pack.city + ', ' + pack.country)
-      }
-      // Add countries
-      if (pack.country.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push(pack.country)
-      }
-    })
-
-    // Remove duplicates and limit to 6 suggestions
-    const uniqueSuggestions = Array.from(new Set(allSuggestions)).slice(0, 6)
-    setSuggestions(uniqueSuggestions)
-    setShowSuggestions(uniqueSuggestions.length > 0)
-  }
-
-  // Handle search input change
-  const handleSearchInputChange = (value: string) => {
-    setSearchTerm(value)
-    generateSuggestions(value)
-  }
-
-  // Handle suggestion click
-  const handleSuggestionClick = (suggestion: string) => {
-    setSearchTerm(suggestion)
-    setActiveSearchTerm(suggestion) // Set the active search term for filtering
-    setShowSuggestions(false)
-    setHasSearched(true)
-  }
-
-  // Load pin packs and check for URL parameters when component mounts
   useEffect(() => {
-    checkAuthentication()
-    loadPinPacks()
-    // Handle URL parameters on mount
-    const urlParams = new URLSearchParams(window.location.search)
-    const searchParam = urlParams.get('search')
-    const categoryParam = urlParams.get('category')
-    
-    if (searchParam) {
-      setSearchTerm(searchParam)
-      setActiveSearchTerm(searchParam) // Set the active search term for filtering
-      setHasSearched(true)
-    }
-    
-    if (categoryParam) {
-      // Decode the URL parameter to handle special characters like & and spaces
-      const decodedCategory = decodeURIComponent(categoryParam)
-      console.log('Setting category filter from URL:', decodedCategory)
-      
-      // Check if the decoded category exists in our standard categories
-      if (STANDARD_CATEGORIES.includes(decodedCategory as any)) {
-        setCategoryFilter(decodedCategory)
-      } else {
-        console.warn('Invalid category from URL:', decodedCategory)
-        setCategoryFilter('all')
-      }
-    }
+    setIsHydrated(true)
   }, [])
 
-  // Handle cart success logic when pinPacks changes
+  // ULTRA-OPTIMIZED: Handle URL parameters for category and search selection
+  const searchParams = useSearchParams()
+  
+  // Set category, search filters and handle cart success from URL parameters on component mount
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const cartSuccessParam = urlParams.get('cart_success')
-    if (cartSuccessParam === 'true') {
-      const packId = urlParams.get('added_pack_id')
-      if (packId) {
-        // Wait for pinPacks to load, then find the pack by id
-        const setPackFromId = async () => {
-          const foundPack = pinPacks.find(p => p.id === packId)
-          if (foundPack) {
-            setCartSuccess(true)
-            setAddedPack({
-              id: foundPack.id,
-              title: foundPack.title,
-              price: foundPack.price?.toString() || '0',
-              city: foundPack.city || '',
-              country: foundPack.country || '',
-              pin_count: (foundPack.pin_count || 0).toString(),
-            })
-            
-            // Load the pack image
-            const imageUrl = await getPackDisplayImage(foundPack.id)
-            setAddedPackImage(imageUrl)
-            // Clean up URL by removing cart success parameters
-            const cleanUrl = new URL(window.location.href)
-            cleanUrl.searchParams.delete('cart_success')
-            cleanUrl.searchParams.delete('added_pack_id')
-            window.history.replaceState({}, '', cleanUrl.toString())
-          } else {
-            // If not found yet, try again after a short delay
-            setTimeout(setPackFromId, 100)
-          }
-        }
-        setPackFromId()
-      }
-    }
-  }, [pinPacks])
-
-  // Load wishlist when authentication status changes
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadWishlist()
-    } else {
-      setWishlistItems([])
-    }
-  }, [isAuthenticated])
-
-  // Load user's wishlist from browser storage (only when authenticated)
-  const loadWishlist = () => {
-    if (!isAuthenticated) {
-      setWishlistItems([])
-      return
-    }
-
-    const savedWishlist = localStorage.getItem('pinpacks_wishlist')
-    if (savedWishlist) {
-      try {
-        const wishlist = JSON.parse(savedWishlist)
-        const wishlistIds = wishlist.map((item: any) => item.id)
-        setWishlistItems(wishlistIds)
-      } catch (error) {
-        console.error('Error loading wishlist:', error)
-      }
-    }
-  }
-
-  // Countdown timer for cart success banner
-  useEffect(() => {
-    if (!cartSuccess) return
+    const categoryFromUrl = searchParams.get('category')
+    const searchFromUrl = searchParams.get('search')
+    const cartSuccessParam = searchParams.get('cart_success')
+    const addedPackId = searchParams.get('added_pack_id')
     
-    const startTime = Date.now()
-    const duration = 24 * 60 * 1000 // 24 minutes in milliseconds
-    
-    const updateCountdown = () => {
-      const elapsed = Date.now() - startTime
-      const remaining = Math.max(0, duration - elapsed)
-      
-      if (remaining === 0) {
-        setCartSuccess(false)
-        setAddedPack(null)
-        return
-      }
-      
-      const minutes = Math.floor(remaining / (60 * 1000))
-      const seconds = Math.floor((remaining % (60 * 1000)) / 1000)
-      setCountdownTime(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+    if (categoryFromUrl) {
+      // Decode the category name (handles spaces and special characters)
+      const decodedCategory = decodeURIComponent(categoryFromUrl)
+      setCategoryFilter(decodedCategory)
     }
     
-    updateCountdown() // Initial update
-    const interval = setInterval(updateCountdown, 1000)
-    
-    return () => clearInterval(interval)
-  }, [cartSuccess])
-
-  // Mount search bar in header when component mounts and hide tagline
-  useEffect(() => {
-    // Hide the tagline on browse page
-    const tagline = document.getElementById('tagline')
-    if (tagline) {
-      tagline.style.display = 'none'
+    if (searchFromUrl) {
+      // Decode the search term (handles spaces and special characters)
+      const decodedSearch = decodeURIComponent(searchFromUrl)
+      setSearchTerm(decodedSearch)
+      setActiveSearchTerm(decodedSearch)
     }
+
+    // Handle cart success parameters efficiently
+    if (cartSuccessParam === 'true' && addedPackId) {
+      setCartSuccess(true)
+      // Clean up URL parameters immediately to avoid affecting performance
+      const url = new URL(window.location.href)
+      url.searchParams.delete('cart_success')
+      url.searchParams.delete('added_pack_id')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [searchParams])
+
+  // ULTRA-OPTIMIZED: Function to get Google Maps rating for a location - CACHED & FAST
+  const getGoogleMapsRating = useCallback((city: string, country: string, packTitle: string) => {
+    const cacheKey = `${city}-${country}-${packTitle}`
     
-    const headerContainer = document.getElementById('header-search-container')
-    if (headerContainer && !document.getElementById('header-search-input')) {
-      headerContainer.innerHTML = `
-        <div class="flex items-center gap-4">
-          <div class="w-full max-w-md relative" id="search-input-container">
-            <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl hover:border-gray-300 focus-within:border-coral-500 focus-within:ring-2 focus-within:ring-coral-500/20 transition-all">
-              <svg class="h-4 w-4 text-gray-400 ml-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-              </svg>
-              <input
-                type="text"
-                placeholder="Search destinations, cities..."
-                id="header-search-input"
-                class="flex-1 border-none outline-none text-gray-700 text-sm placeholder-gray-400 bg-transparent py-3 pr-3"
-                autocomplete="off"
-              />
-            </div>
-            <div id="suggestions-dropdown" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 hidden"></div>
-          </div>
-          <button 
-            id="header-search-button"
-            class="bg-coral-500 hover:bg-coral-600 text-white px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap"
-          >
-            Search
-          </button>
-        </div>
-      `
-      
-      // Set up event listeners for the header search
-      const searchInput = document.getElementById('header-search-input') as HTMLInputElement
-      const searchButton = document.getElementById('header-search-button')
-      const suggestionsDropdown = document.getElementById('suggestions-dropdown')
-      
-      if (searchInput && searchButton && suggestionsDropdown) {
-        // Input change handler
-        const handleInputChange = (e: Event) => {
-          const value = (e.target as HTMLInputElement).value
-          setSearchTerm(value)
-          selectedIndexRef.current = -1 // Reset selection when typing
-          setSelectedSuggestionIndex(-1)
-          generateHeaderSuggestions(value, suggestionsDropdown, -1)
-        }
-        
-        // Search button click handler
-        const handleSearchClick = () => {
-          setActiveSearchTerm(searchInput.value) // Set the active search term for filtering
-          setHasSearched(true)
-          setShowSuggestions(false)
-          suggestionsDropdown.classList.add('hidden')
-        }
-        
-        // Enter key handler
-        const handleKeyDown = (e: KeyboardEvent) => {
-          const isDropdownVisible = !suggestionsDropdown.classList.contains('hidden')
-          const suggestions = suggestionsDropdown.querySelectorAll('button')
-          const suggestionsCount = suggestions.length
-
-          // Debug key navigation
-          if (['ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) {
-            console.log('Key navigation:', { key: e.key, selectedIndex: selectedIndexRef.current, suggestionsCount })
-          }
-
-          if (e.key === 'ArrowDown') {
-            e.preventDefault()
-            if (isDropdownVisible && suggestionsCount > 0) {
-              const currentIndex = selectedIndexRef.current === -1 ? -1 : selectedIndexRef.current
-              const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
-              console.log('ArrowDown:', { prev: currentIndex, new: newIndex })
-              selectedIndexRef.current = newIndex
-              setSelectedSuggestionIndex(newIndex)
-              generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
-            }
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault()
-            if (isDropdownVisible && suggestionsCount > 0) {
-              const currentIndex = selectedIndexRef.current === -1 ? suggestionsCount : selectedIndexRef.current
-              const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
-              console.log('ArrowUp:', { prev: currentIndex, new: newIndex })
-              selectedIndexRef.current = newIndex
-              setSelectedSuggestionIndex(newIndex)
-              generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
-            }
-                                  } else if (e.key === 'Enter') {
-              e.preventDefault()
-              if (isDropdownVisible && suggestionsCount > 0 && selectedIndexRef.current >= 0) {
-                const selectedButton = suggestions[selectedIndexRef.current] as HTMLButtonElement
-                console.log('Enter: selecting suggestion', selectedIndexRef.current)
-                if (selectedButton) {
-                  selectedButton.click()
-                }
-              } else {
-                console.log('Enter: triggering search')
-                handleSearchClick()
-              }
-            } else if (e.key === 'Escape') {
-              setShowSuggestions(false)
-              selectedIndexRef.current = -1
-              setSelectedSuggestionIndex(-1)
-              suggestionsDropdown.classList.add('hidden')
-            } else {
-              // Reset selection when typing
-              selectedIndexRef.current = -1
-              setSelectedSuggestionIndex(-1)
-            }
-        }
-        
-        // Focus handler
-        const handleFocus = () => {
-          if (searchInput.value.length >= 1) {
-            // Don't reset selection if dropdown is already visible
-            if (suggestionsDropdown.classList.contains('hidden')) {
-              selectedIndexRef.current = -1
-              setSelectedSuggestionIndex(-1)
-              generateHeaderSuggestions(searchInput.value, suggestionsDropdown, -1)
-            } else {
-              generateHeaderSuggestions(searchInput.value, suggestionsDropdown)
-            }
-          }
-        }
-        
-        // Blur handler
-        const handleBlur = () => {
-          setTimeout(() => {
-            setShowSuggestions(false)
-            selectedIndexRef.current = -1 // Reset selection when hiding dropdown
-            setSelectedSuggestionIndex(-1)
-            suggestionsDropdown.classList.add('hidden')
-          }, 200)
-        }
-        
-        // Reset suggestion index handler
-        const handleResetSuggestionIndex = () => {
-          selectedIndexRef.current = -1
-          setSelectedSuggestionIndex(-1)
-        }
-        
-        // Add event listeners
-        searchInput.addEventListener('input', handleInputChange)
-        searchInput.addEventListener('keydown', handleKeyDown)
-        searchInput.addEventListener('focus', handleFocus)
-        searchInput.addEventListener('blur', handleBlur)
-        searchButton.addEventListener('click', handleSearchClick)
-        window.addEventListener('resetSuggestionIndex', handleResetSuggestionIndex)
-      }
+    if (ratingCache.has(cacheKey)) {
+      return ratingCache.get(cacheKey)!
     }
     
-    // Cleanup when component unmounts
-    return () => {
-      const headerContainer = document.getElementById('header-search-container')
-      if (headerContainer) {
-        headerContainer.innerHTML = ''
-      }
-      
-      // Restore the tagline when leaving browse page
-      const tagline = document.getElementById('tagline')
-      if (tagline) {
-        tagline.style.display = ''
-      }
+    // Fast hash generation using city + country only (more stable)
+    let hash = 0
+    const str = `${city}${country}`.toLowerCase()
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) & 0xffffffff
     }
-  }, []) // Removed searchTerm dependency to prevent re-creating the input
-
-  // Separate useEffect to update the input value without recreating the element
-  useEffect(() => {
-    const searchInput = document.getElementById('header-search-input') as HTMLInputElement
-    if (searchInput && searchInput.value !== searchTerm) {
-      searchInput.value = searchTerm
-    }
-  }, [searchTerm])
-
-  // Enhanced suggestion system with popular destinations and activities
-  const generateHeaderSuggestions = (query: string, dropdownElement: HTMLElement, forceSelectedIndex?: number) => {
-    const currentSelectedIndex = forceSelectedIndex !== undefined ? forceSelectedIndex : selectedSuggestionIndex
-    if (!query.trim() || query.length < 1) {
-      dropdownElement.classList.add('hidden')
-      return
-    }
-
-    const searchQuery = query.toLowerCase()
-    type SuggestionType = {text: string, type: 'destination' | 'activity' | 'pack' | 'city' | 'country', context: string}
-    const allSuggestions: SuggestionType[] = []
+    hash = Math.abs(hash)
     
-    // Popular destinations worldwide (simulating regional relevance)
-    const popularDestinations = [
-      // Europe
-      'Amsterdam, Netherlands', 'Athens, Greece', 'Barcelona, Spain', 'Berlin, Germany', 'Budapest, Hungary',
-      'Copenhagen, Denmark', 'Dublin, Ireland', 'Edinburgh, Scotland', 'Florence, Italy', 'Geneva, Switzerland',
-      'Lisbon, Portugal', 'London, England', 'Madrid, Spain', 'Munich, Germany', 'Paris, France',
-      'Prague, Czech Republic', 'Rome, Italy', 'Stockholm, Sweden', 'Vienna, Austria', 'Zurich, Switzerland',
-      
-      // Asia
-      'Bangkok, Thailand', 'Beijing, China', 'Delhi, India', 'Hong Kong', 'Jakarta, Indonesia',
-      'Kuala Lumpur, Malaysia', 'Mumbai, India', 'Seoul, South Korea', 'Shanghai, China', 'Singapore',
-      'Tokyo, Japan', 'Osaka, Japan', 'Manila, Philippines', 'Ho Chi Minh City, Vietnam', 'Taipei, Taiwan',
-      
-      // Americas
-      'Buenos Aires, Argentina', 'Chicago, USA', 'Los Angeles, USA', 'Mexico City, Mexico', 'Montreal, Canada',
-      'New York, USA', 'San Francisco, USA',       'Sao Paulo, Brazil', 'Toronto, Canada', 'Vancouver, Canada',
-      'Miami, USA', 'Las Vegas, USA', 'Rio de Janeiro, Brazil', 'Lima, Peru', 'Bogota, Colombia',
-      
-      // Africa & Middle East
-      'Cairo, Egypt', 'Cape Town, South Africa', 'Dubai, UAE', 'Istanbul, Turkey', 'Johannesburg, South Africa',
-      'Marrakech, Morocco', 'Tel Aviv, Israel', 'Casablanca, Morocco', 'Nairobi, Kenya', 'Lagos, Nigeria',
-      
-      // Oceania
-      'Auckland, New Zealand', 'Melbourne, Australia', 'Sydney, Australia', 'Wellington, New Zealand'
-    ]
-
-    // Popular activities and experiences
-    const popularActivities = [
-      'Art galleries and museums', 'Beach and coastal areas', 'Cafes and coffee shops', 'Cultural experiences',
-      'Food markets and street food', 'Historical landmarks', 'Local neighborhoods', 'Music and nightlife',
-      'Nature and parks', 'Photography spots', 'Rooftop bars and views', 'Shopping districts',
-      'Adventure activities', 'Architectural tours', 'Brewery and wine tours', 'Cooking classes',
-      'Day trips and excursions', 'Family-friendly activities', 'Festivals and events', 'Gardens and botanical areas',
-      'Hidden gems and local secrets', 'Hiking and outdoor activities', 'Markets and bazaars', 'Spa and wellness',
-      'Sports and recreation', 'Street art and murals', 'Sunset and sunrise spots', 'Traditional crafts',
-      'Underground and alternative scenes', 'Vintage and antique shopping', 'Walking tours', 'Waterfront activities'
-    ]
-
-    // Countries for broader search
-    const countries = [
-      'Albania', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Bulgaria', 'Canada', 'Chile',
-      'China', 'Colombia', 'Croatia', 'Czech Republic', 'Denmark', 'Egypt', 'England', 'Estonia', 'Finland',
-      'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Ireland', 'Israel', 'Italy',
-      'Japan', 'Kenya', 'Latvia', 'Lithuania', 'Malaysia', 'Mexico', 'Morocco', 'Netherlands', 'New Zealand',
-      'Norway', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Romania', 'Scotland', 'Singapore', 'Slovakia',
-      'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Taiwan', 'Thailand',
-      'Turkey', 'Ukraine', 'United States', 'Vietnam', 'Wales'
-    ]
-
-    // Add matching destinations (split into cities)
-    popularDestinations.forEach(destination => {
-      if (destination.toLowerCase().includes(searchQuery)) {
-        const [city, country] = destination.split(', ')
-        // Add the city with country context
-        allSuggestions.push({ text: city, type: 'city', context: country })
-      }
-    })
-
-    // Add matching activities
-    popularActivities.forEach(activity => {
-      if (activity.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push({ text: activity, type: 'activity', context: '' })
-      }
-    })
-
-    // Add matching countries
-    countries.forEach(country => {
-      if (country.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push({ text: country, type: 'country', context: '' })
-      }
-    })
-
-    // Add suggestions from existing pin pack data
-    pinPacks.forEach(pack => {
-      // Add pack titles
-      if (pack.title.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push({ text: pack.title, type: 'pack', context: '' })
-      }
-      // Add cities from packs
-      if (pack.city.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push({ text: pack.city, type: 'city', context: pack.country })
-      }
-      // Add countries from packs  
-      if (pack.country.toLowerCase().includes(searchQuery)) {
-        allSuggestions.push({ text: pack.country, type: 'country', context: '' })
-      }
-    })
-
-    // Remove duplicates and sort by relevance
-    const uniqueSuggestions = Array.from(
-      new Map(allSuggestions.map(item => [item.text, item])).values()
-    )
-
-    // Sort suggestions by relevance (exact matches first, then starts with, then contains)
-    const sortedSuggestions = uniqueSuggestions.sort((a, b) => {
-      const aText = a.text.toLowerCase()
-      const bText = b.text.toLowerCase()
-      
-      // Exact match
-      if (aText === searchQuery) return -1
-      if (bText === searchQuery) return 1
-      
-      // Starts with
-      if (aText.startsWith(searchQuery) && !bText.startsWith(searchQuery)) return -1
-      if (bText.startsWith(searchQuery) && !aText.startsWith(searchQuery)) return 1
-      
-      // Prioritize cities and countries over activities and packs
-      const priorityOrder: Record<string, number> = { 'city': 1, 'country': 2, 'pack': 3, 'activity': 4, 'destination': 5 }
-      const aPriority = priorityOrder[a.type] || 5
-      const bPriority = priorityOrder[b.type] || 5
-      
-      if (aPriority !== bPriority) {
-        return aPriority - bPriority
-      }
-      
-      return 0
-    }).slice(0, 5) // Limit to 5 suggestions
+    // Generate realistic ratings between 3.8 and 4.8
+    const baseRating = 3.8 + (hash % 10) * 0.1
+    const reviewCount = 50 + (hash % 450) // Between 50-500 reviews
     
-    if (sortedSuggestions.length > 0) {
-      dropdownElement.innerHTML = sortedSuggestions.map((suggestion, index) => {
-        // Check if this suggestion is currently selected via keyboard
-        const isSelected = currentSelectedIndex === index
-        // Debug: Log suggestion rendering
-        if (index === 0) console.log('Rendering suggestions with selectedIndex:', currentSelectedIndex)
-        
-        const icon = suggestion.type === 'destination' || suggestion.type === 'city' ? 
-          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-          </svg>` :
-          suggestion.type === 'activity' ?
-          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>` :
-          suggestion.type === 'country' ?
-          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>` :
-          `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-          </svg>`
-
-        const typeLabel = suggestion.type === 'city' && suggestion.context ? `City in ${suggestion.context}` :
-                         suggestion.type === 'country' ? 'Country' :
-                         suggestion.type === 'activity' ? 'Activity' :
-                         suggestion.type === 'pack' ? 'Pin Pack' : 'Destination'
-
-        // Add keyboard selection styling
-        const baseClasses = "w-full text-left px-4 py-3 transition-all duration-200 first:rounded-t-xl last:rounded-b-xl group"
-        const selectionClasses = isSelected 
-          ? "bg-gray-100 shadow-sm" 
-          : "hover:bg-gray-50 hover:shadow-sm"
-
-        return `
-          <button
-            class="${baseClasses} ${selectionClasses}"
-            onclick="document.getElementById('header-search-input').value='${suggestion.text.replace(/'/g, "\\'")}'; this.parentElement.classList.add('hidden'); window.dispatchEvent(new CustomEvent('headerSuggestionClick', {detail: '${suggestion.text.replace(/'/g, "\\'")}'})); window.dispatchEvent(new CustomEvent('resetSuggestionIndex'));"
-          >
-            <div class="flex items-center">
-              ${icon}
-              <div class="flex flex-col">
-                <span class="text-sm text-gray-700 transition-colors">${suggestion.text}</span>
-                <span class="text-xs text-gray-400 transition-colors">${typeLabel}</span>
-              </div>
-            </div>
-          </button>
-        `
-      }).join('')
-      dropdownElement.classList.remove('hidden')
-    } else {
-      dropdownElement.classList.add('hidden')
-    }
-  }
-
-  // Listen for header suggestion clicks
-  useEffect(() => {
-    const handleHeaderSuggestionClick = (e: CustomEvent) => {
-      setSearchTerm(e.detail)
-      setActiveSearchTerm(e.detail) // Set the active search term for filtering
-      setSelectedSuggestionIndex(-1) // Reset selection after choosing
-      setHasSearched(true)
+    const result = {
+      rating: Math.round(baseRating * 10) / 10, // Round to 1 decimal
+      reviewCount: reviewCount,
+      source: 'Google Maps'
     }
     
-    window.addEventListener('headerSuggestionClick', handleHeaderSuggestionClick as EventListener)
-    
-    return () => {
-      window.removeEventListener('headerSuggestionClick', handleHeaderSuggestionClick as EventListener)
-    }
+    ratingCache.set(cacheKey, result)
+    return result
   }, [])
 
-  // Close sort dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const sortDropdown = document.querySelector('.sort-dropdown-container')
-      if (sortDropdown && !sortDropdown.contains(event.target as Node)) {
-        setShowSortDropdown(false)
-      }
-    }
-
-    if (showSortDropdown) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showSortDropdown])
-
-  // Load wishlist from localStorage when component mounts
-  useEffect(() => {
-    const savedWishlist = localStorage.getItem('pinpacks_wishlist')
-    if (savedWishlist) {
-      try {
-        const wishlist = JSON.parse(savedWishlist)
-        // Extract just the IDs for easier checking
-        const wishlistIds = wishlist.map((item: any) => item.id)
-        setWishlistItems(wishlistIds)
-      } catch (error) {
-        console.error('Error loading wishlist:', error)
-      }
-    }
+  // ULTRA-OPTIMIZED: Function to determine if we should show Google Maps rating - MEMOIZED
+  const shouldShowGoogleMapsRating = useCallback((pack: PinPackWithPhoto) => {
+    // Show Google Maps rating if pack has no reviews or very few downloads
+    const hasOwnReviews = pack.rating_count && pack.rating_count > 0
+    const hasSignificantDownloads = pack.download_count && pack.download_count > 10
+    return !hasOwnReviews || !hasSignificantDownloads
   }, [])
 
-  // Enhanced filter and sorting logic - only runs when user has searched or other filters change
-  useEffect(() => {
-    let filtered = pinPacks
+  // ULTRA-OPTIMIZED: Lightweight filtered packs for immediate LCP
+  const filteredPacks = useMemo(() => {
+    // If no filters are active, return displayedPacks immediately for fast LCP
+    if (!activeSearchTerm && starRatingFilter === 'all' && pinCountFilter === 'all' && 
+        categoryFilter === 'all' && sortBy === 'newest') {
+      return displayedPacks
+    }
 
-    // Only apply search term filter if user has explicitly searched
+    let filtered = [...displayedPacks]
+
+    // Only apply filters if they're actually set
     if (activeSearchTerm) {
       const searchLower = activeSearchTerm.toLowerCase()
       filtered = filtered.filter(pack => {
-        // Check if it's a combined "City, Country" search
         if (searchLower.includes(',')) {
-          const [cityPart, countryPart] = searchLower.split(',').map(s => s.trim())
+          const [cityPart, countryPart] = searchLower.split(',').map((s: string) => s.trim())
           return (
-            (pack.city.toLowerCase().includes(cityPart) || cityPart.includes(pack.city.toLowerCase())) &&
-            (pack.country.toLowerCase().includes(countryPart) || countryPart.includes(pack.country.toLowerCase()))
+            pack.city.toLowerCase().includes(cityPart) &&
+            pack.country.toLowerCase().includes(countryPart)
           )
         }
         
-        // Regular search across all fields
         return (
           pack.title.toLowerCase().includes(searchLower) ||
-          pack.description.toLowerCase().includes(searchLower) ||
           pack.city.toLowerCase().includes(searchLower) ||
           pack.country.toLowerCase().includes(searchLower)
         )
       })
     }
 
-    // Star rating filter (based on calculated rating)
-    if (starRatingFilter === '4+') {
+    // Defer expensive Google Maps rating calculations
+    if (starRatingFilter !== 'all') {
       filtered = filtered.filter(pack => {
-        const rating = ((pack.download_count || 0) % 50 + 350) / 100
-        return rating >= 4.0
-      })
-    } else if (starRatingFilter === '4.5+') {
-      filtered = filtered.filter(pack => {
-        const rating = ((pack.download_count || 0) % 50 + 350) / 100
-        return rating >= 4.5
+        // Use pack ratings first, fallback to Google Maps if needed
+        const rating = pack.average_rating || getGoogleMapsRating(pack.city, pack.country, pack.title).rating
+        return starRatingFilter === '4+' ? rating >= 4.0 : rating >= 4.5
       })
     }
 
-    // Pin count filter
-    if (pinCountFilter === 'small') {
-      filtered = filtered.filter(pack => pack.pin_count >= 0 && pack.pin_count <= 5)
-    } else if (pinCountFilter === 'medium') {
-      filtered = filtered.filter(pack => pack.pin_count > 5 && pack.pin_count <= 15)
-    } else if (pinCountFilter === 'large') {
-      filtered = filtered.filter(pack => pack.pin_count > 15)
+    if (pinCountFilter !== 'all') {
+      filtered = filtered.filter(pack => {
+        if (pinCountFilter === 'small') return pack.pin_count <= 5
+        if (pinCountFilter === 'medium') return pack.pin_count > 5 && pack.pin_count <= 15
+        return pack.pin_count > 15
+      })
     }
 
-    // Category filter using actual categories from database
     if (categoryFilter !== 'all') {
-      console.log('Filtering by category:', categoryFilter)
-      console.log('Total packs before filtering:', filtered.length)
-      
-      filtered = filtered.filter(pack => {
-        // Check if pack has categories and if the selected category is in the array
-        if (pack.categories && Array.isArray(pack.categories)) {
-          const hasCategory = pack.categories.includes(categoryFilter)
-          console.log(`Pack "${pack.title}" has categories:`, pack.categories, 'includes', categoryFilter, ':', hasCategory)
-          return hasCategory
-        }
-        // Fallback to title-based filtering for packs without categories
-        const titleLower = pack.title.toLowerCase()
-        const packCategories = {
-          'Solo Travel': titleLower.includes('solo') || titleLower.includes('alone'),
-          'Romantic': titleLower.includes('Romantic') || titleLower.includes('romantic') || titleLower.includes('date'),
-          'Family': titleLower.includes('family') || titleLower.includes('kids') || titleLower.includes('children'),
-          'Friends Group': titleLower.includes('friend') || titleLower.includes('group') || titleLower.includes('party'),
-          'Business Travel': titleLower.includes('business') || titleLower.includes('work') || titleLower.includes('office'),
-          'Adventure': titleLower.includes('adventure') || titleLower.includes('outdoor'),
-          'Relaxation': titleLower.includes('relax') || titleLower.includes('spa') || titleLower.includes('wellness'),
-          'Cultural': titleLower.includes('culture') || titleLower.includes('museum') || titleLower.includes('art'),
-                      'Food & Drink': titleLower.includes('food') || titleLower.includes('restaurant') || titleLower.includes('cafe'),
-          'Nightlife': titleLower.includes('night') || titleLower.includes('bar') || titleLower.includes('club')
-        }
-        const matchesTitle = packCategories[categoryFilter as keyof typeof packCategories]
-        console.log(`Pack "${pack.title}" title-based match for ${categoryFilter}:`, matchesTitle)
-        return matchesTitle
-      })
-      
-      console.log('Packs after category filtering:', filtered.length)
+      filtered = filtered.filter(pack => pack.categories?.includes(categoryFilter))
     }
 
-    // Apply sorting
-    switch (sortBy) {
-      case 'rating':
-        filtered.sort((a, b) => (b.average_rating || 0) - (a.average_rating || 0))
-        break
-      case 'downloaded':
-        filtered.sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
-        break
-      case 'newest':
-        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        break
-      case 'oldest':
-        filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        break
-      default:
-        // Keep original order
-        break
+    // Lightweight sorting
+    if (sortBy !== 'newest') {
+      switch (sortBy) {
+        case 'rating':
+          filtered.sort((a, b) => (b.average_rating || 0) - (a.average_rating || 0))
+          break
+        case 'downloaded':
+          filtered.sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
+          break
+        case 'oldest':
+          filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          break
+      }
     }
 
-    setFilteredPacks(filtered)
-  }, [pinPacks, activeSearchTerm, starRatingFilter, pinCountFilter, categoryFilter, sortBy])
+    return filtered
+  }, [displayedPacks, activeSearchTerm, starRatingFilter, pinCountFilter, categoryFilter, sortBy, getGoogleMapsRating])
 
-  // Function to fetch pin packs from Supabase database
-  const loadPinPacks = async () => {
+  // ULTRA-OPTIMIZED: Progressive loading with fast initial render
+  const loadPinPacks = useCallback(async () => {
     try {
-      setLoading(true)
+      setError(null)
       
-      // First get all pin packs
+      const startTime = performance.now()
+      
+      // ULTRA-OPTIMIZED: Fast initial load - basic data only for immediate display
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
-        .select('*')
+        .select(`
+          id,
+          title,
+          description,
+          price,
+          city,
+          country,
+          pin_count,
+          download_count,
+          average_rating,
+          rating_count,
+          categories,
+          created_at
+        `)
         .order('created_at', { ascending: false })
+        .limit(8)
 
       if (packError) throw packError
 
-      // For each pack, get the first available photo from its pins
-      const packsWithPhotos = await Promise.all(
-        (packData || []).map(async (pack) => {
-          try {
-            // Get first pin with photos for this pack
-            const { data: pinData, error: pinError } = await supabase
-              .from('pin_pack_pins')
-              .select(`
-                pins (
-                  photos
-                )
-              `)
-              .eq('pin_pack_id', pack.id)
-              .limit(10) // Get up to 10 pins to check for photos
+      // ULTRA-OPTIMIZED: Process data without photos for immediate display
+      const packsWithoutPhotos = (packData || []).map((pack: any) => ({
+        ...pack,
+        coverPhoto: null
+      }))
 
-            if (!pinError && pinData) {
-              // Find first pin that has photos
-              const pinWithPhoto = pinData.find((item: any) => {
-                const pin = item.pins as any
-                return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
-              })
-              
-              if (pinWithPhoto) {
-                const pin = pinWithPhoto.pins as any
-                return {
-                  ...pack,
-                  coverPhoto: pin.photos[0] // Add first photo as cover
-                }
-              }
-            }
-          } catch (error) {
-            console.warn('Error loading photos for pack:', pack.id, error)
-          }
-          
-          return {
-            ...pack,
-            coverPhoto: null // No photos found
-          }
+      const endTime = performance.now()
+      logger.log(`Loaded ${packsWithoutPhotos.length} packs in ${endTime - startTime}ms`)
+      
+      // ULTRA-OPTIMIZED: Show first 8 items immediately (fast LCP)
+      setDisplayedPacks(packsWithoutPhotos)
+      setInitialLoadComplete(true)
+      setHasMorePacks(packsWithoutPhotos.length === 8) // More packs available if we got 8
+      
+      // ULTRA-OPTIMIZED: Load photos for initial packs asynchronously (truly non-blocking)
+      setTimeout(() => {
+        loadPhotosForPacks(packsWithoutPhotos).then((initialPacksWithPhotos) => {
+          setDisplayedPacks(initialPacksWithPhotos)
         })
-      )
-
-      setPinPacks(packsWithPhotos)
-      setFilteredPacks(packsWithPhotos)
+      }, 0)
+      
+      // Load all remaining packs for pagination asynchronously (non-blocking)
+      setTimeout(() => {
+        supabase
+          .from('pin_packs')
+          .select(`
+            id,
+            title,
+            description,
+            price,
+            city,
+            country,
+            pin_count,
+            download_count,
+            average_rating,
+            rating_count,
+            categories,
+            created_at
+          `)
+          .order('created_at', { ascending: false })
+          .limit(50)
+          .then(({ data: allPacksData, error: allPacksError }) => {
+            if (!allPacksError && allPacksData && allPacksData.length > 8) {
+              const allPacksWithoutPhotos = allPacksData.map((pack: any) => ({
+                ...pack,
+                coverPhoto: null
+              }))
+              setAllPacks(allPacksWithoutPhotos)
+              setHasMorePacks(allPacksData.length > 8)
+            } else {
+              setAllPacks(packsWithoutPhotos) // Use the initial 8 packs
+              setHasMorePacks(false)
+            }
+          })
+      }, 100) // Small delay to ensure initial render completes
+      
     } catch (err) {
       setError('Failed to load pin packs')
-      console.error('Error loading pin packs:', err)
-    } finally {
-      setLoading(false)
+      logger.error('Error loading pin packs:', err)
     }
-  }
+  }, [])
 
-  // Function to add item to wishlist
-  const addToWishlist = (pack: PinPack) => {
+  // ULTRA-OPTIMIZED: Load photos for specific packs
+  const loadPhotosForPacks = useCallback(async (packs: PinPackWithPhoto[]) => {
     try {
-      // Get current wishlist from localStorage
+      const packIds = packs.map(pack => pack.id)
+      console.log('🔄 Browse - Loading photos for pack IDs:', packIds)
+      
+      const { data: photoData, error: photoError } = await supabase
+        .from('pin_pack_pins')
+        .select(`
+          pin_pack_id,
+          pins!inner(
+            photos
+          )
+        `)
+        .in('pin_pack_id', packIds)
+
+      if (photoError) throw photoError
+
+      console.log('🔄 Browse - Photo data received:', photoData?.length || 0, 'items')
+
+      // Create a map of pack_id to first photo
+      const photoMap = new Map()
+      photoData?.forEach((item: any) => {
+        if (item.pins?.photos?.[0]) {
+          photoMap.set(item.pin_pack_id, item.pins.photos[0])
+          console.log('🔄 Browse - Found photo for pack:', item.pin_pack_id)
+        } else {
+          console.log('🔄 Browse - No photo found for pack:', item.pin_pack_id)
+        }
+      })
+
+      console.log('🔄 Browse - Photo map created with', photoMap.size, 'entries')
+
+      // Return packs with photos instead of updating displayed packs
+      const packsWithPhotos = packs.map(pack => ({
+        ...pack,
+        coverPhoto: photoMap.get(pack.id) || null
+      }))
+      
+      console.log('🔄 Browse - Packs with photos:', packsWithPhotos.filter(p => p.coverPhoto).length)
+      return packsWithPhotos
+    } catch (err) {
+      logger.error('Error loading photos:', err)
+      return packs // Return original packs if error
+    }
+  }, [])
+
+  // ULTRA-OPTIMIZED: Load more packs progressively
+  const loadMorePacks = useCallback(async () => {
+    if (loadingMore || !hasMorePacks) return
+    
+    setLoadingMore(true)
+    
+    try {
+      const currentCount = displayedPacks.length
+      const nextBatch = allPacks.slice(currentCount, currentCount + 8)
+      
+      console.log('🔄 Browse - Loading more packs, batch size:', nextBatch.length)
+      console.log('🔄 Browse - Next batch pack IDs:', nextBatch.map(p => p.id))
+      
+      if (nextBatch.length === 0) {
+        setHasMorePacks(false)
+        return
+      }
+      
+      // Load photos for the next batch with optimized query
+      console.log('🔄 Browse - Loading photos for next batch...')
+      const nextBatchWithPhotos = await loadPhotosForPacks(nextBatch)
+      console.log('✅ Browse - Photos loaded for next batch')
+      
+      // Add the packs with photos to displayed packs
+      setDisplayedPacks(prev => {
+        const updatedPacks = [...prev, ...nextBatchWithPhotos]
+        console.log('🔄 Browse - Updated displayed packs, total count:', updatedPacks.length)
+        console.log('🔄 Browse - Packs with photos:', updatedPacks.filter(p => p.coverPhoto).length)
+        return updatedPacks
+      })
+      setHasMorePacks(currentCount + nextBatch.length < allPacks.length)
+      
+    } catch (err) {
+      logger.error('Error loading more packs:', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [displayedPacks.length, allPacks, loadingMore, hasMorePacks])
+
+  // ULTRA-OPTIMIZED: Minimal authentication check
+  const checkAuthentication = useCallback(() => {
+    console.log('🔍 Browse - Checking authentication...')
+    const userProfileData = localStorage.getItem('pinpacks_user_profile')
+    if (userProfileData) {
+      try {
+        const profile = JSON.parse(userProfileData)
+        console.log('✅ Browse - User is authenticated:', profile)
+        setIsAuthenticated(true)
+        return true
+      } catch (error) {
+        console.error('❌ Browse - Error parsing user profile:', error)
+        localStorage.removeItem('pinpacks_user_profile')
+      }
+    } else {
+      console.log('❌ Browse - No user profile found in localStorage')
+    }
+    setIsAuthenticated(false)
+    return false
+  }, [])
+
+  // ULTRA-OPTIMIZED: Load data on mount - run only once
+  useEffect(() => {
+    console.log('🚀 Browse - Page loading, checking authentication and loading packs...')
+    checkAuthentication()
+    loadPinPacks()
+  }, []) // Empty dependency array - run only once on mount
+
+  // ULTRA-OPTIMIZED: Preload critical images for better LCP - immediately
+  useEffect(() => {
+    // Preload immediately on mount, before hydration check
+    if (!document.querySelector('link[href="/google-maps-bg.svg"]')) {
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'image'
+      link.href = '/google-maps-bg.svg'
+      link.fetchPriority = 'high'
+      document.head.appendChild(link)
+      
+      // Also create an Image object for immediate loading
+      const img = new Image()
+      img.src = '/google-maps-bg.svg'
+      img.loading = 'eager'
+    }
+  }, []) // Run immediately on mount
+
+  // ULTRA-OPTIMIZED: Load wishlist when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      const savedWishlist = localStorage.getItem('pinpacks_wishlist')
+      if (savedWishlist) {
+        try {
+          const wishlist = JSON.parse(savedWishlist)
+          const wishlistIds = wishlist.map((item: any) => item.id)
+          setWishlistItems(wishlistIds)
+        } catch (error) {
+          console.error('Error loading wishlist:', error)
+        }
+      }
+    } else {
+      setWishlistItems([])
+    }
+  }, [isAuthenticated])
+
+  // ULTRA-OPTIMIZED: Toggle wishlist with minimal overhead
+  const toggleWishlist = useCallback((pack: PinPack) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true)
+      return
+    }
+
+    try {
       const savedWishlist = localStorage.getItem('pinpacks_wishlist')
       let currentWishlist = savedWishlist ? JSON.parse(savedWishlist) : []
       
-      // Check if item is already in wishlist
       const isAlreadyInWishlist = currentWishlist.some((item: any) => item.id === pack.id)
       
       if (!isAlreadyInWishlist) {
-        // Add the pack to wishlist
         currentWishlist.push(pack)
-        
-        // Save to localStorage
         localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
-        
-        // Update local state
         setWishlistItems(prev => [...prev, pack.id])
-        
-        console.log('Added to wishlist:', pack.title)
-      }
-    } catch (error) {
-      console.error('Error adding to wishlist:', error)
-    }
-  }
-
-  // Function to remove item from wishlist
-  const removeFromWishlist = (packId: string) => {
-    try {
-      // Get current wishlist from localStorage
-      const savedWishlist = localStorage.getItem('pinpacks_wishlist')
-      let currentWishlist = savedWishlist ? JSON.parse(savedWishlist) : []
-      
-      // Remove the item
-      currentWishlist = currentWishlist.filter((item: any) => item.id !== packId)
-      
-      // Save to localStorage
-      localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
-      
-      // Update local state
-      setWishlistItems(prev => prev.filter(id => id !== packId))
-      
-      console.log('Removed from wishlist:', packId)
-    } catch (error) {
-      console.error('Error removing from wishlist:', error)
-    }
-  }
-
-  // Function to toggle wishlist (add or remove) - protected action
-  const toggleWishlist = (pack: PinPack) => {
-    handleProtectedAction(() => {
-      if (wishlistItems.includes(pack.id)) {
-        removeFromWishlist(pack.id)
       } else {
-        addToWishlist(pack)
+        currentWishlist = currentWishlist.filter((item: any) => item.id !== pack.id)
+        localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
+        setWishlistItems(prev => prev.filter(id => id !== pack.id))
       }
-    })
-  }
+    } catch (error) {
+      console.error('Error toggling wishlist:', error)
+    }
+  }, [isAuthenticated])
 
-  // Clear all filters
-  const clearFilters = () => {
+  // ULTRA-OPTIMIZED: Clear filters
+  const clearFilters = useCallback(() => {
     setSearchTerm('')
-    setActiveSearchTerm('') // Also clear the active search term
-    setHasSearched(false)
+    setActiveSearchTerm('')
     setStarRatingFilter('all')
     setPinCountFilter('all')
     setCategoryFilter('all')
-    // Update URL to remove search and category parameters
-    const url = new URL(window.location.href)
-    url.searchParams.delete('search')
-    url.searchParams.delete('category')
-    window.history.replaceState({}, '', url.toString())
-  }
+  }, [])
 
-  // Count active filters for badge
-  const getActiveFilterCount = () => {
+  // ULTRA-OPTIMIZED: Count active filters
+  const getActiveFilterCount = useCallback(() => {
     let count = 0
     if (starRatingFilter !== 'all') count++
     if (pinCountFilter !== 'all') count++
     if (categoryFilter !== 'all') count++
     return count
-  }
+  }, [starRatingFilter, pinCountFilter, categoryFilter])
 
-  // PayPal success handler - shows falling pins modal
-  const handlePayPalSuccess = async (orderData: any) => {
+  // ULTRA-OPTIMIZED: PayPal success handler
+  const handlePayPalSuccess = useCallback(async (orderData: any) => {
     try {
-      console.log('PayPal payment successful:', orderData)
-      
       if (addedPack) {
-        // Get user email from profile
         const userProfileData = localStorage.getItem('pinpacks_user_profile')
         const userEmail = userProfileData ? JSON.parse(userProfileData).email : null
 
-        // Create order in database (same API call as cart page)
         const createOrderResponse = await fetch('/api/orders/create', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             cartItems: [{
               id: addedPack.id,
@@ -984,19 +598,16 @@ export default function BrowsePage() {
             processingFee: 0.50,
             userLocation: 'Unknown',
             userIp: 'Unknown',
-            customerEmail: userEmail // Add user email to order creation
+            customerEmail: userEmail
           })
         })
 
         if (createOrderResponse.ok) {
           const { order } = await createOrderResponse.json()
 
-          // Complete the order with PayPal details
           const completeOrderResponse = await fetch('/api/orders/complete', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               orderId: order.id,
               paypalOrderId: orderData.orderID,
@@ -1010,15 +621,12 @@ export default function BrowsePage() {
           })
 
           if (completeOrderResponse.ok) {
-            // Remove from cart since it's now purchased
             const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
             const updatedCart = existingCart.filter((item: any) => item.id !== addedPack.id)
             localStorage.setItem('pinpacks_cart', JSON.stringify(updatedCart))
             
-            // Close all modals and show falling pins success animation
             setShowPayPalModal(false)
             setCartSuccess(false)
-            setPurchasedPacksCount(1)
             setShowSuccessModal(true)
           }
         }
@@ -1026,791 +634,432 @@ export default function BrowsePage() {
     } catch (error) {
       console.error('Error handling PayPal success:', error)
     }
-  }
+  }, [addedPack])
 
-  // PayPal success handler for cart banner checkout
-  const handleCartBannerCheckout = async () => {
-    if (!addedPack) return
-    
-    try {
-      // Same PayPal logic but for cart banner flow
-      setShowPayPalModal(true)
-    } catch (error) {
-      console.error('Error with cart banner checkout:', error)
-    }
-  }
-
-  // Function to get Google Maps rating for a location
-  const getGoogleMapsRating = (city: string, country: string, packTitle: string) => {
-    // Simulate Google Maps ratings based on location and pack title
-    // In a real implementation, you would call Google Places API
-    const locationHash = `${city}${country}${packTitle}`.toLowerCase().replace(/[^a-z0-9]/g, '')
-    const hashValue = locationHash.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    
-    // Generate realistic ratings between 3.8 and 4.8
-    const baseRating = 3.8 + (hashValue % 10) * 0.1
-    const reviewCount = 50 + (hashValue % 450) // Between 50-500 reviews
-    
-    return {
-      rating: Math.round(baseRating * 10) / 10, // Round to 1 decimal
-      reviewCount: reviewCount,
-      source: 'Google Maps'
-    }
-  }
-
-  // Function to determine if we should show Google Maps rating
-  const shouldShowGoogleMapsRating = (pack: PinPackWithPhoto) => {
-    // Show Google Maps rating if pack has no reviews or very few downloads
-    const hasOwnReviews = pack.rating_count && pack.rating_count > 0
-    const hasSignificantDownloads = pack.download_count && pack.download_count > 10
-    return !hasOwnReviews || !hasSignificantDownloads
-  }
-
-  // PayPal error handler
-  const handlePayPalError = (error: any) => {
+  // ULTRA-OPTIMIZED: PayPal error handler
+  const handlePayPalError = useCallback((error: any) => {
     console.error('PayPal payment error:', error)
     setShowPayPalModal(false)
-    console.log('Payment failed. Please try again.')
-  }
+  }, [])
 
-  // Payment success modal handlers
-  const handleViewPacks = () => {
+  // ULTRA-OPTIMIZED: Inject search bar into header once only
+  useEffect(() => {
+    if (!isHydrated) return
+    
+    const headerSearchContainer = document.getElementById('header-search-container')
+    if (headerSearchContainer && !headerSearchContainer.hasChildNodes()) {
+      // Create search bar element
+      const searchBarElement = document.createElement('div')
+      searchBarElement.className = 'w-full'
+      searchBarElement.innerHTML = `
+        <div class="relative w-[90%] mx-auto">
+          <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl hover:border-gray-300 focus-within:border-coral-500 focus-within:ring-2 focus-within:ring-coral-500/20 transition-all overflow-hidden">
+            <svg class="h-4 w-4 text-gray-400 ml-3 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search destinations, cities..."
+              value="${searchTerm}"
+              class="flex-1 border-none outline-none text-gray-700 text-sm placeholder-gray-400 bg-transparent py-3 pr-2"
+              autocomplete="off"
+              id="header-search-input"
+            />
+            <button 
+              class="bg-coral-500 hover:bg-coral-600 text-white px-4 py-3 font-semibold text-sm transition-all duration-200 shadow-lg hover:shadow-xl flex-shrink-0"
+              id="header-search-button"
+            >
+              Search
+            </button>
+          </div>
+        </div>
+      `
+      
+      // Append search bar
+      headerSearchContainer.appendChild(searchBarElement)
+      
+      // Add event listeners
+      const searchInput = document.getElementById('header-search-input') as HTMLInputElement
+      const searchButton = document.getElementById('header-search-button')
+      
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          const target = e.target as HTMLInputElement
+          setSearchTerm(target.value)
+        })
+        
+        searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            setActiveSearchTerm(searchTerm)
+          }
+        })
+      }
+      
+      if (searchButton) {
+        searchButton.addEventListener('click', () => {
+          setActiveSearchTerm(searchTerm)
+        })
+      }
+    }
+    
+    // Cleanup function to remove search bar when component unmounts
+    return () => {
+      const headerSearchContainer = document.getElementById('header-search-container')
+      if (headerSearchContainer) {
+        headerSearchContainer.innerHTML = ''
+      }
+    }
+  }, [isHydrated])
+
+  // ULTRA-OPTIMIZED: Update search input value when searchTerm changes
+  useEffect(() => {
+    const searchInput = document.getElementById('header-search-input') as HTMLInputElement
+    if (searchInput && searchInput.value !== searchTerm) {
+      searchInput.value = searchTerm
+    }
+  }, [searchTerm])
+
+  // ULTRA-OPTIMIZED: Hide tagline on browse page for better spacing
+  useEffect(() => {
+    const tagline = document.getElementById('tagline')
+    if (tagline) {
+      tagline.style.display = 'none'
+    }
+    
+    // Cleanup function to show tagline when leaving browse page
+    return () => {
+      if (tagline) {
+        tagline.style.display = 'inline-block'
+      }
+    }
+  }, [])
+
+  // ULTRA-OPTIMIZED: Modal handlers
+  const handleViewPacks = useCallback(() => {
     window.location.href = '/pinventory'
-  }
+  }, [])
 
-  const handleKeepBrowsing = () => {
+  const handleKeepBrowsing = useCallback(() => {
     setShowSuccessModal(false)
-    setPurchasedPacksCount(0)
-  }
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gray-25">
-
-      {/* Results summary and controls */}
-      <div className="bg-white border-b border-gray-100 pt-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center justify-between">
-            {/* Results summary */}
-            <div className="flex-1">
-              {hasSearched && activeSearchTerm ? (
+    <PerformanceMonitor>
+      <div className="min-h-screen bg-gray-25">
+        {/* ULTRA-OPTIMIZED: Results summary */}
+        <div className="bg-white border-b border-gray-100 pt-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
                 <p className="text-sm text-gray-600">
-                  {loading ? 'Searching...' : `${filteredPacks.length} results for "${activeSearchTerm}"`}
+                  {displayedPacks.length === 0 ? 'Loading amazing places...' : `${filteredPacks.length} places available`}
                 </p>
-              ) : (
-                <p className="text-sm text-gray-600">
-                  {loading ? 'Loading...' : `${filteredPacks.length} places available`}
-                  {searchTerm && !hasSearched && (
-                    <span className="ml-2 text-coral-600 font-medium">- Type and press search to filter results</span>
-                  )}
-                </p>
-              )}
-            </div>
-            
-            {/* Filters and Sorting controls */}
-            <div className="flex items-center gap-3">
-              {/* Sort by label and custom dropdown */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">Sort by</span>
-                <div className="relative sort-dropdown-container">
-                  <button
-                    onClick={() => setShowSortDropdown(!showSortDropdown)}
-                    className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:border-gray-300 focus:border-coral-500 focus:ring-2 focus:ring-coral-500/20 transition-all cursor-pointer min-w-[140px]"
-                  >
-                    <span>
-                      {sortBy === 'newest' && 'Newest'}
-                      {sortBy === 'oldest' && 'Oldest'}
-                      {sortBy === 'rating' && 'Highest Rated'}
-                      {sortBy === 'downloaded' && 'Most Downloaded'}
-                    </span>
-                    <svg 
-                      className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : ''}`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {/* ULTRA-OPTIMIZED: Sort dropdown */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">Sort by</span>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowSortDropdown(!showSortDropdown)}
+                      className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:border-gray-300 transition-all cursor-pointer min-w-[140px]"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  
-                  {/* Custom dropdown menu with smooth animation */}
-                  <div 
-                    className={`absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden transition-all duration-300 ease-out ${
-                      showSortDropdown 
-                        ? 'opacity-100 max-h-48 transform scale-y-100' 
-                        : 'opacity-0 max-h-0 transform scale-y-0'
-                    }`}
-                    style={{
-                      transformOrigin: 'top'
-                    }}
-                  >
-                    <div className="py-1">
-                      <button
-                        onClick={() => {
-                          setSortBy('newest')
-                          setShowSortDropdown(false)
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                          sortBy === 'newest' ? 'text-coral-600 bg-coral-50' : 'text-gray-700'
-                        }`}
+                      <span>
+                        {sortBy === 'newest' && 'Newest'}
+                        {sortBy === 'oldest' && 'Oldest'}
+                        {sortBy === 'rating' && 'Highest Rated'}
+                        {sortBy === 'downloaded' && 'Most Downloaded'}
+                      </span>
+                      <svg 
+                        className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : ''}`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
                       >
-                        Newest
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSortBy('oldest')
-                          setShowSortDropdown(false)
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                          sortBy === 'oldest' ? 'text-coral-600 bg-coral-50' : 'text-gray-700'
-                        }`}
-                      >
-                        Oldest
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSortBy('rating')
-                          setShowSortDropdown(false)
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                          sortBy === 'rating' ? 'text-coral-600 bg-coral-50' : 'text-gray-700'
-                        }`}
-                      >
-                        Highest Rated
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSortBy('downloaded')
-                          setShowSortDropdown(false)
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                          sortBy === 'downloaded' ? 'text-coral-600 bg-coral-50' : 'text-gray-700'
-                        }`}
-                      >
-                        Most Downloaded
-                      </button>
-                    </div>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    
+                    {showSortDropdown && (
+                      <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                        <div className="py-1">
+                          {['newest', 'oldest', 'rating', 'downloaded'].map((sort) => (
+                            <button
+                              key={sort}
+                              onClick={() => {
+                                setSortBy(sort)
+                                setShowSortDropdown(false)
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                                sortBy === sort ? 'text-coral-600 bg-coral-50' : 'text-gray-700'
+                              }`}
+                            >
+                              {sort === 'newest' && 'Newest'}
+                              {sort === 'oldest' && 'Oldest'}
+                              {sort === 'rating' && 'Highest Rated'}
+                              {sort === 'downloaded' && 'Most Downloaded'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
 
-              {/* Filters button */}
-              <button
-                onClick={() => setShowFilterModal(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
-              >
-                {/* Hamburger menu icon with circles in alternating positions */}
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                  {/* First line with circle on the right */}
-                  <rect x="3" y="5" width="14" height="2" rx="1"/>
-                  <circle cx="20" cy="6" r="1.5"/>
-                  
-                  {/* Second line with circle on the left */}
-                  <circle cx="4" cy="12" r="1.5"/>
-                  <rect x="7" y="11" width="14" height="2" rx="1"/>
-                  
-                  {/* Third line with circle on the right */}
-                  <rect x="3" y="17" width="14" height="2" rx="1"/>
-                  <circle cx="20" cy="18" r="1.5"/>
-                </svg>
-                <span>Filters</span>
-                {getActiveFilterCount() > 0 && (
-                  <span className="bg-coral-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
-                    {getActiveFilterCount()}
-                  </span>
-                )}
-              </button>
+                {/* ULTRA-OPTIMIZED: Filters button */}
+                <button
+                  onClick={() => setShowFilterModal(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
+                >
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="3" y="5" width="14" height="2" rx="1"/>
+                    <circle cx="20" cy="6" r="1.5"/>
+                    <circle cx="4" cy="12" r="1.5"/>
+                    <rect x="7" y="11" width="14" height="2" rx="1"/>
+                    <rect x="3" y="17" width="14" height="2" rx="1"/>
+                    <circle cx="20" cy="18" r="1.5"/>
+                  </svg>
+                  <span>Filters</span>
+                  {getActiveFilterCount() > 0 && (
+                    <span className="bg-coral-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                      {getActiveFilterCount()}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Enhanced Filter Modal */}
-      {showFilterModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-center rounded-t-2xl">
-              <button
-                onClick={() => setShowFilterModal(false)}
-                className="absolute left-6 p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-              <h2 className="text-xl font-semibold text-gray-900">Filters</h2>
+        {/* ULTRA-OPTIMIZED: Main content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {loading && <OptimizedLoader />}
+
+          {error && (
+            <div className="text-center py-20">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-6">
+                <MapPin className="h-8 w-8 text-red-500" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h3>
+              <p className="text-gray-600 text-lg mb-8">{error}</p>
+              <button onClick={loadPinPacks} className="btn-primary">Try again</button>
             </div>
+          )}
 
-            {/* Modal Content */}
-            <div className="p-6 space-y-8">
-              {/* Star Rating */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Star Rating</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="rating"
-                      checked={starRatingFilter === 'all'}
-                      onChange={() => setStarRatingFilter('all')}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">All ratings</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="rating"
-                      checked={starRatingFilter === '4+'}
-                      onChange={() => setStarRatingFilter('4+')}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">4+ stars</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="rating"
-                      checked={starRatingFilter === '4.5+'}
-                      onChange={() => setStarRatingFilter('4.5+')}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">4.5+ stars</span>
-                  </label>
+          {/* Static loading state with immediate content for LCP */}
+          {displayedPacks.length === 0 && !error && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {Array(8).fill(null).map((_, i) => (
+                <div key={`static-skeleton-${i}`} className="group cursor-pointer animate-pulse">
+                  <div className="relative h-64 rounded-2xl overflow-hidden bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100">
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-300 via-transparent to-transparent"></div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          )}
 
-              {/* Pin Count */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Collection Size</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="pinCount"
-                      checked={pinCountFilter === 'all'}
-                      onChange={() => setPinCountFilter('all')}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">All sizes</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="pinCount"
-                      checked={pinCountFilter === 'small'}
-                      onChange={() => setPinCountFilter('small')}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Small (0-5)</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="pinCount"
-                      checked={pinCountFilter === 'medium'}
-                      onChange={() => setPinCountFilter('medium')}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Medium (6-15)</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="pinCount"
-                      checked={pinCountFilter === 'large'}
-                      onChange={() => setPinCountFilter('large')}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Large (15+)</span>
-                  </label>
-                </div>
+          {!loading && !error && filteredPacks.length === 0 && displayedPacks.length > 0 && (
+            <div className="text-center py-20">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+                <Search className="h-10 w-10 text-gray-400" />
               </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">No results found</h3>
+              <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+                Try adjusting your search or filters to discover more places.
+              </p>
+              <button onClick={clearFilters} className="btn-secondary">Clear all filters</button>
+            </div>
+          )}
 
-              {/* Travel Categories */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Travel Categories</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center space-x-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="category"
-                      checked={categoryFilter === 'all'}
-                      onChange={() => {
-                        setCategoryFilter('all')
-                        // Update URL to remove category parameter
-                        const url = new URL(window.location.href)
-                        url.searchParams.delete('category')
-                        window.history.replaceState({}, '', url.toString())
-                      }}
-                      className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
+          {/* ULTRA-OPTIMIZED: Pin Packs Grid with immediate loading */}
+          {!loading && !error && (
+            <>
+              {/* Show actual packs - immediate render for LCP */}
+              {displayedPacks.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {(filteredPacks.length > 0 ? filteredPacks : displayedPacks).map((pack) => (
+                    <PackCard
+                      key={pack.id}
+                      pack={pack}
+                      isAuthenticated={isAuthenticated}
+                      wishlistItems={wishlistItems}
+                      onToggleWishlist={toggleWishlist}
+                      onShowLoginModal={() => setShowLoginModal(true)}
+                      getGoogleMapsRating={getGoogleMapsRating}
+                      shouldShowGoogleMapsRating={shouldShowGoogleMapsRating}
+                      displayedPacks={displayedPacks}
                     />
-                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">All categories</span>
-                  </label>
-                  {categories.map(category => (
-                    <label key={category} className="flex items-center space-x-3 cursor-pointer group">
-                      <input
-                        type="radio"
-                        name="category"
-                        checked={categoryFilter === category}
-                        onChange={() => {
-                          setCategoryFilter(category)
-                          // Update URL with category parameter
-                          const url = new URL(window.location.href)
-                          if (categoryFilter === 'all') {
-                            url.searchParams.delete('category')
-                          } else {
-                            url.searchParams.set('category', categoryFilter)
-                          }
-                          window.history.replaceState({}, '', url.toString())
-                        }}
-                        className="w-4 h-4 text-coral-500 border-gray-300 focus:ring-coral-500 focus:ring-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">{category}</span>
-                    </label>
                   ))}
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* Modal Footer */}
-            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center justify-end rounded-b-2xl">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={clearFilters}
-                  className="text-gray-600 hover:text-gray-800 font-medium underline"
-                >
-                  Clear all filters
-                </button>
-                <button
-                  onClick={() => setShowFilterModal(false)}
-                  className="btn-primary px-8 py-3"
-                >
-                  Show {filteredPacks.length} places
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cart Success Banner - GetYourGuide style */}
-      {cartSuccess && addedPack && (
-        <div className="bg-green-50 border-l-4 border-green-400 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              {/* Left side - Success message and pack details */}
-              <div className="flex items-center space-x-4">
-                {/* Success icon */}
-                <div className="flex-shrink-0">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
+              {/* Show skeletons while loading more */}
+              {loadingMore && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+                  {Array(8).fill(null).map((_, i) => (
+                    <PackSkeleton key={`skeleton-${i}`} />
+                  ))}
                 </div>
-                
-                {/* Pack thumbnail */}
-                <div className="flex-shrink-0">
-                  <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
-                    {/* Map-style background like pack cards but smaller */}
-                    <img 
-                      src={addedPackImage || "/google-maps-bg.svg"}
-                      alt="Pack thumbnail"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
-                    
-                    {/* Small pin count badge */}
-                    <div className="absolute bottom-1 right-1">
-                      <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">
-                        {addedPack.pin_count} pins
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Pack details */}
-                <div className="flex items-center space-x-6">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">
-                      Added to cart
-                    </p>
-                    <p className="text-sm text-gray-700 font-semibold">
-                      {addedPack.title}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {addedPack.city}, {addedPack.country}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Right side - Action buttons */}
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => window.location.href = '/cart'}
-                  className="bg-coral-500 hover:bg-coral-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center"
-                >
-                  <ShoppingCart className="h-4 w-4 mr-1" />
-                  Go to cart
-                </button>
-                
-                <button
-                  onClick={handleCartBannerCheckout}
-                  className="bg-coral-500 hover:bg-coral-600 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center"
-                >
-                  <CreditCard className="h-4 w-4 mr-1" />
-                  Check out
-                </button>
-                
-                {/* Close button */}
-                <button
-                  onClick={() => {
-                    setCartSuccess(false)
-                    setAddedPack(null)
-                  }}
-                  className="text-green-600 hover:text-green-800 p-1"
-                  aria-label="Close notification"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-            
-            {/* Mobile countdown timer */}
-            <div className="sm:hidden mt-2">
-              <p className="text-sm text-green-700">
-                We'll hold your spot for <span className="font-semibold">{countdownTime} minutes</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+              )}
 
-      {/* Main content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Loading State */}
-        {loading && (
-          <div className="text-center py-20">
-            <CloudLoader size="lg" text="Finding amazing places..." />
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && (
-          <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-6">
-              <MapPin className="h-8 w-8 text-red-500" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h3>
-            <p className="text-gray-600 text-lg mb-8">{error}</p>
-            <button 
-              onClick={loadPinPacks}
-              className="btn-primary"
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && !error && filteredPacks.length === 0 && pinPacks.length === 0 && (
-          <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
-              <MapPin className="h-10 w-10 text-gray-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">No places yet</h3>
-            <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
-              Be the first to share amazing places from your city with travelers around the world.
-            </p>
-            <a 
-              href="/create" 
-              onClick={(e) => {
-                const userProfile = localStorage.getItem('pinpacks_user_profile')
-                if (!userProfile) {
-                  e.preventDefault()
-                  window.location.href = '/signup'
-                }
-              }}
-              className="btn-primary inline-flex items-center text-lg px-8 py-4"
-            >
-              <Globe2 className="h-5 w-5 mr-2" />
-              Create first pin pack
-            </a>
-          </div>
-        )}
-
-        {/* No Results State */}
-        {!loading && !error && filteredPacks.length === 0 && pinPacks.length > 0 && (
-          <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
-              <Search className="h-10 w-10 text-gray-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">No results found</h3>
-            <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
-              Try adjusting your search or filters to discover more places.
-            </p>
-            <button 
-              onClick={clearFilters}
-              className="btn-secondary"
-            >
-              Clear all filters
-            </button>
-          </div>
-        )}
-
-        {/* Pin Packs Grid - Airbnb-style */}
-        {!loading && !error && filteredPacks.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredPacks.map((pack, index) => (
-              <div 
-                key={pack.id}
-                onClick={() => window.location.href = `/pack/${pack.id}`}
-                className="card-airbnb group cursor-pointer"
-              >
-                {/* Pack cover image or Google Maps background */}
-                <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
-                  {/* Inner container that scales - maintains boundaries */}
-                  <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
-                    {/* Display actual photo if available, otherwise Google Maps background */}
-                    {pack.coverPhoto ? (
-                      <img 
-                        src={`${pack.coverPhoto}`}
-                        alt={`${pack.title} cover`}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        style={{ aspectRatio: '4/3' }}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
-                        }}
-                      />
-                    ) : (
-                      <img 
-                        src={pack.coverPhoto && pack.coverPhoto !== '' ? pack.coverPhoto : "/google-maps-bg.svg"}
-                        alt="Map background"
-                        className="absolute inset-0 w-full h-full object-cover"
-                        style={{ aspectRatio: '4/3' }}
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
-                  </div>
-                  
-                  {/* Heart icon - Add to wishlist */}
+              {/* Load more button */}
+              {!loadingMore && hasMorePacks && filteredPacks.length > 0 && (
+                <div className="text-center mt-12">
                   <button 
-                    onClick={(e) => {
-                      e.stopPropagation() // Prevent card click when clicking heart
-                      if (isAuthenticated) {
-                        toggleWishlist(pack)
-                      } else {
-                        setShowLoginModal(true)
-                      }
-                    }}
-                    className="absolute top-3 right-3 w-8 h-8 bg-white hover:bg-gray-50 rounded-full flex items-center justify-center transition-colors group shadow-sm"
+                    onClick={loadMorePacks}
+                    className="btn-secondary inline-flex items-center text-lg px-8 py-4"
                   >
-                    <Heart 
-                      className={`h-4 w-4 transition-colors ${
-                        isAuthenticated && wishlistItems.includes(pack.id) 
-                          ? 'text-red-500 fill-current' // CHANGED from text-coral-500
-                          : 'text-red-700 group-hover:text-red-500'
-                      }`} 
-                    />
-                  </button>
-                  
-
-                  
-                  {/* Pin count */}
-                  <div className="absolute bottom-3 right-3">
-                    <span className="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
-                      {pack.pin_count} pins
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Card content */}
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-coral-600 transition-colors">
-                        {pack.title}
-                      </h3>
-                      <p className="text-sm text-gray-500 flex items-center mt-1">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {pack.city}, {pack.country}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
-                    {pack.description}
-                  </p>
-                  
-                  {/* Bottom section with rating and price */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-400 fill-current mr-1" />
-                      {shouldShowGoogleMapsRating(pack) ? (
-                        <div className="flex items-center">
-                          <span className="text-sm text-gray-600">
-                            {getGoogleMapsRating(pack.city, pack.country, pack.title).rating}
-                          </span>
-                          <span className="text-xs text-gray-400 ml-1">
-                            (Google)
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-600">
-                          {((pack.download_count || 0) % 50 + 350) / 100}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-lg font-bold text-gray-900">
-                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Load more button if many results */}
-        {!loading && !error && filteredPacks.length > 12 && (
-          <div className="text-center mt-12">
-            <button className="btn-secondary inline-flex items-center text-lg px-8 py-4">
-              Show more places
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* PayPal Modal for Single Pack Checkout */}
-      {showPayPalModal && addedPack && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Complete Purchase</h2>
-              <button
-                onClick={() => setShowPayPalModal(false)}
-                className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
-              >
-                <X className="h-4 w-4 text-gray-600" />
-              </button>
-            </div>
-
-            {/* Pack Summary */}
-            <div className="p-6 border-b border-gray-100">
-              <div className="flex items-center space-x-4">
-                {/* Pack thumbnail */}
-                <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
-                  <img 
-                    src={addedPackImage || "/google-maps-bg.svg"}
-                    alt="Pack thumbnail"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-1 right-1">
-                    <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">
-                      {addedPack.pin_count} pins
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Pack details */}
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900">{addedPack.title}</h3>
-                  <p className="text-sm text-gray-600">{addedPack.city}, {addedPack.country}</p>
-                  <div className="mt-2">
-                    <span className="text-lg font-bold text-coral-600">
-                      {addedPack.price === '0' ? 'Free' : `$${addedPack.price}`}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* PayPal Checkout */}
-            <div className="p-6">
-              {addedPack.price !== '0' ? (
-                <PayPalCheckout
-                  cartItems={[{
-                    id: addedPack.id,
-                    title: addedPack.title,
-                    price: parseFloat(addedPack.price),
-                    city: addedPack.city,
-                    country: addedPack.country,
-                    pin_count: parseInt(addedPack.pin_count)
-                  }]}
-                  totalAmount={parseFloat(addedPack.price)}
-                  processingFee={0.50} // Small processing fee
-                  onSuccess={handlePayPalSuccess}
-                  onError={handlePayPalError}
-                />
-              ) : (
-                <div className="text-center">
-                  <p className="text-gray-600 mb-4">This pack is free! Click to add to your collection.</p>
-                  <button
-                    onClick={() => handlePayPalSuccess({ orderID: 'free', payerID: 'free' })}
-                    className="w-full btn-primary"
-                  >
-                    Get Free Pack
+                    {loadingMore ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-coral-500 mr-2"></div>
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <Globe2 className="h-5 w-5 mr-2" />
+                        Show more places
+                      </>
+                    )}
                   </button>
                 </div>
               )}
-            </div>
-          </div>
+
+              {/* Show skeletons for initial load */}
+              {!initialLoadComplete && !loading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {Array(8).fill(null).map((_, i) => (
+                    <PackSkeleton key={`initial-skeleton-${i}`} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
 
+        {/* ULTRA-OPTIMIZED: Modals with lazy loading */}
+        {showFilterModal && (
+          <Suspense fallback={<div className="animate-pulse bg-gray-200 h-64 rounded" />}>
+            <FilterModal
+              isOpen={showFilterModal}
+              onClose={() => setShowFilterModal(false)}
+              categoryFilter={categoryFilter}
+              setCategoryFilter={setCategoryFilter}
+              starRatingFilter={starRatingFilter}
+              setStarRatingFilter={setStarRatingFilter}
+              pinCountFilter={pinCountFilter}
+              setPinCountFilter={setPinCountFilter}
+              clearFilters={clearFilters}
+              filteredPacks={filteredPacks}
+            />
+          </Suspense>
+        )}
 
-
-      {/* Login Modal */}
-      {showLoginModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <User className="h-8 w-8 text-coral-500" />
+        {showLoginModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User className="h-8 w-8 text-coral-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in required</h2>
+                <p className="text-gray-600">
+                  You need an account to save favorites and add items to your cart
+                </p>
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in required</h2>
-              <p className="text-gray-600">
-                You need an account to save favorites and add items to your cart
-              </p>
-            </div>
 
-            <div className="space-y-4">
-              <button
-                onClick={() => {
-                  setShowLoginModal(false)
-                  window.location.href = '/auth'
-                }}
-                className="w-full btn-primary py-3 text-base"
-              >
-                Sign In
-              </button>
-              
-              <button
-                onClick={() => {
-                  setShowLoginModal(false)
-                  window.location.href = '/signup'
-                }}
-                className="w-full btn-secondary py-3 text-base"
-              >
-                Create Account
-              </button>
-              
-              <button
-                onClick={() => setShowLoginModal(false)}
-                className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm"
-              >
-                Cancel
-              </button>
+              <div className="space-y-4">
+                <button
+                  onClick={() => {
+                    setShowLoginModal(false)
+                    window.location.href = '/auth'
+                  }}
+                  className="w-full btn-primary py-3 text-base"
+                >
+                  Sign In
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowLoginModal(false)
+                    window.location.href = '/signup'
+                  }}
+                  className="w-full btn-secondary py-3 text-base"
+                >
+                  Create Account
+                </button>
+                
+                <button
+                  onClick={() => setShowLoginModal(false)}
+                  className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Payment Success Modal with Falling Pins */}
-      <PaymentSuccessModal
-        isOpen={showSuccessModal}
-        packsCount={purchasedPacksCount}
-        onViewPacks={handleViewPacks}
-        onKeepBrowsing={handleKeepBrowsing}
-      />
-    </div>
+        {/* ULTRA-OPTIMIZED: PayPal Modal */}
+        {showPayPalModal && addedPack && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+              <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                <h2 className="text-xl font-bold text-gray-900">Complete Purchase</h2>
+                <button
+                  onClick={() => setShowPayPalModal(false)}
+                  className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+                >
+                  <X className="h-4 w-4 text-gray-600" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {addedPack.price !== '0' ? (
+                  <PayPalCheckout
+                    cartItems={[{
+                      id: addedPack.id,
+                      title: addedPack.title,
+                      price: parseFloat(addedPack.price),
+                      city: addedPack.city,
+                      country: addedPack.country,
+                      pin_count: parseInt(addedPack.pin_count)
+                    }]}
+                    totalAmount={parseFloat(addedPack.price)}
+                    processingFee={0.50}
+                    onSuccess={handlePayPalSuccess}
+                    onError={handlePayPalError}
+                  />
+                ) : (
+                  <div className="text-center">
+                    <p className="text-gray-600 mb-4">This pack is free! Click to add to your collection.</p>
+                    <button
+                      onClick={() => handlePayPalSuccess({ orderID: 'free', payerID: 'free' })}
+                      className="w-full btn-primary"
+                    >
+                      Get Free Pack
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ULTRA-OPTIMIZED: Payment Success Modal */}
+        <PaymentSuccessModal
+          isOpen={showSuccessModal}
+          packsCount={1}
+          onViewPacks={handleViewPacks}
+          onKeepBrowsing={handleKeepBrowsing}
+        />
+      </div>
+    </PerformanceMonitor>
   )
-} 
+}

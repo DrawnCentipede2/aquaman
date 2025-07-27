@@ -1,0 +1,42 @@
+<svg width="400" height="300" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="300" fill="#f8fafc"/>
+  
+  <!-- Map-like grid pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="400" height="300" fill="url(#grid)"/>
+  
+  <!-- Central location marker -->
+  <circle cx="200" cy="150" r="8" fill="#ef4444" stroke="#dc2626" stroke-width="2"/>
+  <circle cx="200" cy="150" r="4" fill="#ffffff"/>
+  
+  <!-- Location dots -->
+  <circle cx="120" cy="100" r="3" fill="#3b82f6" opacity="0.7"/>
+  <circle cx="280" cy="80" r="3" fill="#3b82f6" opacity="0.7"/>
+  <circle cx="90" cy="200" r="3" fill="#3b82f6" opacity="0.7"/>
+  <circle cx="310" cy="220" r="3" fill="#3b82f6" opacity="0.7"/>
+  <circle cx="150" cy="250" r="3" fill="#3b82f6" opacity="0.7"/>
+  <circle cx="250" cy="120" r="3" fill="#3b82f6" opacity="0.7"/>
+  
+  <!-- Subtle roads -->
+  <path d="M 0 150 L 400 150" stroke="#d1d5db" stroke-width="2" opacity="0.5"/>
+  <path d="M 200 0 L 200 300" stroke="#d1d5db" stroke-width="2" opacity="0.5"/>
+  
+  <!-- Gradient overlay for better text readability -->
+  <defs>
+    <linearGradient id="overlay" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#f8fafc;stop-opacity:0.8"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#overlay)"/>
+  
+  <!-- Placeholder text -->
+  <text x="200" y="280" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#6b7280" opacity="0.7">
+    Location Image
+  </text>
+</svg> 

@@ -83,6 +83,11 @@ export default function AuthPage() {
         localStorage.setItem('pinpacks_user_location', profile.location || '')
         localStorage.setItem('pinpacks_user_ip', profile.ip || '')
 
+        // Clear any existing purchased packs from localStorage for returning users
+        // The pinventory page will reload from database orders only
+        localStorage.removeItem('pinpacks_purchased')
+        console.log('🧹 Cleared existing purchased packs from localStorage for returning user')
+
         setUserProfile(profile)
         window.dispatchEvent(new Event('storage'))
         window.location.href = '/browse'
@@ -97,6 +102,11 @@ export default function AuthPage() {
         localStorage.setItem('pinpacks_user_profile', JSON.stringify(profile))
         localStorage.setItem('pinpacks_user_id', profile.userId)
         localStorage.setItem('pinpacks_user_email', profile.email)
+        
+        // Clear any existing purchased packs from localStorage for legacy users
+        localStorage.removeItem('pinpacks_purchased')
+        console.log('🧹 Cleared existing purchased packs from localStorage for legacy user')
+        
         setUserProfile(profile)
         window.dispatchEvent(new Event('storage'))
         window.location.href = '/browse'

@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { User, Plus, Heart, ShoppingCart, Package, Settings, ChevronDown, Globe, DollarSign, Bell, HelpCircle, LogOut, X, Check, CreditCard, Shield, Lock } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 
@@ -46,10 +46,13 @@ const getInitialAuthState = () => {
     const stored = getStoredProfile()
     if (stored) {
       const parsed = JSON.parse(stored.data)
+      console.log('🔍 Navigation - Found stored profile:', parsed)
       return { isAuthenticated: true, userProfile: parsed }
+    } else {
+      console.log('🔍 Navigation - No stored profile found')
     }
   } catch (error) {
-    console.warn('Error parsing initial auth state:', error)
+    console.warn('❌ Navigation - Error parsing initial auth state:', error)
     localStorage.removeItem('pinpacks_user_profile')
   }
   return { isAuthenticated: false, userProfile: null }
@@ -66,6 +69,9 @@ export default function Navigation() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  
+  // Use ref to track current authentication state for interval checks
+  const isAuthenticatedRef = useRef<boolean>(false)
   
   // Login popup state
   const [showLoginPopup, setShowLoginPopup] = useState(false)
@@ -110,27 +116,101 @@ export default function Navigation() {
 
   // Check authentication and load preferences on mount
   useEffect(() => {
+    console.log('🚀 Navigation - Component mounting, checking authentication...')
+    
     // Mark component as mounted
     setIsMounted(true)
     
     // Check authentication state after mounting
     const initialAuthState = getInitialAuthState()
+    console.log('🔍 Navigation - Initial auth state:', initialAuthState)
+    
     setIsAuthenticated(initialAuthState.isAuthenticated)
     setUserProfile(initialAuthState.userProfile)
+    isAuthenticatedRef.current = initialAuthState.isAuthenticated
+    
+    console.log('✅ Navigation - Authentication state set:', initialAuthState.isAuthenticated)
+    
+    // Additional immediate check for authentication (in case profile was saved just before mount)
+    setTimeout(() => {
+      const immediateAuthState = getInitialAuthState()
+      if (immediateAuthState.isAuthenticated && !isAuthenticatedRef.current) {
+        console.log('🔍 Navigation - Immediate authentication check found user:', immediateAuthState)
+        setIsAuthenticated(immediateAuthState.isAuthenticated)
+        setUserProfile(immediateAuthState.userProfile)
+        isAuthenticatedRef.current = immediateAuthState.isAuthenticated
+        
+        // Load preferences for newly authenticated user
+        const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
+        const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
+        const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
+        setSelectedCurrency(savedCurrency)
+        setSelectedLanguage(savedLanguage)
+        setSelectedRegion(savedRegion)
+        setIsCreatorEligible(true)
+        setIsRegisteredCreator(true)
+        console.log('✅ Navigation - Preferences loaded via immediate check')
+      }
+    }, 100) // Check after 100ms
     
     // Load saved preferences if user is authenticated
     if (initialAuthState.isAuthenticated) {
+      console.log('👤 Navigation - User is authenticated, loading preferences...')
       const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
       const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
       const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
-      const hasCreatedPacks = localStorage.getItem('PinCloud_has_created_packs') === 'true'
-      const isCreatorRegistered = localStorage.getItem('PinCloud_is_registered_creator') === 'true'
-      
+      // For MVP: All authenticated users are considered "registered" creators
       setSelectedCurrency(savedCurrency)
       setSelectedLanguage(savedLanguage)
       setSelectedRegion(savedRegion)
-      setIsCreatorEligible(hasCreatedPacks)
-      setIsRegisteredCreator(isCreatorRegistered)
+      setIsCreatorEligible(true) // All authenticated users can create packs
+      setIsRegisteredCreator(true) // All authenticated users are registered creators
+      console.log('✅ Navigation - Preferences loaded for authenticated user')
+    } else {
+      console.log('❌ Navigation - User is not authenticated')
+    }
+    
+    // Set up interval to check for authentication changes (useful for signup redirects)
+    // Only run this once per session to avoid unnecessary overhead on page changes
+    const hasRunAuthInterval = sessionStorage.getItem('navigation_auth_interval_run')
+    let authCheckInterval: NodeJS.Timeout | null = null
+    let clearIntervalTimeout: NodeJS.Timeout | null = null
+    
+    if (!hasRunAuthInterval) {
+      console.log('🔄 Navigation - Starting interval-based authentication checking (first time only)')
+      sessionStorage.setItem('navigation_auth_interval_run', 'true')
+      
+      authCheckInterval = setInterval(() => {
+        const currentAuthState = getInitialAuthState()
+        // Check if we're now authenticated but weren't before
+        if (currentAuthState.isAuthenticated && !isAuthenticatedRef.current) {
+          console.log('🔍 Navigation - Authentication detected via interval check:', currentAuthState)
+          setIsAuthenticated(currentAuthState.isAuthenticated)
+          setUserProfile(currentAuthState.userProfile)
+          isAuthenticatedRef.current = currentAuthState.isAuthenticated
+          
+          // Load preferences for newly authenticated user
+          const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
+          const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
+          const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
+          setSelectedCurrency(savedCurrency)
+          setSelectedLanguage(savedLanguage)
+          setSelectedRegion(savedRegion)
+          setIsCreatorEligible(true)
+          setIsRegisteredCreator(true)
+          console.log('✅ Navigation - Preferences loaded via interval check')
+        }
+      }, 500) // Check every 500ms for faster detection
+      
+      // Clear interval after 15 seconds
+      clearIntervalTimeout = setTimeout(() => {
+        if (authCheckInterval) {
+          clearInterval(authCheckInterval)
+          console.log('⏰ Navigation - Stopped interval-based authentication checking')
+        }
+      }, 15000)
+    } else {
+      console.log('⏭️ Navigation - Skipping interval-based authentication checking (already run this session)')
     }
     
     // Listen for storage changes (when user signs in/out in another tab)
@@ -143,25 +223,29 @@ export default function Navigation() {
         e.key === 'pinpacks_is_registered_creator' ||
         e.key === 'pinpacks_has_created_packs'
       ) {
-        console.log('User profile or creator status storage changed, updating auth state')
+        console.log('🔍 Navigation - User profile or creator status storage changed, updating auth state')
+        console.log('📡 Navigation - Storage event key:', e.key, 'newValue:', e.newValue)
         const newAuthState = getInitialAuthState()
+        console.log('🔍 Navigation - New auth state from storage event:', newAuthState)
         setIsAuthenticated(newAuthState.isAuthenticated)
         setUserProfile(newAuthState.userProfile)
+        isAuthenticatedRef.current = newAuthState.isAuthenticated
         
         // Load preferences if newly authenticated
         if (newAuthState.isAuthenticated) {
+          console.log('✅ Navigation - User became authenticated via storage event, loading preferences...')
           const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
           const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
           const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
-          const hasCreatedPacks = localStorage.getItem('PinCloud_has_created_packs') === 'true'
-          const isCreatorRegistered = localStorage.getItem('PinCloud_is_registered_creator') === 'true'
-          
+          // For MVP: All authenticated users are considered "registered" creators
           setSelectedCurrency(savedCurrency)
           setSelectedLanguage(savedLanguage)
           setSelectedRegion(savedRegion)
-          setIsCreatorEligible(hasCreatedPacks)
-          setIsRegisteredCreator(isCreatorRegistered)
+          setIsCreatorEligible(true) // All authenticated users can create packs
+          setIsRegisteredCreator(true) // All authenticated users are registered creators
+          console.log('✅ Navigation - Preferences loaded after storage event')
         } else {
+          console.log('❌ Navigation - User became unauthenticated via storage event')
           // Reset creator status if not authenticated
           setIsCreatorEligible(false)
           setIsRegisteredCreator(false)
@@ -171,20 +255,56 @@ export default function Navigation() {
     
     // Also listen for custom storage events (triggered manually)
     const handleCustomStorageEvent = () => {
+      console.log('🔍 Navigation - Custom storage event received')
       if (isAuthenticated) {
-        const hasCreatedPacks = localStorage.getItem('PinCloud_has_created_packs') === 'true'
-        const isCreatorRegistered = localStorage.getItem('PinCloud_is_registered_creator') === 'true'
-        setIsCreatorEligible(hasCreatedPacks)
-        setIsRegisteredCreator(isCreatorRegistered)
+        console.log('✅ Navigation - User is authenticated in custom storage event')
+        // For MVP: All authenticated users are considered "registered" creators
+        setIsCreatorEligible(true) // All authenticated users can create packs
+        setIsRegisteredCreator(true) // All authenticated users are registered creators
+      } else {
+        console.log('❌ Navigation - User is not authenticated in custom storage event')
       }
     }
     
+    // Listen for custom authentication events (triggered by signup page)
+    const handleCustomAuthEvent = () => {
+      console.log('🔍 Navigation - Custom authentication event received')
+      const currentAuthState = getInitialAuthState()
+      if (currentAuthState.isAuthenticated && !isAuthenticatedRef.current) {
+        console.log('🔍 Navigation - Authentication detected via custom event:', currentAuthState)
+        setIsAuthenticated(currentAuthState.isAuthenticated)
+        setUserProfile(currentAuthState.userProfile)
+        isAuthenticatedRef.current = currentAuthState.isAuthenticated
+        
+        // Load preferences for newly authenticated user
+        const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
+        const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
+        const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
+        setSelectedCurrency(savedCurrency)
+        setSelectedLanguage(savedLanguage)
+        setSelectedRegion(savedRegion)
+        setIsCreatorEligible(true)
+        setIsRegisteredCreator(true)
+        console.log('✅ Navigation - Preferences loaded via custom auth event')
+      }
+    }
+    
+    console.log('📡 Navigation - Adding storage event listeners')
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('storage', handleCustomStorageEvent)
+    window.addEventListener('custom-auth-event', handleCustomAuthEvent)
     
     return () => {
+      console.log('🧹 Navigation - Cleaning up event listeners and intervals')
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('storage', handleCustomStorageEvent)
+      window.removeEventListener('custom-auth-event', handleCustomAuthEvent)
+      if (authCheckInterval) {
+        clearInterval(authCheckInterval)
+      }
+      if (clearIntervalTimeout) {
+        clearTimeout(clearIntervalTimeout)
+      }
     }
   }, [])
 
@@ -265,6 +385,10 @@ export default function Navigation() {
     localStorage.removeItem('PinCloud_is_registered_creator')
     localStorage.removeItem('pinpacks_has_created_packs')
     localStorage.removeItem('pinpacks_is_registered_creator')
+    
+    // Clear sessionStorage flag so interval can run again on next login
+    sessionStorage.removeItem('navigation_auth_interval_run')
+    
     window.dispatchEvent(new Event('storage'))
     window.location.href = '/'
   }
@@ -299,26 +423,15 @@ export default function Navigation() {
     window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language, region } }))
   }
 
-  // Handle "Sell like a local" click - route based on authentication status
-  const handleSellLikeLocal = (e: React.MouseEvent) => {
-    e.preventDefault()
-    
-    if (isAuthenticated) {
-      // User is signed in → go to manage page where they can view/create packs
-      window.location.href = '/manage'
-    } else {
-      // User is not signed in → go to sell page to learn about selling
-      window.location.href = '/sell'
-    }
-  }
+  // For MVP: No longer needed - all authenticated users go directly to manage page
 
 
 
-  // Show loading state during hydration to prevent mismatch
+    // Show loading state during hydration to prevent mismatch
   if (!isMounted) {
     return (
       <nav className="flex items-center space-x-1">
-        {/* Loading state - show buyer mode by default during hydration */}
+        {/* Loading state - completely static to prevent hydration mismatch */}
         <div className="hidden md:flex items-center space-x-1">
           <a href="/browse" className={getLinkClasses('/browse')}>
             Browse
@@ -348,17 +461,18 @@ export default function Navigation() {
             Cart
           </a>
 
-          <a 
-            href="/sell" 
-            className={getLinkClasses('/sell')}
-            onClick={(e) => {
-              e.preventDefault()
-              // During loading, just prevent default - no popup yet
-            }}
-          >
-            <DollarSign className="h-4 w-4 inline mr-1" />
-            Sell like a local
-          </a>
+                     {/* Always show "Manage Packs" during loading to prevent jump */}
+           <a 
+             href="/manage"
+             className={getLinkClasses('/manage')}
+             onClick={(e) => {
+               e.preventDefault()
+               // During loading, just prevent default - no popup yet
+             }}
+           >
+             <Package className="h-4 w-4 inline mr-1" />
+             Manage Packs
+           </a>
         </div>
         
         {/* Right side actions - Identical Profile button during loading */}
@@ -404,24 +518,24 @@ export default function Navigation() {
                   fontWeight: 'bold'
                 }}
               >
-                                 <User style={{ width: '1rem', height: '1rem' }} />
-               </div>
-               <div 
-                 className="hidden sm:block"
-                 style={{
-                   fontSize: '0.875rem',
-                   fontWeight: '500',
-                   color: '#111827'
-                 } as React.CSSProperties}
-               >
-                 Profile
-               </div>
-               <ChevronDown 
-                 style={{ 
-                   width: '1rem', 
-                   height: '1rem',
-                   color: '#6b7280'
-                 }}
+                <User style={{ width: '1rem', height: '1rem' }} />
+              </div>
+              <div 
+                className="hidden sm:block"
+                style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  color: '#111827'
+                } as React.CSSProperties}
+              >
+                Profile
+              </div>
+              <ChevronDown 
+                style={{ 
+                  width: '1rem', 
+                  height: '1rem',
+                  color: '#6b7280'
+                }}
               />
             </button>
           </div>
@@ -457,14 +571,17 @@ export default function Navigation() {
             Cart
           </a>
 
-          {/* Always show "Sell like a local" - routes to manage page if authenticated, sell page otherwise */}
+          {/* For MVP: Always show "Manage Packs" for authenticated users */}
           <a 
-            href="/sell" 
-            className={getLinkClasses('/sell')}
-            onClick={handleSellLikeLocal}
+            href="/manage"
+            className={getLinkClasses('/manage')}
+            onClick={!isAuthenticated ? (e) => {
+              e.preventDefault()
+              setShowLoginPopup(true)
+            } : undefined}
           >
-            <DollarSign className="h-4 w-4 inline mr-1" />
-            Sell like a local
+            <Package className="h-4 w-4 inline mr-1" />
+            Manage Packs
           </a>
         </div>
 
@@ -609,18 +726,6 @@ export default function Navigation() {
                         <User className="h-4 w-4 mr-3 text-gray-500" />
                         Profile Settings
                       </a>
-                      
-                      {/* Creator Dashboard Link - Only show if registered creator */}
-                      {isRegisteredCreator && (
-                        <a
-                          href="/creator-dashboard"
-                          onClick={() => setIsDropdownOpen(false)}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        >
-                          <Settings className="h-4 w-4 mr-3 text-gray-500" />
-                          Creator Dashboard
-                        </a>
-                      )}
                       
                       <div className="border-t border-gray-100 my-2"></div>
                     </div>

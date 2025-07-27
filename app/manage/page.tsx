@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download, Calendar, Edit, Eye, Trash2, Plus, TrendingUp, DollarSign, Users, Star, MapPin, Clock, BarChart3, Package } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
@@ -40,63 +40,105 @@ export default function ManagePage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<{ id: string, title: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  
+  // Add refs to prevent redundant authentication calls
+  const authCheckedRef = useRef(false)
+  const authInProgressRef = useRef(false)
+  
+  // Add ref to prevent redundant pack loading calls
+  const packsLoadingRef = useRef(false)
+  const lastUserIdRef = useRef<string>('')
 
   // Check for authenticated user and use email-based system
   useEffect(() => {
+    // Prevent redundant authentication checks
+    if (authCheckedRef.current || authInProgressRef.current) {
+      return
+    }
+    
     const checkAuth = async () => {
-      // Check if user is authenticated via new email system
-      const userProfile = localStorage.getItem('pinpacks_user_profile')
-      const savedUserId = localStorage.getItem('pinpacks_user_id')
+      // Set flag to prevent concurrent auth checks
+      authInProgressRef.current = true
       
-      if (userProfile) {
-        // User is authenticated via email system
-        const profile = JSON.parse(userProfile)
+      try {
+        // Check if user is authenticated via new email system
+        const userProfile = localStorage.getItem('pinpacks_user_profile')
+        const savedUserId = localStorage.getItem('pinpacks_user_id')
         
-        // Ensure we have the correct UUID for this user (same logic as create page)
-        try {
-          const { data: userData, error } = await supabase
-            .from('users')
-            .select('id, email')
-            .eq('email', profile.email)
-            .single()
+        if (userProfile) {
+          // User is authenticated via email system
+          const profile = JSON.parse(userProfile)
           
-          if (userData && !error) {
-            setUserId(userData.id) // Use the actual UUID from database
-            console.log('Authenticated user found, using UUID:', userData.id)
-          } else {
-            console.warn('Could not find user in database:', error)
+          // Ensure we have the correct UUID for this user (same logic as create page)
+          try {
+            const { data: userData, error } = await supabase
+              .from('users')
+              .select('id, email')
+              .eq('email', profile.email)
+              .single()
+            
+            if (userData && !error) {
+              setUserId(userData.id) // Use the actual UUID from database
+              console.log('Authenticated user found, using UUID:', userData.id)
+            } else {
+              console.warn('Could not find user in database:', error)
+              setUserId(profile.userId) // Fallback to stored userId
+            }
+          } catch (error) {
+            console.error('Error fetching user UUID:', error)
             setUserId(profile.userId) // Fallback to stored userId
           }
-        } catch (error) {
-          console.error('Error fetching user UUID:', error)
-          setUserId(profile.userId) // Fallback to stored userId
+          
+          console.log('Authenticated user found:', profile.email)
+        } else if (savedUserId) {
+          // User has old system ID - still allow them to use it
+          setUserId(savedUserId)
+          console.log('Legacy user found:', savedUserId)
+        } else {
+          // No authentication found - redirect to sign in
+          console.log('Please sign in first to view your pin packs')
+          router.push('/auth')
+          return
         }
         
-        console.log('Authenticated user found:', profile.email)
-      } else if (savedUserId) {
-        // User has old system ID - still allow them to use it
-        setUserId(savedUserId)
-        console.log('Legacy user found:', savedUserId)
-      } else {
-        // No authentication found - redirect to sign in
-        console.log('Please sign in first to view your pin packs')
-        router.push('/auth')
-        return
+        // Mark authentication as completed
+        authCheckedRef.current = true
+      } finally {
+        // Clear the in-progress flag
+        authInProgressRef.current = false
       }
     }
     
     checkAuth()
-  }, [router])
+    
+    // Cleanup function to reset flags if component unmounts
+    return () => {
+      authCheckedRef.current = false
+      authInProgressRef.current = false
+    }
+  }, [router]) // Keep router dependency but prevent redundant calls
 
   // Load user's pin packs when user ID is available
   useEffect(() => {
-    if (userId) {
-      loadUserPacks()
+    // Prevent redundant pack loading calls
+    if (!userId || userId === lastUserIdRef.current || packsLoadingRef.current) {
+      return
     }
+    
+    // Update last userId and trigger pack loading
+    lastUserIdRef.current = userId
+    loadUserPacks()
   }, [userId])
 
   // Function to load user's pin packs with analytics
   const loadUserPacks = async () => {
+    // Prevent concurrent pack loading
+    if (packsLoadingRef.current) {
+      return
+    }
+    
+    packsLoadingRef.current = true
+    
     try {
       setLoading(true)
       setError(null)
@@ -214,6 +256,7 @@ export default function ManagePage() {
       console.error('Error loading user packs:', error)
     } finally {
       setLoading(false)
+      packsLoadingRef.current = false // Reset loading ref
     }
   }
 

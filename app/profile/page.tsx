@@ -590,56 +590,9 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Privacy Settings */}
-          <div className="card-airbnb p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-              <Eye className="h-6 w-6 text-primary-500 mr-3" />
-              Privacy Settings
-            </h2>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Profile Visibility
-                </label>
-                <select
-                  value={formData.profile_visibility || 'public'}
-                  onChange={(e) => handleInputChange('profile_visibility', e.target.value)}
-                  className="input-airbnb w-full max-w-md"
-                >
-                  <option value="public">Public - Anyone can see your profile</option>
-                  <option value="limited">Limited - Only basic info visible</option>
-                  <option value="private">Private - Only you can see your profile</option>
-                </select>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Marketing Emails</h3>
-                  <p className="text-sm text-gray-600">Receive updates about new features and promotions</p>
-                </div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.marketing_emails !== undefined ? formData.marketing_emails : true}
-                    onChange={(e) => handleInputChange('marketing_emails', e.target.checked)}
-                    className="mr-2 text-primary-500 focus:ring-primary-500"
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
 
           {/* Save Button */}
           <div className="flex justify-between items-center">
-            <button
-              onClick={handleLogout}
-              className="text-gray-600 hover:text-gray-800 font-medium px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors inline-flex items-center"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </button>
-            
             <button
               onClick={handleSaveProfile}
               disabled={isSaving || !formData.email?.trim()}
