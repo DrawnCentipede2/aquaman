@@ -58,12 +58,65 @@ export async function POST(request: NextRequest) {
       .select('pin_pack_id')
       .eq('order_id', orderId)
     
-    if (!itemsError && orderItems) {
+    if (itemsError) {
+      console.error('Error fetching order items:', itemsError)
+    } else if (orderItems && orderItems.length > 0) {
       // Increment download count for each purchased pack
+      console.log('🔍 Processing', orderItems.length, 'order items for download count increment')
+      
       for (const item of orderItems) {
-        await supabase.rpc('increment_download_count', {
-          pack_id: item.pin_pack_id
-        })
+        try {
+          console.log('🔍 Attempting RPC call for pack:', item.pin_pack_id)
+          
+          // Try using RPC function first
+          const { error: rpcError } = await supabase.rpc('increment_download_count', {
+            pack_id: item.pin_pack_id
+          })
+          
+          if (rpcError) {
+            console.warn('🔍 RPC call failed, using fallback approach:', rpcError)
+            
+            // Fallback: Get current count and increment
+            const { data: currentPack, error: fetchError } = await supabase
+              .from('pin_packs')
+              .select('download_count')
+              .eq('id', item.pin_pack_id)
+              .single()
+            
+            if (fetchError) {
+              console.error('🔍 Could not fetch current download count:', fetchError)
+            } else {
+              const newCount = (currentPack.download_count || 0) + 1
+              const { error: updateError } = await supabase
+                .from('pin_packs')
+                .update({ download_count: newCount })
+                .eq('id', item.pin_pack_id)
+              
+              if (updateError) {
+                console.error('🔍 Fallback update also failed:', updateError)
+              } else {
+                console.log('🔍 Fallback update successful for pack:', item.pin_pack_id)
+              }
+            }
+            
+            // Also try to insert download record manually
+            try {
+              await supabase
+                .from('pack_downloads')
+                .insert({
+                  pin_pack_id: item.pin_pack_id,
+                  download_type: 'purchase'
+                })
+            } catch (downloadError) {
+              console.warn('🔍 Could not insert download record:', downloadError)
+            }
+          } else {
+            console.log('🔍 RPC call successful for pack:', item.pin_pack_id)
+          }
+        } catch (error) {
+          console.error('🔍 Error processing pack download count:', error)
+          // Continue processing other items even if one fails
+        }
       }
     }
     

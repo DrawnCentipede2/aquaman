@@ -144,6 +144,9 @@ export default function PackDetailPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [purchasedPacksCount, setPurchasedPacksCount] = useState(0)
   
+  // Cart success popup state
+  const [showCartSuccessModal, setShowCartSuccessModal] = useState(false)
+  
   // Purchase status state
   const [isPurchased, setIsPurchased] = useState(false)
   
@@ -940,31 +943,13 @@ export default function PackDetailPage() {
           currentCart.push(pack)
           localStorage.setItem('pinpacks_cart', JSON.stringify(currentCart))
           
-          // Don't update state immediately - keep button text unchanged until redirect
+          // Update local state to reflect cart addition
+          setCartItems(prev => [...prev, pack.id])
+          
+          // Show cart success popup
+          setShowCartSuccessModal(true)
+          
           console.log('Added to cart:', pack.title)
-          
-          // Get the current search from referrer or URL if available
-          const referrerUrl = document.referrer
-          let searchQuery = ''
-          
-          if (referrerUrl && referrerUrl.includes('/browse')) {
-            try {
-              const referrerParams = new URL(referrerUrl).searchParams
-              searchQuery = referrerParams.get('search') || ''
-            } catch (error) {
-              console.warn('Could not parse referrer URL:', error)
-            }
-          }
-          // Get the best available image for the pack
-          const displayImage = getPackDisplayImage() || ''
-          // Redirect to browse page with cart success parameters
-          const browseUrl = new URL('/browse', window.location.origin)
-          if (searchQuery) {
-            browseUrl.searchParams.set('search', searchQuery)
-          }
-          browseUrl.searchParams.set('cart_success', 'true')
-          browseUrl.searchParams.set('added_pack_id', pack.id)
-          window.location.href = browseUrl.toString()
         }
       } catch (error) {
         console.error('Error adding to cart:', error)
@@ -2664,6 +2649,102 @@ export default function PackDetailPage() {
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
       />
+
+      {/* Cart Success Modal */}
+      {showCartSuccessModal && pack && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Added to Cart!</h2>
+              <button
+                onClick={() => setShowCartSuccessModal(false)}
+                className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+              >
+                <X className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Pack Summary */}
+            <div className="p-6">
+              <div className="flex items-center space-x-4 mb-6">
+                {/* Pack thumbnail */}
+                <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
+                  <img 
+                    src={getPackDisplayImage() || "/google-maps-bg.svg"}
+                    alt="Pack thumbnail"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  <div className="absolute bottom-1 right-1">
+                    <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">
+                      {pins.length} pins
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Pack details */}
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{pack.title}</h3>
+                  <p className="text-sm text-gray-600">{pack.city}, {pack.country}</p>
+                  <div className="mt-2">
+                    <span className="text-lg font-bold text-coral-600">
+                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Success checkmark */}
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-green-500" />
+                </div>
+              </div>
+
+              <div className="text-center mb-6">
+                <p className="text-gray-600">
+                  Perfect! Your pack has been added to your cart.
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowCartSuccessModal(false)
+                    if (pack.price > 0) {
+                      setShowPayPalModal(true)
+                    } else {
+                      handlePayPalSuccess({ orderID: 'free', payerID: 'free' })
+                    }
+                  }}
+                  className="w-full btn-primary py-3 text-base flex items-center justify-center"
+                >
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  {pack.price > 0 ? `Buy Now for $${pack.price}` : 'Get Free Pack'}
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowCartSuccessModal(false)
+                    window.location.href = '/cart'
+                  }}
+                  className="w-full btn-secondary py-3 text-base flex items-center justify-center"
+                >
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  Go to Cart
+                </button>
+                
+                <button
+                  onClick={() => setShowCartSuccessModal(false)}
+                  className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm"
+                >
+                  Continue Browsing
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 

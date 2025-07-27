@@ -141,6 +141,8 @@ export default function BrowsePage() {
   // ULTRA-OPTIMIZED: Search only triggers when user clicks search button
   const [activeSearchTerm, setActiveSearchTerm] = useState('')
 
+
+
   // ULTRA-OPTIMIZED: Hydration safety
   const [isHydrated, setIsHydrated] = useState(false)
   
@@ -219,6 +221,8 @@ export default function BrowsePage() {
     const hasSignificantDownloads = pack.download_count && pack.download_count > 10
     return !hasOwnReviews || !hasSignificantDownloads
   }, [])
+
+
 
   // ULTRA-OPTIMIZED: Lightweight filtered packs for immediate LCP
   const filteredPacks = useMemo(() => {
@@ -642,13 +646,13 @@ export default function BrowsePage() {
     setShowPayPalModal(false)
   }, [])
 
-  // ULTRA-OPTIMIZED: Inject search bar into header once only
+  // ULTRA-OPTIMIZED: Inject simple search bar into header
   useEffect(() => {
     if (!isHydrated) return
     
     const headerSearchContainer = document.getElementById('header-search-container')
     if (headerSearchContainer && !headerSearchContainer.hasChildNodes()) {
-      // Create search bar element
+      // Create simple search bar element
       const searchBarElement = document.createElement('div')
       searchBarElement.className = 'w-full'
       searchBarElement.innerHTML = `
@@ -660,7 +664,6 @@ export default function BrowsePage() {
             <input
               type="text"
               placeholder="Search destinations, cities..."
-              value="${searchTerm}"
               class="flex-1 border-none outline-none text-gray-700 text-sm placeholder-gray-400 bg-transparent py-3 pr-2"
               autocomplete="off"
               id="header-search-input"
@@ -683,6 +686,9 @@ export default function BrowsePage() {
       const searchButton = document.getElementById('header-search-button')
       
       if (searchInput) {
+        // Set initial value
+        searchInput.value = searchTerm
+        
         searchInput.addEventListener('input', (e) => {
           const target = e.target as HTMLInputElement
           setSearchTerm(target.value)
@@ -690,14 +696,18 @@ export default function BrowsePage() {
         
         searchInput.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
-            setActiveSearchTerm(searchTerm)
+            const currentValue = (e.target as HTMLInputElement).value
+            setSearchTerm(currentValue)
+            setActiveSearchTerm(currentValue)
           }
         })
       }
       
       if (searchButton) {
         searchButton.addEventListener('click', () => {
-          setActiveSearchTerm(searchTerm)
+          const currentValue = searchInput.value
+          setSearchTerm(currentValue)
+          setActiveSearchTerm(currentValue)
         })
       }
     }
