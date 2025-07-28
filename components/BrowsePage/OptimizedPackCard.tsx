@@ -83,9 +83,31 @@ export default function OptimizedPackCard({
     >
       {/* Pack cover image with lazy loading */}
       <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
-        {/* Loading skeleton */}
+        {/* Enhanced loading skeleton with shimmer animation */}
         {!imageLoaded && (
-          <div className="absolute inset-0 bg-gray-200 animate-pulse" />
+          <div className="absolute inset-0">
+            {/* Base gradient background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200" />
+            
+            {/* Shimmer effect */}
+            <div className="absolute inset-0 animate-shimmer" />
+            
+            {/* Floating dots animation */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-coral-400/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-coral-400/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-coral-400/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
+            
+            {/* Photo placeholder icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow-sm">
+                <MapPin className="h-6 w-6 text-coral-500 animate-pulse" />
+              </div>
+            </div>
+          </div>
         )}
         
         {/* Inner container that scales - maintains boundaries */}
@@ -95,7 +117,7 @@ export default function OptimizedPackCard({
             <img 
               src={pack.coverPhoto}
               alt={`${pack.title} cover`}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               }`}
               style={{ aspectRatio: '4/3' }}
@@ -107,7 +129,7 @@ export default function OptimizedPackCard({
             <img 
               src="/google-maps-bg.svg"
               alt="Map background"
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               }`}
               style={{ aspectRatio: '4/3' }}

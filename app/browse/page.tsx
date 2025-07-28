@@ -33,6 +33,33 @@ const ratingCache = new Map<string, {
   source: string
 }>()
 
+// ULTRA-OPTIMIZED: Photo cache to avoid repeated slow queries
+const photoCache = new Map<string, string | null>()
+
+// ULTRA-OPTIMIZED: Performance monitoring for query optimization
+const queryPerformanceLog = {
+  slowQueries: 0,
+  totalQueries: 0,
+  averageTime: 0,
+  logQuery: (duration: number) => {
+    queryPerformanceLog.totalQueries++
+    queryPerformanceLog.averageTime = (queryPerformanceLog.averageTime * (queryPerformanceLog.totalQueries - 1) + duration) / queryPerformanceLog.totalQueries
+    if (duration > 2000) queryPerformanceLog.slowQueries++
+    
+    // Log performance summary every 10 queries
+    if (queryPerformanceLog.totalQueries % 10 === 0) {
+      console.log(`📊 Browse - Query Performance Summary: ${queryPerformanceLog.totalQueries} queries, ${queryPerformanceLog.slowQueries} slow, avg: ${queryPerformanceLog.averageTime.toFixed(2)}ms`)
+    }
+  }
+}
+
+// DATABASE OPTIMIZATION RECOMMENDATIONS:
+// Run these SQL commands in Supabase SQL Editor for better performance:
+// CREATE INDEX IF NOT EXISTS idx_pin_pack_pins_pack_id ON pin_pack_pins(pin_pack_id);
+// CREATE INDEX IF NOT EXISTS idx_pin_pack_pins_pin_id ON pin_pack_pins(pin_id);
+// CREATE INDEX IF NOT EXISTS idx_pins_photos ON pins USING GIN (photos);
+// CREATE INDEX IF NOT EXISTS idx_pin_packs_created_at ON pin_packs(created_at DESC);
+
 // ULTRA-OPTIMIZED: Heavy components with aggressive code splitting
 const PayPalCheckout = dynamic(() => import('@/components/PayPalCheckout'), {
   loading: () => <div className="animate-pulse bg-gray-200 h-12 rounded" />,
@@ -297,10 +324,8 @@ export default function BrowsePage() {
   const loadPinPacks = useCallback(async () => {
     try {
       setError(null)
-      
       const startTime = performance.now()
-      
-      // ULTRA-OPTIMIZED: Fast initial load - basic data only for immediate display
+      // 1. Fetch the first 8 packs (no photos yet)
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
         .select(`
@@ -319,31 +344,43 @@ export default function BrowsePage() {
         `)
         .order('created_at', { ascending: false })
         .limit(8)
-
       if (packError) throw packError
-
-      // ULTRA-OPTIMIZED: Process data without photos for immediate display
-      const packsWithoutPhotos = (packData || []).map((pack: any) => ({
-        ...pack,
-        coverPhoto: null
-      }))
-
-      const endTime = performance.now()
-      logger.log(`Loaded ${packsWithoutPhotos.length} packs in ${endTime - startTime}ms`)
-      
-      // ULTRA-OPTIMIZED: Show first 8 items immediately (fast LCP)
+      const packsWithoutPhotos = (packData || []).map((pack: any) => ({ ...pack, coverPhoto: null }))
       setDisplayedPacks(packsWithoutPhotos)
       setInitialLoadComplete(true)
-      setHasMorePacks(packsWithoutPhotos.length === 8) // More packs available if we got 8
-      
-      // ULTRA-OPTIMIZED: Load photos for initial packs asynchronously (truly non-blocking)
-      setTimeout(() => {
-        loadPhotosForPacks(packsWithoutPhotos).then((initialPacksWithPhotos) => {
-          setDisplayedPacks(initialPacksWithPhotos)
-        })
-      }, 0)
-      
-      // Load all remaining packs for pagination asynchronously (non-blocking)
+      setHasMorePacks(packsWithoutPhotos.length === 8)
+      // 2. Progressive photo loading: first 4 packs
+      const firstBatch = packsWithoutPhotos.slice(0, 4)
+      const restBatch = packsWithoutPhotos.slice(4)
+      try {
+        const firstBatchWithPhotos = await loadPhotosForPacks(firstBatch)
+        setDisplayedPacks(prev => [
+          ...firstBatchWithPhotos,
+          ...prev.slice(4)
+        ])
+      } catch (photoError) {
+        logger.error('Error loading first batch photos:', photoError)
+      }
+      // 3. Progressive photo loading: rest in batches of 4
+      for (let i = 0; i < restBatch.length; i += 4) {
+        const batch = restBatch.slice(i, i + 4)
+        try {
+          const batchWithPhotos = await loadPhotosForPacks(batch)
+          setDisplayedPacks(prev => {
+            // Replace the packs in the correct positions
+            const updated = [...prev]
+            for (let j = 0; j < batchWithPhotos.length; j++) {
+              updated[4 + i + j] = batchWithPhotos[j]
+            }
+            return updated
+          })
+        } catch (photoError) {
+          logger.error('Error loading progressive batch photos:', photoError)
+        }
+        // Small delay between batches for UI responsiveness
+        await new Promise(res => setTimeout(res, 200))
+      }
+      // 4. Load all remaining packs for pagination asynchronously (unchanged)
       setTimeout(() => {
         supabase
           .from('pin_packs')
@@ -365,67 +402,182 @@ export default function BrowsePage() {
           .limit(50)
           .then(({ data: allPacksData, error: allPacksError }) => {
             if (!allPacksError && allPacksData && allPacksData.length > 8) {
-              const allPacksWithoutPhotos = allPacksData.map((pack: any) => ({
-                ...pack,
-                coverPhoto: null
-              }))
+              const allPacksWithoutPhotos = allPacksData.map((pack: any) => ({ ...pack, coverPhoto: null }))
               setAllPacks(allPacksWithoutPhotos)
               setHasMorePacks(allPacksData.length > 8)
             } else {
-              setAllPacks(packsWithoutPhotos) // Use the initial 8 packs
+              setAllPacks(packsWithoutPhotos)
               setHasMorePacks(false)
             }
           })
-      }, 100) // Small delay to ensure initial render completes
-      
+      }, 50)
     } catch (err) {
       setError('Failed to load pin packs')
       logger.error('Error loading pin packs:', err)
     }
   }, [])
 
-  // ULTRA-OPTIMIZED: Load photos for specific packs
+  // ULTRA-OPTIMIZED: Load photos for specific packs with comprehensive diagnostics
   const loadPhotosForPacks = useCallback(async (packs: PinPackWithPhoto[]) => {
     try {
       const packIds = packs.map(pack => pack.id)
       console.log('🔄 Browse - Loading photos for pack IDs:', packIds)
       
-      const { data: photoData, error: photoError } = await supabase
+      // OPTIMIZED: Check cache first to avoid repeated slow queries
+      const cachedResults = packIds.map(packId => ({
+        packId,
+        photo: photoCache.get(packId)
+      }))
+      
+      const uncachedPackIds = cachedResults
+        .filter(result => result.photo === undefined)
+        .map(result => result.packId)
+      
+      if (uncachedPackIds.length === 0) {
+        console.log('🔄 Browse - All photos found in cache')
+        return packs.map(pack => ({
+          ...pack,
+          coverPhoto: photoCache.get(pack.id) || null
+        }))
+      }
+      
+      console.log('🔄 Browse - Cache miss for pack IDs:', uncachedPackIds)
+      
+      // Performance monitoring for Supabase query
+      const queryStartTime = performance.now()
+      console.log('⏱️ Browse - Starting optimized Supabase photo query...')
+      
+      // OPTIMIZED: Simplified query approach - get pack_pin relationships first, then photos
+      // This avoids the expensive inner join and JSON filtering
+      const { data: packPinData, error: packPinError } = await supabase
         .from('pin_pack_pins')
-        .select(`
-          pin_pack_id,
-          pins!inner(
-            photos
-          )
-        `)
-        .in('pin_pack_id', packIds)
+        .select('pin_pack_id, pin_id')
+        .in('pin_pack_id', uncachedPackIds)
+        .limit(uncachedPackIds.length * 5) // Reasonable limit for photos per pack
 
-      if (photoError) throw photoError
+      if (packPinError) {
+        console.error('❌ Browse - Pack pin query error:', packPinError)
+        throw packPinError
+      }
+
+      // If no pack pins found, cache null values and return
+      if (!packPinData || packPinData.length === 0) {
+        console.log('🔄 Browse - No pack pins found, caching null values')
+        uncachedPackIds.forEach(packId => photoCache.set(packId, null))
+        return packs.map(pack => ({
+          ...pack,
+          coverPhoto: photoCache.get(pack.id) || null
+        }))
+      }
+
+      // Get unique pin IDs from the pack pins
+      const pinIds = Array.from(new Set(packPinData.map(item => item.pin_id)))
+      console.log('🔄 Browse - Found pin IDs:', pinIds.length)
+
+      // OPTIMIZED: Simple query to get photos for these pins
+      const { data: photoData, error: photoError } = await supabase
+        .from('pins')
+        .select('id, photos')
+        .in('id', pinIds)
+        .not('photos', 'is', null)
+        .limit(pinIds.length)
+
+      const queryEndTime = performance.now()
+      const queryDuration = queryEndTime - queryStartTime
+      
+      // Log query performance for monitoring
+      queryPerformanceLog.logQuery(queryDuration)
+      
+      console.log(`⏱️ Browse - Optimized Supabase query completed in ${queryDuration.toFixed(2)}ms`)
+      
+      if (photoError) {
+        console.error('❌ Browse - Photo query error:', photoError)
+        throw photoError
+      }
 
       console.log('🔄 Browse - Photo data received:', photoData?.length || 0, 'items')
 
-      // Create a map of pack_id to first photo
+      // Performance monitoring for data processing
+      const processingStartTime = performance.now()
+      
+      // OPTIMIZED: Create efficient lookup maps
       const photoMap = new Map()
-      photoData?.forEach((item: any) => {
-        if (item.pins?.photos?.[0]) {
-          photoMap.set(item.pin_pack_id, item.pins.photos[0])
-          console.log('🔄 Browse - Found photo for pack:', item.pin_pack_id)
-        } else {
-          console.log('🔄 Browse - No photo found for pack:', item.pin_pack_id)
+      const packPinMap = new Map()
+      
+      // Build pack to pin mapping
+      packPinData.forEach(item => {
+        if (!packPinMap.has(item.pin_pack_id)) {
+          packPinMap.set(item.pin_pack_id, [])
+        }
+        packPinMap.get(item.pin_pack_id).push(item.pin_id)
+      })
+      
+      // Build pin to photo mapping
+      photoData?.forEach(item => {
+        if (item.photos?.[0]) {
+          photoMap.set(item.id, item.photos[0])
+        }
+      })
+      
+      // Find first photo for each pack and cache results
+      const packPhotoMap = new Map()
+      packPinMap.forEach((packPinIds, packId) => {
+        for (const pinId of packPinIds) {
+          if (photoMap.has(pinId)) {
+            const photo = photoMap.get(pinId)
+            packPhotoMap.set(packId, photo)
+            photoCache.set(packId, photo) // Cache the result
+            break // Use first photo found
+          }
+        }
+      })
+      
+      // Cache null values for packs without photos
+      uncachedPackIds.forEach(packId => {
+        if (!photoCache.has(packId)) {
+          photoCache.set(packId, null)
         }
       })
 
-      console.log('🔄 Browse - Photo map created with', photoMap.size, 'entries')
+      const processingEndTime = performance.now()
+      const processingDuration = processingEndTime - processingStartTime
+      
+      console.log(`⏱️ Browse - Data processing completed in ${processingDuration.toFixed(2)}ms`)
+      console.log('🔄 Browse - Pack photo map created with', packPhotoMap.size, 'entries')
 
-      // Return packs with photos instead of updating displayed packs
+      // Return packs with photos (combine cached and new results)
       const packsWithPhotos = packs.map(pack => ({
         ...pack,
-        coverPhoto: photoMap.get(pack.id) || null
+        coverPhoto: photoCache.get(pack.id) || null
       }))
       
+      const totalDuration = processingEndTime - queryStartTime
+      console.log(`⏱️ Browse - Total photo loading time: ${totalDuration.toFixed(2)}ms`)
       console.log('🔄 Browse - Packs with photos:', packsWithPhotos.filter(p => p.coverPhoto).length)
+      
+      // Performance warning if query takes too long
+      if (queryDuration > 2000) {
+        console.warn(`⚠️ Browse - Slow Supabase query detected: ${queryDuration.toFixed(2)}ms`)
+        console.warn('💡 Consider: Check Supabase performance, network connection, or database indexes')
+      }
+      
+      // Performance warning if processing takes too long
+      if (processingDuration > 500) {
+        console.warn(`⚠️ Browse - Slow data processing detected: ${processingDuration.toFixed(2)}ms`)
+        console.warn('💡 Consider: Optimize data processing logic or reduce data size')
+      }
+      
+      // Overall performance assessment
+      if (totalDuration > 3000) {
+        console.warn(`⚠️ Browse - Overall slow photo loading: ${totalDuration.toFixed(2)}ms`)
+        console.warn('💡 Consider: Check network speed, Supabase region, or database optimization')
+      } else if (totalDuration < 1000) {
+        console.log(`✅ Browse - Excellent photo loading performance: ${totalDuration.toFixed(2)}ms`)
+      }
+      
       return packsWithPhotos
     } catch (err) {
+      console.error('❌ Browse - Error loading photos:', err)
       logger.error('Error loading photos:', err)
       return packs // Return original packs if error
     }
@@ -751,6 +903,41 @@ export default function BrowsePage() {
 
   const handleKeepBrowsing = useCallback(() => {
     setShowSuccessModal(false)
+  }, [])
+
+  // Add this to your component to monitor network performance
+  useEffect(() => {
+    // Monitor network performance
+    if ('connection' in navigator) {
+      const connection = (navigator as any).connection
+      console.log('🌐 Network Info:', {
+        effectiveType: connection.effectiveType,
+        downlink: connection.downlink,
+        rtt: connection.rtt,
+        saveData: connection.saveData
+      })
+      
+      // Warn about slow connections
+      if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') {
+        console.warn('⚠️ Slow network detected - photo loading may be slow')
+      }
+    }
+    
+    // Monitor image loading performance
+    const originalImage = window.Image
+    window.Image = function() {
+      const img = new originalImage()
+      const startTime = performance.now()
+      
+      img.addEventListener('load', () => {
+        const loadTime = performance.now() - startTime
+        if (loadTime > 2000) {
+          console.warn(`⚠️ Slow image load detected: ${loadTime.toFixed(2)}ms`)
+        }
+      })
+      
+      return img
+    } as any
   }, [])
 
   return (

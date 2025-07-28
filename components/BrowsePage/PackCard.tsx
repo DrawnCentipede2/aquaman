@@ -46,7 +46,7 @@ export default function PackCard({
     
     if (isFirstFewImages) {
       setIsVisible(true) // Load immediately for LCP
-      setImageLoaded(true) // Skip loading state for immediate render
+      // Don't set imageLoaded here - let the actual image loading handle it
       return
     }
     
@@ -145,9 +145,31 @@ export default function PackCard({
     >
       {/* Image container with progressive loading */}
       <div className="relative h-64 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
-        {/* Loading skeleton - only show for non-priority images */}
-        {!imageLoaded && !(displayedPacks && displayedPacks.slice(0, 4).some(p => p.id === pack.id)) && (
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 animate-pulse" />
+        {/* Enhanced loading skeleton with shimmer animation */}
+        {!imageLoaded && (
+          <div className="absolute inset-0">
+            {/* Base gradient background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200" />
+            
+            {/* Shimmer effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer bg-[length:200%_100%]" />
+            
+            {/* Floating dots animation */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-coral-400/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-coral-400/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-coral-400/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
+            
+            {/* Photo placeholder icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 shadow-sm">
+                <MapPin className="h-6 w-6 text-coral-500 animate-pulse" />
+              </div>
+            </div>
+          </div>
         )}
         
         {/* Optimized image with scaling container */}
@@ -156,7 +178,9 @@ export default function PackCard({
             <img 
               src={imgSrc}
               alt={`${pack.title} cover`}
-              className="absolute inset-0 w-full h-full object-cover"
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${
+                imageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
               style={{ aspectRatio: '4/3' }}
               loading={pack.id === displayedPacks?.[0]?.id ? "eager" : "lazy"}
               decoding="async"
