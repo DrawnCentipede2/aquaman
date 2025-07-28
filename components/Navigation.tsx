@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import { User, Plus, Heart, ShoppingCart, Package, Settings, ChevronDown, Globe, DollarSign, Bell, HelpCircle, LogOut, X, Check, CreditCard, Shield, Lock } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
+import { logger } from '@/lib/logger'
 
 // Function to get (and if necessary migrate) the user profile from localStorage
 const getStoredProfile = () => {
@@ -32,7 +33,7 @@ const getStoredProfile = () => {
       })
       return { key: newKey, data: raw }
     } catch (e) {
-      console.warn('Migration error:', e)
+      logger.warn('Migration error:', e)
     }
   }
   return null
@@ -46,13 +47,13 @@ const getInitialAuthState = () => {
     const stored = getStoredProfile()
     if (stored) {
       const parsed = JSON.parse(stored.data)
-      console.log('🔍 Navigation - Found stored profile:', parsed)
+      logger.log('🔍 Navigation - Found stored profile:', parsed)
       return { isAuthenticated: true, userProfile: parsed }
     } else {
-      console.log('🔍 Navigation - No stored profile found')
+      logger.log('🔍 Navigation - No stored profile found')
     }
   } catch (error) {
-    console.warn('❌ Navigation - Error parsing initial auth state:', error)
+    logger.warn('❌ Navigation - Error parsing initial auth state:', error)
     localStorage.removeItem('pinpacks_user_profile')
   }
   return { isAuthenticated: false, userProfile: null }
@@ -116,26 +117,26 @@ export default function Navigation() {
 
   // Check authentication and load preferences on mount
   useEffect(() => {
-    console.log('🚀 Navigation - Component mounting, checking authentication...')
+    logger.log('🚀 Navigation - Component mounting, checking authentication...')
     
     // Mark component as mounted
     setIsMounted(true)
     
     // Check authentication state after mounting
     const initialAuthState = getInitialAuthState()
-    console.log('🔍 Navigation - Initial auth state:', initialAuthState)
+    logger.log('🔍 Navigation - Initial auth state:', initialAuthState)
     
     setIsAuthenticated(initialAuthState.isAuthenticated)
     setUserProfile(initialAuthState.userProfile)
     isAuthenticatedRef.current = initialAuthState.isAuthenticated
     
-    console.log('✅ Navigation - Authentication state set:', initialAuthState.isAuthenticated)
+    logger.log('✅ Navigation - Authentication state set:', initialAuthState.isAuthenticated)
     
     // Additional immediate check for authentication (in case profile was saved just before mount)
     setTimeout(() => {
       const immediateAuthState = getInitialAuthState()
       if (immediateAuthState.isAuthenticated && !isAuthenticatedRef.current) {
-        console.log('🔍 Navigation - Immediate authentication check found user:', immediateAuthState)
+        logger.log('🔍 Navigation - Immediate authentication check found user:', immediateAuthState)
         setIsAuthenticated(immediateAuthState.isAuthenticated)
         setUserProfile(immediateAuthState.userProfile)
         isAuthenticatedRef.current = immediateAuthState.isAuthenticated
@@ -149,13 +150,13 @@ export default function Navigation() {
         setSelectedRegion(savedRegion)
         setIsCreatorEligible(true)
         setIsRegisteredCreator(true)
-        console.log('✅ Navigation - Preferences loaded via immediate check')
+        logger.log('✅ Navigation - Preferences loaded via immediate check')
       }
     }, 100) // Check after 100ms
     
     // Load saved preferences if user is authenticated
     if (initialAuthState.isAuthenticated) {
-      console.log('👤 Navigation - User is authenticated, loading preferences...')
+      logger.log('👤 Navigation - User is authenticated, loading preferences...')
       const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
       const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
       const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
@@ -165,9 +166,9 @@ export default function Navigation() {
       setSelectedRegion(savedRegion)
       setIsCreatorEligible(true) // All authenticated users can create packs
       setIsRegisteredCreator(true) // All authenticated users are registered creators
-      console.log('✅ Navigation - Preferences loaded for authenticated user')
+      logger.log('✅ Navigation - Preferences loaded for authenticated user')
     } else {
-      console.log('❌ Navigation - User is not authenticated')
+      logger.log('❌ Navigation - User is not authenticated')
     }
     
     // Set up interval to check for authentication changes (useful for signup redirects)
@@ -177,14 +178,14 @@ export default function Navigation() {
     let clearIntervalTimeout: NodeJS.Timeout | null = null
     
     if (!hasRunAuthInterval) {
-      console.log('🔄 Navigation - Starting interval-based authentication checking (first time only)')
+      logger.log('🔄 Navigation - Starting interval-based authentication checking (first time only)')
       sessionStorage.setItem('navigation_auth_interval_run', 'true')
       
       authCheckInterval = setInterval(() => {
         const currentAuthState = getInitialAuthState()
         // Check if we're now authenticated but weren't before
         if (currentAuthState.isAuthenticated && !isAuthenticatedRef.current) {
-          console.log('🔍 Navigation - Authentication detected via interval check:', currentAuthState)
+          logger.log('🔍 Navigation - Authentication detected via interval check:', currentAuthState)
           setIsAuthenticated(currentAuthState.isAuthenticated)
           setUserProfile(currentAuthState.userProfile)
           isAuthenticatedRef.current = currentAuthState.isAuthenticated
@@ -198,7 +199,7 @@ export default function Navigation() {
           setSelectedRegion(savedRegion)
           setIsCreatorEligible(true)
           setIsRegisteredCreator(true)
-          console.log('✅ Navigation - Preferences loaded via interval check')
+          logger.log('✅ Navigation - Preferences loaded via interval check')
         }
       }, 500) // Check every 500ms for faster detection
       
@@ -206,11 +207,11 @@ export default function Navigation() {
       clearIntervalTimeout = setTimeout(() => {
         if (authCheckInterval) {
           clearInterval(authCheckInterval)
-          console.log('⏰ Navigation - Stopped interval-based authentication checking')
+          logger.log('⏰ Navigation - Stopped interval-based authentication checking')
         }
       }, 15000)
     } else {
-      console.log('⏭️ Navigation - Skipping interval-based authentication checking (already run this session)')
+      logger.log('⏭️ Navigation - Skipping interval-based authentication checking (already run this session)')
     }
     
     // Listen for storage changes (when user signs in/out in another tab)
@@ -223,17 +224,17 @@ export default function Navigation() {
         e.key === 'pinpacks_is_registered_creator' ||
         e.key === 'pinpacks_has_created_packs'
       ) {
-        console.log('🔍 Navigation - User profile or creator status storage changed, updating auth state')
-        console.log('📡 Navigation - Storage event key:', e.key, 'newValue:', e.newValue)
+        logger.log('🔍 Navigation - User profile or creator status storage changed, updating auth state')
+        logger.log('📡 Navigation - Storage event key:', e.key, 'newValue:', e.newValue)
         const newAuthState = getInitialAuthState()
-        console.log('🔍 Navigation - New auth state from storage event:', newAuthState)
+        logger.log('🔍 Navigation - New auth state from storage event:', newAuthState)
         setIsAuthenticated(newAuthState.isAuthenticated)
         setUserProfile(newAuthState.userProfile)
         isAuthenticatedRef.current = newAuthState.isAuthenticated
         
         // Load preferences if newly authenticated
         if (newAuthState.isAuthenticated) {
-          console.log('✅ Navigation - User became authenticated via storage event, loading preferences...')
+          logger.log('✅ Navigation - User became authenticated via storage event, loading preferences...')
           const savedCurrency = localStorage.getItem('PinCloud_currency') || 'USD'
           const savedLanguage = localStorage.getItem('PinCloud_language') || 'English'
           const savedRegion = localStorage.getItem('PinCloud_region') || 'United States'
@@ -243,9 +244,9 @@ export default function Navigation() {
           setSelectedRegion(savedRegion)
           setIsCreatorEligible(true) // All authenticated users can create packs
           setIsRegisteredCreator(true) // All authenticated users are registered creators
-          console.log('✅ Navigation - Preferences loaded after storage event')
+          logger.log('✅ Navigation - Preferences loaded after storage event')
         } else {
-          console.log('❌ Navigation - User became unauthenticated via storage event')
+          logger.log('❌ Navigation - User became unauthenticated via storage event')
           // Reset creator status if not authenticated
           setIsCreatorEligible(false)
           setIsRegisteredCreator(false)
@@ -255,23 +256,23 @@ export default function Navigation() {
     
     // Also listen for custom storage events (triggered manually)
     const handleCustomStorageEvent = () => {
-      console.log('🔍 Navigation - Custom storage event received')
+      logger.log('🔍 Navigation - Custom storage event received')
       if (isAuthenticated) {
-        console.log('✅ Navigation - User is authenticated in custom storage event')
+        logger.log('✅ Navigation - User is authenticated in custom storage event')
         // For MVP: All authenticated users are considered "registered" creators
         setIsCreatorEligible(true) // All authenticated users can create packs
         setIsRegisteredCreator(true) // All authenticated users are registered creators
       } else {
-        console.log('❌ Navigation - User is not authenticated in custom storage event')
+        logger.log('❌ Navigation - User is not authenticated in custom storage event')
       }
     }
     
     // Listen for custom authentication events (triggered by signup page)
     const handleCustomAuthEvent = () => {
-      console.log('🔍 Navigation - Custom authentication event received')
+      logger.log('🔍 Navigation - Custom authentication event received')
       const currentAuthState = getInitialAuthState()
       if (currentAuthState.isAuthenticated && !isAuthenticatedRef.current) {
-        console.log('🔍 Navigation - Authentication detected via custom event:', currentAuthState)
+        logger.log('🔍 Navigation - Authentication detected via custom event:', currentAuthState)
         setIsAuthenticated(currentAuthState.isAuthenticated)
         setUserProfile(currentAuthState.userProfile)
         isAuthenticatedRef.current = currentAuthState.isAuthenticated
@@ -285,17 +286,17 @@ export default function Navigation() {
         setSelectedRegion(savedRegion)
         setIsCreatorEligible(true)
         setIsRegisteredCreator(true)
-        console.log('✅ Navigation - Preferences loaded via custom auth event')
+        logger.log('✅ Navigation - Preferences loaded via custom auth event')
       }
     }
     
-    console.log('📡 Navigation - Adding storage event listeners')
+    logger.log('📡 Navigation - Adding storage event listeners')
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('storage', handleCustomStorageEvent)
     window.addEventListener('custom-auth-event', handleCustomAuthEvent)
     
     return () => {
-      console.log('🧹 Navigation - Cleaning up event listeners and intervals')
+      logger.log('🧹 Navigation - Cleaning up event listeners and intervals')
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('storage', handleCustomStorageEvent)
       window.removeEventListener('custom-auth-event', handleCustomAuthEvent)
@@ -847,7 +848,7 @@ export default function Navigation() {
             className="p-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all duration-200"
             onClick={() => {
               // Toggle mobile menu (you can implement this later)
-              console.log('Mobile menu toggle')
+              logger.log('Mobile menu toggle')
             }}
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

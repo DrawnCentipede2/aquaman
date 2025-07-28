@@ -301,7 +301,7 @@ export default function BrowsePage() {
   // Debug selectedSuggestionIndex changes
   useEffect(() => {
     selectedIndexRef.current = selectedSuggestionIndex
-            console.log('selectedSuggestionIndex changed to:', selectedSuggestionIndex)
+    logger.log('selectedSuggestionIndex changed to:', selectedSuggestionIndex)
   }, [selectedSuggestionIndex])
   
   // Enhanced filter states
@@ -349,7 +349,7 @@ export default function BrowsePage() {
         setUserProfile(profile)
         return true
       } catch (error) {
-        console.error('Error parsing user profile:', error)
+        logger.error('Error parsing user profile:', error)
         localStorage.removeItem('pinpacks_user_profile')
       }
     }
@@ -529,7 +529,7 @@ export default function BrowsePage() {
         const wishlistIds = wishlist.map((item: any) => item.id)
         setWishlistItems(wishlistIds)
       } catch (error) {
-        console.error('Error loading wishlist:', error)
+        logger.error('Error loading wishlist:', error)
       }
     }
   }
@@ -629,7 +629,7 @@ export default function BrowsePage() {
 
           // Debug key navigation
           if (['ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) {
-            console.log('Key navigation:', { key: e.key, selectedIndex: selectedIndexRef.current, suggestionsCount })
+            logger.log('Key navigation:', { key: e.key, selectedIndex: selectedIndexRef.current, suggestionsCount })
           }
 
           if (e.key === 'ArrowDown') {
@@ -637,7 +637,7 @@ export default function BrowsePage() {
             if (isDropdownVisible && suggestionsCount > 0) {
               const currentIndex = selectedIndexRef.current === -1 ? -1 : selectedIndexRef.current
               const newIndex = currentIndex < suggestionsCount - 1 ? currentIndex + 1 : 0
-              console.log('ArrowDown:', { prev: currentIndex, new: newIndex })
+              logger.log('ArrowDown:', { prev: currentIndex, new: newIndex })
               selectedIndexRef.current = newIndex
               setSelectedSuggestionIndex(newIndex)
               generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
@@ -647,7 +647,7 @@ export default function BrowsePage() {
             if (isDropdownVisible && suggestionsCount > 0) {
               const currentIndex = selectedIndexRef.current === -1 ? suggestionsCount : selectedIndexRef.current
               const newIndex = currentIndex > 0 ? currentIndex - 1 : suggestionsCount - 1
-              console.log('ArrowUp:', { prev: currentIndex, new: newIndex })
+              logger.log('ArrowUp:', { prev: currentIndex, new: newIndex })
               selectedIndexRef.current = newIndex
               setSelectedSuggestionIndex(newIndex)
               generateHeaderSuggestions(searchInput.value, suggestionsDropdown, newIndex)
@@ -656,12 +656,12 @@ export default function BrowsePage() {
               e.preventDefault()
               if (isDropdownVisible && suggestionsCount > 0 && selectedIndexRef.current >= 0) {
                 const selectedButton = suggestions[selectedIndexRef.current] as HTMLButtonElement
-                console.log('Enter: selecting suggestion', selectedIndexRef.current)
+                logger.log('Enter: selecting suggestion', selectedIndexRef.current)
                 if (selectedButton) {
                   selectedButton.click()
                 }
               } else {
-                console.log('Enter: triggering search')
+                logger.log('Enter: triggering search')
                 handleSearchClick()
               }
             } else if (e.key === 'Escape') {
@@ -874,7 +874,7 @@ export default function BrowsePage() {
         // Check if this suggestion is currently selected via keyboard
         const isSelected = currentSelectedIndex === index
         // Debug: Log suggestion rendering
-        if (index === 0) console.log('Rendering suggestions with selectedIndex:', currentSelectedIndex)
+        if (index === 0) logger.log('Rendering suggestions with selectedIndex:', currentSelectedIndex)
         
         const icon = suggestion.type === 'destination' || suggestion.type === 'city' ? 
           `<svg class="h-3 w-3 text-gray-400 group-hover:text-gray-600 mr-3 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -969,7 +969,7 @@ export default function BrowsePage() {
         const wishlistIds = wishlist.map((item: any) => item.id)
         setWishlistItems(wishlistIds)
       } catch (error) {
-        console.error('Error loading wishlist:', error)
+        logger.error('Error loading wishlist:', error)
       }
     }
   }, [])
@@ -1129,10 +1129,10 @@ export default function BrowsePage() {
         // Update local state
         setWishlistItems(prev => [...prev, pack.id])
         
-        console.log('Added to wishlist:', pack.title)
+        logger.log('Added to wishlist:', pack.title)
       }
     } catch (error) {
-      console.error('Error adding to wishlist:', error)
+      logger.error('Error adding to wishlist:', error)
     }
   }
 
@@ -1152,9 +1152,9 @@ export default function BrowsePage() {
       // Update local state
       setWishlistItems(prev => prev.filter(id => id !== packId))
       
-      console.log('Removed from wishlist:', packId)
+      logger.log('Removed from wishlist:', packId)
     } catch (error) {
-      console.error('Error removing from wishlist:', error)
+      logger.error('Error removing from wishlist:', error)
     }
   }
 
@@ -1196,7 +1196,7 @@ export default function BrowsePage() {
   // PayPal success handler - shows falling pins modal
   const handlePayPalSuccess = async (orderData: any) => {
     try {
-      console.log('PayPal payment successful:', orderData)
+      logger.log('PayPal payment successful:', orderData)
       
       if (addedPack) {
         // Get user email from profile
@@ -1262,7 +1262,7 @@ export default function BrowsePage() {
         }
       }
     } catch (error) {
-      console.error('Error handling PayPal success:', error)
+      logger.error('Error handling PayPal success:', error)
     }
   }
 
@@ -1274,7 +1274,7 @@ export default function BrowsePage() {
       // Same PayPal logic but for cart banner flow
       setShowPayPalModal(true)
     } catch (error) {
-      console.error('Error with cart banner checkout:', error)
+      logger.error('Error with cart banner checkout:', error)
     }
   }
 
@@ -1306,9 +1306,9 @@ export default function BrowsePage() {
 
   // PayPal error handler
   const handlePayPalError = (error: any) => {
-    console.error('PayPal payment error:', error)
+    logger.error('PayPal payment error:', error)
     setShowPayPalModal(false)
-    console.log('Payment failed. Please try again.')
+    logger.log('Payment failed. Please try again.')
   }
 
   // Payment success modal handlers

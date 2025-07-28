@@ -48,7 +48,7 @@ const queryPerformanceLog = {
     
     // Log performance summary every 10 queries
     if (queryPerformanceLog.totalQueries % 10 === 0) {
-      console.log(`📊 Browse - Query Performance Summary: ${queryPerformanceLog.totalQueries} queries, ${queryPerformanceLog.slowQueries} slow, avg: ${queryPerformanceLog.averageTime.toFixed(2)}ms`)
+      // Performance logging disabled for production
     }
   }
 }
@@ -421,7 +421,6 @@ export default function BrowsePage() {
   const loadPhotosForPacks = useCallback(async (packs: PinPackWithPhoto[]) => {
     try {
       const packIds = packs.map(pack => pack.id)
-      console.log('🔄 Browse - Loading photos for pack IDs:', packIds)
       
       // OPTIMIZED: Check cache first to avoid repeated slow queries
       const cachedResults = packIds.map(packId => ({
@@ -434,19 +433,16 @@ export default function BrowsePage() {
         .map(result => result.packId)
       
       if (uncachedPackIds.length === 0) {
-        console.log('🔄 Browse - All photos found in cache')
+        // All photos found in cache
         return packs.map(pack => ({
           ...pack,
           coverPhoto: photoCache.get(pack.id) || null
         }))
       }
-      
-      console.log('🔄 Browse - Cache miss for pack IDs:', uncachedPackIds)
-      
       // Performance monitoring for Supabase query
       const queryStartTime = performance.now()
-      console.log('⏱️ Browse - Starting optimized Supabase photo query...')
-      
+      const totalDuration = performance.now() - queryStartTime;
+
       // OPTIMIZED: Simplified query approach - get pack_pin relationships first, then photos
       // This avoids the expensive inner join and JSON filtering
       const { data: packPinData, error: packPinError } = await supabase
@@ -456,13 +452,11 @@ export default function BrowsePage() {
         .limit(uncachedPackIds.length * 5) // Reasonable limit for photos per pack
 
       if (packPinError) {
-        console.error('❌ Browse - Pack pin query error:', packPinError)
         throw packPinError
       }
 
       // If no pack pins found, cache null values and return
       if (!packPinData || packPinData.length === 0) {
-        console.log('🔄 Browse - No pack pins found, caching null values')
         uncachedPackIds.forEach(packId => photoCache.set(packId, null))
         return packs.map(pack => ({
           ...pack,
@@ -472,7 +466,6 @@ export default function BrowsePage() {
 
       // Get unique pin IDs from the pack pins
       const pinIds = Array.from(new Set(packPinData.map(item => item.pin_id)))
-      console.log('🔄 Browse - Found pin IDs:', pinIds.length)
 
       // OPTIMIZED: Simple query to get photos for these pins
       const { data: photoData, error: photoError } = await supabase
@@ -484,18 +477,12 @@ export default function BrowsePage() {
 
       const queryEndTime = performance.now()
       const queryDuration = queryEndTime - queryStartTime
-      
       // Log query performance for monitoring
       queryPerformanceLog.logQuery(queryDuration)
-      
-      console.log(`⏱️ Browse - Optimized Supabase query completed in ${queryDuration.toFixed(2)}ms`)
-      
+
       if (photoError) {
-        console.error('❌ Browse - Photo query error:', photoError)
         throw photoError
       }
-
-      console.log('🔄 Browse - Photo data received:', photoData?.length || 0, 'items')
 
       // Performance monitoring for data processing
       const processingStartTime = performance.now()
@@ -542,42 +529,32 @@ export default function BrowsePage() {
       const processingEndTime = performance.now()
       const processingDuration = processingEndTime - processingStartTime
       
-      console.log(`⏱️ Browse - Data processing completed in ${processingDuration.toFixed(2)}ms`)
-      console.log('🔄 Browse - Pack photo map created with', packPhotoMap.size, 'entries')
-
-      // Return packs with photos (combine cached and new results)
-      const packsWithPhotos = packs.map(pack => ({
-        ...pack,
-        coverPhoto: photoCache.get(pack.id) || null
-      }))
-      
-      const totalDuration = processingEndTime - queryStartTime
-      console.log(`⏱️ Browse - Total photo loading time: ${totalDuration.toFixed(2)}ms`)
-      console.log('🔄 Browse - Packs with photos:', packsWithPhotos.filter(p => p.coverPhoto).length)
-      
-      // Performance warning if query takes too long
+      // Overall performance assessment
       if (queryDuration > 2000) {
-        console.warn(`⚠️ Browse - Slow Supabase query detected: ${queryDuration.toFixed(2)}ms`)
-        console.warn('💡 Consider: Check Supabase performance, network connection, or database indexes')
+        logger.warn(`⚠️ Browse - Slow Supabase query detected: ${queryDuration.toFixed(2)}ms`)
+        logger.warn('💡 Consider: Check Supabase performance, network connection, or database indexes')
       }
       
-      // Performance warning if processing takes too long
+      // Overall performance assessment
       if (processingDuration > 500) {
-        console.warn(`⚠️ Browse - Slow data processing detected: ${processingDuration.toFixed(2)}ms`)
-        console.warn('💡 Consider: Optimize data processing logic or reduce data size')
+        logger.warn(`⚠️ Browse - Slow data processing detected: ${processingDuration.toFixed(2)}ms`)
+        logger.warn('💡 Consider: Optimize data processing logic or reduce data size')
       }
       
       // Overall performance assessment
       if (totalDuration > 3000) {
-        console.warn(`⚠️ Browse - Overall slow photo loading: ${totalDuration.toFixed(2)}ms`)
-        console.warn('💡 Consider: Check network speed, Supabase region, or database optimization')
+        logger.warn(`⚠️ Browse - Overall slow photo loading: ${totalDuration.toFixed(2)}ms`)
+        logger.warn('💡 Consider: Check network speed, Supabase region, or database optimization')
       } else if (totalDuration < 1000) {
-        console.log(`✅ Browse - Excellent photo loading performance: ${totalDuration.toFixed(2)}ms`)
+        logger.log(`✅ Browse - Excellent photo loading performance: ${totalDuration.toFixed(2)}ms`)
       }
-      
+      const packsWithPhotos = packs.map(pack => ({
+        ...pack,
+        coverPhoto: photoCache.get(pack.id) || null
+      }))
       return packsWithPhotos
     } catch (err) {
-      console.error('❌ Browse - Error loading photos:', err)
+      logger.error('❌ Browse - Error loading photos:', err)
       logger.error('Error loading photos:', err)
       return packs // Return original packs if error
     }
@@ -593,24 +570,17 @@ export default function BrowsePage() {
       const currentCount = displayedPacks.length
       const nextBatch = allPacks.slice(currentCount, currentCount + 8)
       
-      console.log('🔄 Browse - Loading more packs, batch size:', nextBatch.length)
-      console.log('🔄 Browse - Next batch pack IDs:', nextBatch.map(p => p.id))
-      
       if (nextBatch.length === 0) {
         setHasMorePacks(false)
         return
       }
       
       // Load photos for the next batch with optimized query
-      console.log('🔄 Browse - Loading photos for next batch...')
       const nextBatchWithPhotos = await loadPhotosForPacks(nextBatch)
-      console.log('✅ Browse - Photos loaded for next batch')
       
       // Add the packs with photos to displayed packs
       setDisplayedPacks(prev => {
         const updatedPacks = [...prev, ...nextBatchWithPhotos]
-        console.log('🔄 Browse - Updated displayed packs, total count:', updatedPacks.length)
-        console.log('🔄 Browse - Packs with photos:', updatedPacks.filter(p => p.coverPhoto).length)
         return updatedPacks
       })
       setHasMorePacks(currentCount + nextBatch.length < allPacks.length)
@@ -624,20 +594,20 @@ export default function BrowsePage() {
 
   // ULTRA-OPTIMIZED: Minimal authentication check
   const checkAuthentication = useCallback(() => {
-    console.log('🔍 Browse - Checking authentication...')
+    logger.log('🔍 Browse - Checking authentication...')
     const userProfileData = localStorage.getItem('pinpacks_user_profile')
     if (userProfileData) {
       try {
         const profile = JSON.parse(userProfileData)
-        console.log('✅ Browse - User is authenticated:', profile)
+        logger.log('✅ Browse - User is authenticated:', profile)
         setIsAuthenticated(true)
         return true
       } catch (error) {
-        console.error('❌ Browse - Error parsing user profile:', error)
+        logger.error('❌ Browse - Error parsing user profile:', error)
         localStorage.removeItem('pinpacks_user_profile')
       }
     } else {
-      console.log('❌ Browse - No user profile found in localStorage')
+      logger.log('❌ Browse - No user profile found in localStorage')
     }
     setIsAuthenticated(false)
     return false
@@ -645,7 +615,7 @@ export default function BrowsePage() {
 
   // ULTRA-OPTIMIZED: Load data on mount - run only once
   useEffect(() => {
-    console.log('🚀 Browse - Page loading, checking authentication and loading packs...')
+    logger.log('🚀 Browse - Page loading, checking authentication and loading packs...')
     checkAuthentication()
     loadPinPacks()
   }, []) // Empty dependency array - run only once on mount
@@ -678,7 +648,7 @@ export default function BrowsePage() {
           const wishlistIds = wishlist.map((item: any) => item.id)
           setWishlistItems(wishlistIds)
         } catch (error) {
-          console.error('Error loading wishlist:', error)
+          logger.error('Error loading wishlist:', error)
         }
       }
     } else {
@@ -709,7 +679,7 @@ export default function BrowsePage() {
         setWishlistItems(prev => prev.filter(id => id !== pack.id))
       }
     } catch (error) {
-      console.error('Error toggling wishlist:', error)
+      logger.error('Error toggling wishlist:', error)
     }
   }, [isAuthenticated])
 
@@ -788,13 +758,13 @@ export default function BrowsePage() {
         }
       }
     } catch (error) {
-      console.error('Error handling PayPal success:', error)
+      logger.error('Error handling PayPal success:', error)
     }
   }, [addedPack])
 
   // ULTRA-OPTIMIZED: PayPal error handler
   const handlePayPalError = useCallback((error: any) => {
-    console.error('PayPal payment error:', error)
+    logger.error('PayPal payment error:', error)
     setShowPayPalModal(false)
   }, [])
 
@@ -910,7 +880,7 @@ export default function BrowsePage() {
     // Monitor network performance
     if ('connection' in navigator) {
       const connection = (navigator as any).connection
-      console.log('🌐 Network Info:', {
+      logger.log('🌐 Network Info:', {
         effectiveType: connection.effectiveType,
         downlink: connection.downlink,
         rtt: connection.rtt,
@@ -919,7 +889,7 @@ export default function BrowsePage() {
       
       // Warn about slow connections
       if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') {
-        console.warn('⚠️ Slow network detected - photo loading may be slow')
+        logger.warn('⚠️ Slow network detected - photo loading may be slow')
       }
     }
     
@@ -932,7 +902,7 @@ export default function BrowsePage() {
       img.addEventListener('load', () => {
         const loadTime = performance.now() - startTime
         if (loadTime > 2000) {
-          console.warn(`⚠️ Slow image load detected: ${loadTime.toFixed(2)}ms`)
+          logger.warn(`⚠️ Slow image load detected: ${loadTime.toFixed(2)}ms`)
         }
       })
       

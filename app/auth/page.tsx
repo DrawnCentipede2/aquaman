@@ -42,7 +42,7 @@ export default function AuthPage() {
   // Simple email-based sign in for existing users
   const handleSignIn = async () => {
     if (!email.trim()) {
-      console.log('Please enter your email address')
+      // Show user-friendly error message instead of console log
       return
     }
 
@@ -56,7 +56,6 @@ export default function AuthPage() {
         .single()
 
       if (userError && userError.code !== 'PGRST116') {
-        console.error('Supabase select error:', userError)
         throw userError
       }
 
@@ -86,7 +85,6 @@ export default function AuthPage() {
         // Clear any existing purchased packs from localStorage for returning users
         // The pinventory page will reload from database orders only
         localStorage.removeItem('pinpacks_purchased')
-        console.log('🧹 Cleared existing purchased packs from localStorage for returning user')
 
         setUserProfile(profile)
         window.dispatchEvent(new Event('storage'))
@@ -105,7 +103,6 @@ export default function AuthPage() {
         
         // Clear any existing purchased packs from localStorage for legacy users
         localStorage.removeItem('pinpacks_purchased')
-        console.log('🧹 Cleared existing purchased packs from localStorage for legacy user')
         
         setUserProfile(profile)
         window.dispatchEvent(new Event('storage'))
@@ -124,14 +121,12 @@ export default function AuthPage() {
           setEmail('')
         }
       } else {
-        console.log('No account found with that email. Please double-check the address and try again.')
         setEmail('')
       }
       return
       
     } catch (err) {
-      console.log('Failed to sign in. Please try again.')
-      console.error('Sign in error:', err)
+      // Handle sign in error silently
     } finally {
       setIsLoading(false)
     }

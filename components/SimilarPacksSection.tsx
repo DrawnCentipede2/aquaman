@@ -43,7 +43,7 @@ export default function SimilarPacksSection({
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const index = parseInt(entry.target.getAttribute('data-pack-index') || '0')
-            setVisiblePacks(prev => new Set([...prev, index]))
+            setVisiblePacks(prev => new Set(Array.from(prev).concat(index)))
           }
         })
       },
@@ -90,7 +90,7 @@ export default function SimilarPacksSection({
           {similarPacks.map((pack, index) => (
             <div
               key={pack.id}
-              ref={(el) => packRefs.current[index] = el}
+              ref={(el) => { packRefs.current[index] = el }}
               data-pack-index={index.toString()}
               className="flex-none w-80 card-airbnb group cursor-pointer"
               onClick={() => onPackClick(pack.id)}
@@ -99,7 +99,7 @@ export default function SimilarPacksSection({
               <div className="h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 relative overflow-hidden">
                 {visiblePacks.has(index) ? (
                   <OptimizedPackImage
-                    src={pack.coverPhoto}
+                    src={pack.coverPhoto || null}
                     alt={`${pack.title} cover`}
                     fill
                     sizes="(max-width: 768px) 80vw, 320px"

@@ -4,6 +4,7 @@ import { MapPin, Users, Shield, Globe, Heart, Search, Star } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
+import { logger } from '@/lib/logger'
 
 // Utility function to ensure hydration-safe rendering
 const useHydrationSafe = () => {
@@ -132,7 +133,7 @@ export default function LandingPage() {
 
       setRealPacks(packsWithPhotos)
     } catch (err) {
-      console.error('Error loading real packs:', err)
+      logger.error('Error loading real packs:', err)
       // Fallback to empty array to prevent errors
       setRealPacks([])
     } finally {

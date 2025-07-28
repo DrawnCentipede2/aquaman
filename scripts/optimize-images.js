@@ -1,6 +1,7 @@
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
+const { logger } = require('../lib/logger');
 
 // Image optimization script
 async function optimizeImages() {
@@ -14,17 +15,17 @@ async function optimizeImages() {
     'Hidden_Gems.jpg'
   ];
 
-  console.log('🖼️ Starting image optimization...');
+  logger.log('🖼️ Starting image optimization...');
 
   for (const imageName of images) {
     const inputPath = path.join(publicDir, imageName);
     
     if (!fs.existsSync(inputPath)) {
-      console.log(`⚠️ Skipping ${imageName} - file not found`);
+      logger.log(`⚠️ Skipping ${imageName} - file not found`);
       continue;
     }
 
-    console.log(`📸 Optimizing ${imageName}...`);
+    logger.log(`📸 Optimizing ${imageName}...`);
 
     try {
       // Create WebP version
@@ -51,14 +52,14 @@ async function optimizeImages() {
           .toFile(path.join(publicDir, imageName.replace('.jpg', `${size.suffix}.webp`)));
       }
 
-      console.log(`✅ Optimized ${imageName}`);
+      logger.log(`✅ Optimized ${imageName}`);
     } catch (error) {
-      console.error(`❌ Error optimizing ${imageName}:`, error.message);
+      logger.error(`❌ Error optimizing ${imageName}:`, error.message);
     }
   }
 
-  console.log('🎉 Image optimization complete!');
+  logger.log('🎉 Image optimization complete!');
 }
 
 // Run optimization
-optimizeImages().catch(console.error); 
+optimizeImages().catch(logger.error); 

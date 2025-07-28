@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Package, Settings, TrendingUp, DollarSign, Users, Eye, Star, MapPin, Calendar, BarChart3, Edit3, Trash2, ArrowLeft } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import Link from 'next/link'
+import { logger } from '@/lib/logger'
 
 export default function CreatorDashboard() {
   const [userProfile, setUserProfile] = useState<any>(null)
@@ -34,7 +35,7 @@ export default function CreatorDashboard() {
             avgRating: 4.8
           })
         } catch (error) {
-          console.error('Error parsing user profile:', error)
+          logger.error('Error parsing user profile:', error)
           window.location.href = '/auth'
         }
       } else {

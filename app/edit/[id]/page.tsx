@@ -10,6 +10,7 @@ import { getPackDisplayImage } from '@/lib/utils'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
 import { useToast } from '@/components/ui/toast'
 import { Toaster } from '@/components/ui/toaster'
+import { logger } from '@/lib/logger'
 
 export default function EditPackPage() {
   const params = useParams()
@@ -133,7 +134,7 @@ export default function EditPackPage() {
         .eq('pin_pack_id', packId)
 
       if (pinsError) {
-        console.warn('Error loading pins:', pinsError)
+        logger.warn('Error loading pins:', pinsError)
         setPins([])
       } else {
         const pinsData = packPinsData?.map((item: any) => ({
@@ -151,7 +152,7 @@ export default function EditPackPage() {
       }
 
     } catch (error) {
-      console.error('Error loading pack:', error)
+      logger.error('Error loading pack:', error)
       setError('Failed to load pack details')
     } finally {
       setLoading(false)
@@ -278,7 +279,7 @@ export default function EditPackPage() {
       const data = await response.json()
       return data
     } catch (error) {
-      console.error('Error fetching place details:', error)
+      logger.error('Error fetching place details:', error)
       return null
     }
   }
@@ -304,7 +305,7 @@ export default function EditPackPage() {
       
       return null
     } catch (error) {
-      console.error('Error extracting place ID:', error)
+      logger.error('Error extracting place ID:', error)
       return null
     }
   }
@@ -363,7 +364,7 @@ export default function EditPackPage() {
       showToast('Place imported successfully!', 'success')
       
     } catch (error) {
-      console.error('Error adding place:', error)
+      logger.error('Error adding place:', error)
       showToast('Error importing place. Please try again.', 'error')
     } finally {
       setIsFetchingPlaceDetails(false)
@@ -420,7 +421,7 @@ export default function EditPackPage() {
       showToast('Google Maps list imported successfully!', 'success')
       
     } catch (error) {
-      console.error('Error importing from list:', error)
+      logger.error('Error importing from list:', error)
       showToast('Error importing Google Maps list. Please try again.', 'error')
     }
   }
@@ -492,7 +493,7 @@ export default function EditPackPage() {
 
       if (error) throw error
 
-      console.log('Pack updated successfully! ')
+      logger.log('Pack updated successfully! ')
       
       // Show success animation
       setSaveSuccess(true)
@@ -503,7 +504,7 @@ export default function EditPackPage() {
       }, 2000)
       
     } catch (error) {
-      console.error('Error saving changes:', error)
+      logger.error('Error saving changes:', error)
       setError('Failed to save changes. Please try again.')
       
       // Show error animation
@@ -533,11 +534,11 @@ export default function EditPackPage() {
 
       // Update local state
       setPins(pins.filter(pin => pin.id !== pinId))
-      console.log('Pin removed successfully!')
+      logger.log('Pin removed successfully!')
       
     } catch (error) {
-      console.error('Error deleting pin:', error)
-      console.log('Failed to remove pin. Please try again.')
+      logger.error('Error deleting pin:', error)
+      logger.log('Failed to remove pin. Please try again.')
     }
   }
 

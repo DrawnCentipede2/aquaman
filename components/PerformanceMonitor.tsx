@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { logger } from '@/lib/logger'
 
 export default function PerformanceMonitor() {
   useEffect(() => {
@@ -15,16 +16,16 @@ export default function PerformanceMonitor() {
           
           // Only log if LCP is poor to reduce console noise
           if (lastEntry.startTime > 2500) {
-            console.warn('Poor LCP detected:', Math.round(lastEntry.startTime))
+            logger.warn('Poor LCP detected:', Math.round(lastEntry.startTime))
           } else {
-            console.log('Good LCP:', Math.round(lastEntry.startTime))
+            logger.log('Good LCP:', Math.round(lastEntry.startTime))
           }
         })
         
         try {
           lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] })
         } catch (e) {
-          console.warn('LCP monitoring not supported')
+          logger.warn('LCP monitoring not supported')
         }
 
         // Defer non-critical monitoring to avoid blocking LCP
@@ -35,7 +36,7 @@ export default function PerformanceMonitor() {
             entries.forEach((entry: any) => {
               const fid = entry.processingStart - entry.startTime
               if (fid > 100) {
-                console.warn('Poor FID detected:', Math.round(fid))
+                logger.warn('Poor FID detected:', Math.round(fid))
               }
             })
           })
@@ -43,7 +44,7 @@ export default function PerformanceMonitor() {
           try {
             fidObserver.observe({ entryTypes: ['first-input'] })
           } catch (e) {
-            console.warn('FID monitoring not supported')
+            logger.warn('FID monitoring not supported')
           }
 
           // Monitor Cumulative Layout Shift (CLS) - Less critical for LCP
@@ -54,7 +55,7 @@ export default function PerformanceMonitor() {
               if (!entry.hadRecentInput) {
                 clsValue += entry.value
                 if (clsValue > 0.1) {
-                  console.warn('Poor CLS detected:', clsValue.toFixed(3))
+                  logger.warn('Poor CLS detected:', clsValue.toFixed(3))
                 }
               }
             })
@@ -63,7 +64,7 @@ export default function PerformanceMonitor() {
           try {
             clsObserver.observe({ entryTypes: ['layout-shift'] })
           } catch (e) {
-            console.warn('CLS monitoring not supported')
+            logger.warn('CLS monitoring not supported')
           }
         }
 
@@ -81,9 +82,9 @@ export default function PerformanceMonitor() {
         const monitorPageLoad = () => {
           const loadTime = performance.now()
           if (loadTime > 3000) {
-            console.warn('Slow page load detected:', Math.round(loadTime))
+            logger.warn('Slow page load detected:', Math.round(loadTime))
           } else {
-            console.log('Fast page load:', Math.round(loadTime))
+            logger.log('Fast page load:', Math.round(loadTime))
           }
         }
 

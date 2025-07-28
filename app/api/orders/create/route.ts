@@ -44,9 +44,8 @@ export async function POST(request: NextRequest) {
       .single()
     
     if (orderError) {
-      console.error('Error creating order:', orderError)
       return NextResponse.json(
-        { error: 'Failed to create order' },
+        { error: 'Failed to create order', details: orderError.message },
         { status: 500 }
       )
     }
@@ -63,12 +62,11 @@ export async function POST(request: NextRequest) {
       .insert(orderItems)
     
     if (itemsError) {
-      console.error('Error creating order items:', itemsError)
       // Clean up the order if items failed to create
       await supabase.from('orders').delete().eq('id', order.id)
       
       return NextResponse.json(
-        { error: 'Failed to create order items' },
+        { error: 'Failed to create order items', details: itemsError.message },
         { status: 500 }
       )
     }
@@ -80,9 +78,9 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Order creation error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: errorMessage },
       { status: 500 }
     )
   }

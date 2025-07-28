@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { generateFallbackReviews } from '@/lib/reviews'
 import { queryCreatorData } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 interface PinPackWithPhoto extends PinPack {
   coverPhoto?: string | null
@@ -42,7 +43,7 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
       setLoading(true)
       setError(null)
 
-      console.log('🔍 Loading pack details for ID:', packId)
+      logger.log('🔍 Loading pack details for ID:', packId)
 
       // Single optimized query for pack + pins + photos
       const { data: packData, error: packError } = await supabase
@@ -65,9 +66,9 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
       if (packError) throw packError
       if (!packData) throw new Error('Pack not found')
 
-      console.log('🔍 Pack data loaded:', packData)
-      console.log('🔍 Pack reviews:', packData.reviews)
-      console.log('🔍 Creator ID:', packData.creator_id)
+      logger.log('🔍 Pack data loaded:', packData)
+      logger.log('🔍 Pack reviews:', packData.reviews)
+      logger.log('🔍 Creator ID:', packData.creator_id)
 
       setPack(packData)
 
@@ -100,39 +101,39 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
         photos: item.pins.photos || []
       })) || []
 
-      console.log('🔍 Pins data processed:', pinsData.length, 'pins')
+      logger.log('🔍 Pins data processed:', pinsData.length, 'pins')
       setPins(pinsData)
 
       // Process reviews
       if (packData.reviews && Array.isArray(packData.reviews) && packData.reviews.length > 0) {
-        console.log('🔍 Using existing pack reviews:', packData.reviews.length, 'reviews')
+        logger.log('🔍 Using existing pack reviews:', packData.reviews.length, 'reviews')
         setReviews(packData.reviews)
         const firstReview = packData.reviews[0]
         setReviewsSource(firstReview.source === 'Google Maps' ? 'google' : 'pack')
       } else {
-        console.log('🔍 No existing reviews, generating fallback reviews')
+        logger.log('🔍 No existing reviews, generating fallback reviews')
         const fallbackReviews = generateFallbackReviews(packData, pinsData)
-        console.log('🔍 Generated fallback reviews:', fallbackReviews)
+        logger.log('🔍 Generated fallback reviews:', fallbackReviews)
         setReviews(fallbackReviews)
         setReviewsSource('pack')
       }
 
       // Load creator profile with caching
       if (packData.creator_id) {
-        console.log('🔍 Loading creator profile for ID:', packData.creator_id)
+        logger.log('🔍 Loading creator profile for ID:', packData.creator_id)
         
         if (creatorProfileCache.has(packData.creator_id)) {
-          console.log('🔍 Using cached creator profile')
+          logger.log('🔍 Using cached creator profile')
           setCreatorProfile(creatorProfileCache.get(packData.creator_id))
         } else {
           try {
-            console.log('🔍 Querying creator data...')
+            logger.log('🔍 Querying creator data...')
             const { data: creator, error: creatorError } = await queryCreatorData(
               packData.creator_id,
               'name, email, bio, verified, city, country, occupation'
             )
 
-            console.log('🔍 Creator query result:', { creator, creatorError })
+            logger.log('🔍 Creator query result:', { creator, creatorError })
 
             const creatorData = creator && !creatorError ? creator : {
               name: 'Local Creator',
@@ -144,11 +145,11 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
               occupation: 'Local Guide'
             }
 
-            console.log('🔍 Final creator data:', creatorData)
+            logger.log('🔍 Final creator data:', creatorData)
             creatorProfileCache.set(packData.creator_id, creatorData)
             setCreatorProfile(creatorData)
           } catch (error) {
-            console.warn('🔍 Error loading creator profile:', error)
+            logger.warn('🔍 Error loading creator profile:', error)
             const fallbackCreator = {
               name: 'Local Creator',
               email: '',
@@ -162,7 +163,7 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
           }
         }
       } else {
-        console.log('🔍 No creator_id found in pack data')
+        logger.log('🔍 No creator_id found in pack data')
       }
 
       // Load similar packs with optimized query (limit to reduce load time)
@@ -202,7 +203,10 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
               country: similarPack.country,
               pin_count: similarPack.pin_count,
               download_count: similarPack.download_count,
-              coverPhoto
+              coverPhoto,
+              price: 0, // Default price for similar packs
+              created_at: new Date().toISOString(), // Default creation date
+              creator_location: similarPack.city // Use city as creator location
             }
           })
           
@@ -211,12 +215,12 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
           setSimilarPacks([])
         }
       } catch (error) {
-        console.warn('Error loading similar packs:', error)
+        logger.warn('Error loading similar packs:', error)
         setSimilarPacks([])
       }
 
     } catch (err) {
-      console.error('Error loading pack details:', err)
+      logger.error('Error loading pack details:', err)
       setError(`Failed to load pack details: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
@@ -241,7 +245,7 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
         setReviewsSource(firstReview.source === 'Google Maps' ? 'google' : 'pack')
       }
     } catch (error) {
-      console.error('Error refreshing reviews:', error)
+      logger.error('Error refreshing reviews:', error)
     }
   }, [pack, pins])
 

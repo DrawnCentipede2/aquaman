@@ -6,6 +6,7 @@ import { MapPin, Download, Star, Users, Heart, Share2, Calendar, Clock, ArrowLef
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
+import { logger } from '@/lib/logger'
 
 // Extended PinPack type to include cover photo (same as browse page)
 interface PinPackWithPhoto extends PinPack {
@@ -270,7 +271,7 @@ export default function PackDetailPage() {
           if (creator && !error) {
             setCreatorProfile(creator)
           } else if (error) {
-            console.warn('Creator profile query failed:', error)
+            logger.warn('Creator profile query failed:', error)
             // Set fallback creator data if query fails
             setCreatorProfile({
               name: 'Local Creator',
@@ -283,7 +284,7 @@ export default function PackDetailPage() {
             })
           }
         } catch (error) {
-          console.error('Error loading creator profile:', error)
+          logger.error('Error loading creator profile:', error)
           // Set fallback creator data on any error
           setCreatorProfile({
             name: 'Local Creator',
@@ -342,20 +343,20 @@ export default function PackDetailPage() {
 
   // Function to extract a searchable query from Google Maps URL (same as create page)
   const extractQueryFromUrl = (url: string): string | null => {
-    console.log('Extracting query from URL:', url)
+    logger.log('Extracting query from URL:', url)
     
     try {
       // Handle different Google Maps URL formats
       const urlObj = new URL(url)
-      console.log('URL hostname:', urlObj.hostname)
-      console.log('URL pathname:', urlObj.pathname)
+      logger.log('URL hostname:', urlObj.hostname)
+      logger.log('URL pathname:', urlObj.pathname)
       
       // For short URLs like maps.app.goo.gl, try to get the query parameter
       if (urlObj.hostname.includes('maps.app.goo.gl')) {
         // For short URLs, we'll use the path as a query
         const path = urlObj.pathname.replace('/', '')
         if (path) {
-          console.log('Extracted from short URL:', path)
+          logger.log('Extracted from short URL:', path)
           return path
         }
       }
@@ -364,20 +365,20 @@ export default function PackDetailPage() {
       if (urlObj.hostname.includes('google')) {
         // Extract place name from the URL path
         const pathParts = urlObj.pathname.split('/')
-        console.log('Path parts:', pathParts)
+        logger.log('Path parts:', pathParts)
         
         // Look for the 'place' segment and get the next part
         const placeIndex = pathParts.findIndex(part => part === 'place')
-        console.log('Place index:', placeIndex)
+        logger.log('Place index:', placeIndex)
         
         if (placeIndex !== -1 && placeIndex + 1 < pathParts.length) {
           const placeName = pathParts[placeIndex + 1]
-          console.log('Place name found:', placeName)
+          logger.log('Place name found:', placeName)
           
           if (placeName && !placeName.startsWith('@')) {
             // Decode the place name (replace + with spaces and decode URI)
             const decodedName = decodeURIComponent(placeName.replace(/\+/g, ' '))
-            console.log('Decoded place name:', decodedName)
+            logger.log('Decoded place name:', decodedName)
             return decodedName
           }
         }
@@ -391,20 +392,20 @@ export default function PackDetailPage() {
           !part.startsWith('data=') &&
           part.length > 2
         )
-        console.log('Meaningful parts:', meaningfulParts)
+        logger.log('Meaningful parts:', meaningfulParts)
         
         if (meaningfulParts.length > 0) {
           const fallbackName = decodeURIComponent(meaningfulParts[0].replace(/\+/g, ' '))
-          console.log('Fallback name:', fallbackName)
+          logger.log('Fallback name:', fallbackName)
           return fallbackName
         }
       }
       
       // If we can't extract anything specific, use the full URL as a fallback
-      console.log('Using full URL as fallback')
+      logger.log('Using full URL as fallback')
       return url
     } catch (error) {
-      console.error('Error parsing URL:', error)
+      logger.error('Error parsing URL:', error)
       // If URL parsing fails, return the original string
       return url
     }
@@ -429,7 +430,7 @@ export default function PackDetailPage() {
         setUserProfile(profile)
         return true
       } catch (error) {
-        console.error('Error parsing user profile:', error)
+        logger.error('Error parsing user profile:', error)
         localStorage.removeItem('pinpacks_user_profile')
       }
     }
@@ -468,9 +469,9 @@ export default function PackDetailPage() {
             const profile = JSON.parse(userProfileData)
             setIsAuthenticated(true)
             setUserProfile(profile)
-            console.log('Immediate authentication check successful')
+            logger.log('Immediate authentication check successful')
           } catch (error) {
-            console.error('Error parsing user profile in immediate check:', error)
+            logger.error('Error parsing user profile in immediate check:', error)
           }
         }
       }
@@ -498,15 +499,15 @@ export default function PackDetailPage() {
           const profile = JSON.parse(userProfileData)
           setIsAuthenticated(true)
           setUserProfile(profile)
-          console.log('Authentication state updated after redirect')
+          logger.log('Authentication state updated after redirect')
         } catch (error) {
-          console.error('Error parsing user profile:', error)
+          logger.error('Error parsing user profile:', error)
         }
       } else if (!userProfileData && isAuthenticated) {
         // User profile was removed, update authentication state
         setIsAuthenticated(false)
         setUserProfile(null)
-        console.log('Authentication state cleared')
+        logger.log('Authentication state cleared')
       }
     }, 500) // Check every 500ms for faster response
     
@@ -524,15 +525,15 @@ export default function PackDetailPage() {
             const profile = JSON.parse(e.newValue)
             setIsAuthenticated(true)
             setUserProfile(profile)
-            console.log('Authentication state updated via storage event')
+            logger.log('Authentication state updated via storage event')
           } catch (error) {
-            console.error('Error parsing user profile from storage event:', error)
+            logger.error('Error parsing user profile from storage event:', error)
           }
         } else if (!e.newValue && isAuthenticated) {
           // Profile was removed
           setIsAuthenticated(false)
           setUserProfile(null)
-          console.log('Authentication state cleared via storage event')
+          logger.log('Authentication state cleared via storage event')
         }
       }
     }
@@ -545,9 +546,9 @@ export default function PackDetailPage() {
           const profile = JSON.parse(userProfileData)
           setIsAuthenticated(true)
           setUserProfile(profile)
-          console.log('Authentication state updated via custom storage event')
+          logger.log('Authentication state updated via custom storage event')
         } catch (error) {
-          console.error('Error parsing user profile from custom storage event:', error)
+          logger.error('Error parsing user profile from custom storage event:', error)
         }
       }
     }
@@ -579,7 +580,7 @@ export default function PackDetailPage() {
   // Ensure reviews are always set
   useEffect(() => {
     if (!loading && pack && reviews.length === 0) {
-      console.log('No reviews found after loading, setting fallback reviews')
+      logger.log('No reviews found after loading, setting fallback reviews')
       const fallbackReviews = generateFallbackReviews(pack, pins)
       setReviews(fallbackReviews)
       setReviewsSource('pack')
@@ -602,7 +603,7 @@ export default function PackDetailPage() {
         const wishlistIds = wishlist.map((item: any) => item.id)
         setWishlistItems(wishlistIds)
       } catch (error) {
-        console.error('Error loading wishlist:', error)
+        logger.error('Error loading wishlist:', error)
       }
     }
     
@@ -614,7 +615,7 @@ export default function PackDetailPage() {
         const cartIds = cart.map((item: any) => item.id)
         setCartItems(cartIds)
       } catch (error) {
-        console.error('Error loading cart:', error)
+        logger.error('Error loading cart:', error)
       }
     }
   }
@@ -622,7 +623,7 @@ export default function PackDetailPage() {
   // Main function to load all pack details, pins, and similar packs
   const loadPackDetails = async () => {
     try {
-      console.log('Loading pack details for ID:', packId) // Debug log
+      logger.log('Loading pack details for ID:', packId) // Debug log
       
       // First, get the main pack information from database (including stored reviews)
       const { data: packData, error: packError } = await supabase
@@ -631,7 +632,7 @@ export default function PackDetailPage() {
         .eq('id', packId)
         .maybeSingle()
 
-      console.log('Pack query result:', { packData, packError }) // Debug log
+      logger.log('Pack query result:', { packData, packError }) // Debug log
 
       if (packError) throw packError
       if (!packData) throw new Error('Pack not found')
@@ -688,7 +689,7 @@ export default function PackDetailPage() {
                     coverPhoto
                   }
                 } catch (error) {
-                  console.warn('Error loading photos for similar pack:', similarPack.id, error)
+                  logger.warn('Error loading photos for similar pack:', similarPack.id, error)
                   return {
                     ...similarPack,
                     coverPhoto: null
@@ -700,14 +701,14 @@ export default function PackDetailPage() {
             setSimilarPacks(similarPacksWithPhotos)
           }
         } catch (err) {
-          console.error('Error loading data async:', err)
+          logger.error('Error loading data async:', err)
         }
       }, 0)
       
       return
 
     } catch (err) {
-      console.error('Detailed error loading pack details:', err) // Enhanced debug log
+      logger.error('Detailed error loading pack details:', err) // Enhanced debug log
       setError(`Failed to load pack details: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
@@ -747,10 +748,10 @@ export default function PackDetailPage() {
         `)
         .eq('pin_pack_id', packId)
 
-      console.log('Pins query result:', { packPinsData, pinsError }) // Debug log
+      logger.log('Pins query result:', { packPinsData, pinsError }) // Debug log
 
       if (pinsError) {
-        console.warn('Error loading pins:', pinsError)
+        logger.warn('Error loading pins:', pinsError)
         setPins([])
       } else {
         // Extract the pins from the junction table response and map to expected format
@@ -785,7 +786,7 @@ export default function PackDetailPage() {
         setPins(pinsData)
       }
     } catch (err) {
-      console.error('Error loading pins:', err)
+      logger.error('Error loading pins:', err)
       setPins([])
     }
   }
@@ -795,27 +796,27 @@ export default function PackDetailPage() {
     try {
       // Load reviews from stored data (much faster than API calls)
         try {
-          console.log('Loading reviews from stored data...')
-          console.log('Pack data reviews:', packData.reviews)
+          logger.log('Loading reviews from stored data...')
+          logger.log('Pack data reviews:', packData.reviews)
           
           if (packData.reviews && Array.isArray(packData.reviews) && packData.reviews.length > 0) {
-            console.log('Using stored reviews:', packData.reviews.length)
+            logger.log('Using stored reviews:', packData.reviews.length)
             setReviews(packData.reviews)
             // Determine source based on the first review
             const firstReview = packData.reviews[0]
             setReviewsSource(firstReview.source === 'Google Maps' ? 'google' : 'pack')
           } else {
-            console.log('No stored reviews found, using fallback')
+            logger.log('No stored reviews found, using fallback')
             // Fallback to generated reviews if no stored reviews
             const fallbackReviews = generateFallbackReviews(packData, pins)
-            console.log('Setting fallback reviews:', fallbackReviews)
+            logger.log('Setting fallback reviews:', fallbackReviews)
             setReviews(fallbackReviews)
             setReviewsSource('pack')
           }
         } catch (error) {
-          console.warn('Error loading stored reviews, using fallback:', error)
+          logger.warn('Error loading stored reviews, using fallback:', error)
           const fallbackReviews = generateFallbackReviews(packData, pins)
-          console.log('Setting fallback reviews due to error:', fallbackReviews)
+          logger.log('Setting fallback reviews due to error:', fallbackReviews)
           setReviews(fallbackReviews)
           setReviewsSource('pack')
         }
@@ -829,7 +830,7 @@ export default function PackDetailPage() {
         .limit(8)
 
       if (similarError) {
-        console.warn('Error loading similar packs:', similarError)
+        logger.warn('Error loading similar packs:', similarError)
         setSimilarPacks([])
       } else {
         // Load cover photos for similar packs (same logic as browse page)
@@ -864,7 +865,7 @@ export default function PackDetailPage() {
                 }
               }
             } catch (error) {
-              console.warn('Error loading photos for similar pack:', similarPack.id, error)
+              logger.warn('Error loading photos for similar pack:', similarPack.id, error)
             }
             
             return {
@@ -878,7 +879,7 @@ export default function PackDetailPage() {
       }
 
     } catch (err) {
-      console.error('Detailed error loading pack details:', err) // Enhanced debug log
+      logger.error('Detailed error loading pack details:', err) // Enhanced debug log
       setError(`Failed to load pack details: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
@@ -896,10 +897,10 @@ export default function PackDetailPage() {
         currentWishlist.push(pack)
         localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
         setWishlistItems(prev => [...prev, pack.id])
-        console.log('Added to wishlist:', pack.title)
+        logger.log('Added to wishlist:', pack.title)
       }
     } catch (error) {
-      console.error('Error adding to wishlist:', error)
+      logger.error('Error adding to wishlist:', error)
     }
   }
 
@@ -912,9 +913,9 @@ export default function PackDetailPage() {
       currentWishlist = currentWishlist.filter((item: any) => item.id !== packId)
       localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))
       setWishlistItems(prev => prev.filter(id => id !== packId))
-      console.log('Removed from wishlist:', packId)
+      logger.log('Removed from wishlist:', packId)
     } catch (error) {
-      console.error('Error removing from wishlist:', error)
+      logger.error('Error removing from wishlist:', error)
     }
   }
 
@@ -949,10 +950,10 @@ export default function PackDetailPage() {
           // Show cart success popup
           setShowCartSuccessModal(true)
           
-          console.log('Added to cart:', pack.title)
+          logger.log('Added to cart:', pack.title)
         }
       } catch (error) {
-        console.error('Error adding to cart:', error)
+        logger.error('Error adding to cart:', error)
       }
     })
   }
@@ -966,9 +967,9 @@ export default function PackDetailPage() {
       currentCart = currentCart.filter((item: any) => item.id !== packId)
       localStorage.setItem('pinpacks_cart', JSON.stringify(currentCart))
       setCartItems(prev => prev.filter(id => id !== packId))
-      console.log('Removed from cart:', packId)
+      logger.log('Removed from cart:', packId)
     } catch (error) {
-      console.error('Error removing from cart:', error)
+      logger.error('Error removing from cart:', error)
     }
   }
 
@@ -993,14 +994,14 @@ export default function PackDetailPage() {
   // PayPal success handler
   const handlePayPalSuccess = async (orderData: any) => {
     try {
-      console.log('PayPal payment successful:', orderData)
+      logger.log('PayPal payment successful:', orderData)
       
       if (pack) {
         // Get user email from profile
         const userProfileData = localStorage.getItem('pinpacks_user_profile')
         const userEmail = userProfileData ? JSON.parse(userProfileData).email : null
         
-        console.log('🔍 Creating order with user email:', userEmail)
+        logger.log('🔍 Creating order with user email:', userEmail)
 
         // Create order in database (same API call as cart page)
         const createOrderResponse = await fetch('/api/orders/create', {
@@ -1026,11 +1027,11 @@ export default function PackDetailPage() {
           })
         })
 
-        console.log('🔍 Create order response:', createOrderResponse.status)
+        logger.log('🔍 Create order response:', createOrderResponse.status)
 
         if (createOrderResponse.ok) {
           const { order } = await createOrderResponse.json()
-          console.log('🔍 Order created successfully:', order)
+          logger.log('🔍 Order created successfully:', order)
 
           // Complete the order with PayPal details
           const completeOrderResponse = await fetch('/api/orders/complete', {
@@ -1050,17 +1051,17 @@ export default function PackDetailPage() {
             })
           })
 
-          console.log('🔍 Complete order response:', completeOrderResponse.status)
+          logger.log('🔍 Complete order response:', completeOrderResponse.status)
 
           if (completeOrderResponse.ok) {
-            console.log('🔍 Order completed successfully')
+            logger.log('🔍 Order completed successfully')
             
             // Add pack to purchased list
             const existingPurchases = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
             if (!existingPurchases.includes(pack.id)) {
               existingPurchases.push(pack.id)
               localStorage.setItem('pinpacks_purchased', JSON.stringify(existingPurchases))
-              console.log('🔍 Added pack to localStorage purchased list:', pack.id)
+              logger.log('🔍 Added pack to localStorage purchased list:', pack.id)
               
               // Remove from cart if it was there
               const existingCart = JSON.parse(localStorage.getItem('pinpacks_cart') || '[]')
@@ -1077,22 +1078,22 @@ export default function PackDetailPage() {
             setPurchasedPacksCount(1)
             setShowSuccessModal(true)
           } else {
-            console.error('🔍 Failed to complete order:', completeOrderResponse.status)
+            logger.error('🔍 Failed to complete order:', completeOrderResponse.status)
           }
         } else {
-          console.error('🔍 Failed to create order:', createOrderResponse.status)
+          logger.error('🔍 Failed to create order:', createOrderResponse.status)
         }
       }
     } catch (error) {
-      console.error('Error handling PayPal success:', error)
+      logger.error('Error handling PayPal success:', error)
     }
   }
 
   // PayPal error handler
   const handlePayPalError = (error: any) => {
-    console.error('PayPal payment error:', error)
+    logger.error('PayPal payment error:', error)
     setShowPayPalModal(false)
-    console.log('Payment failed. Please try again.')
+    logger.log('Payment failed. Please try again.')
   }
 
   // Payment success modal handlers
@@ -1116,7 +1117,7 @@ export default function PackDetailPage() {
     
     setIsRefreshingReviews(true)
     try {
-      console.log('Refreshing reviews for pack:', pack.id)
+      logger.log('Refreshing reviews for pack:', pack.id)
       await refreshPackReviews(pack.id, pins, supabase)
       
       // Reload the pack data to get updated reviews
@@ -1131,11 +1132,11 @@ export default function PackDetailPage() {
           setReviews(updatedPackData.reviews)
           const firstReview = updatedPackData.reviews[0]
           setReviewsSource(firstReview.source === 'Google Maps' ? 'google' : 'pack')
-          console.log('Reviews refreshed successfully:', updatedPackData.reviews.length)
+          logger.log('Reviews refreshed successfully:', updatedPackData.reviews.length)
         }
       }
     } catch (error) {
-      console.error('Error refreshing reviews:', error)
+      logger.error('Error refreshing reviews:', error)
     } finally {
       setIsRefreshingReviews(false)
     }
@@ -1156,7 +1157,7 @@ export default function PackDetailPage() {
         setIsPurchased(true)
         
         // Show success message
-        console.log(`🎉 Free pack "${pack.title}" added to your Pinventory! You can now access it anytime from your collection.`)
+        logger.log(`🎉 Free pack "${pack.title}" added to your Pinventory! You can now access it anytime from your collection.`)
       }
 
       // Create a search query with all the places in the pack
@@ -1174,7 +1175,7 @@ export default function PackDetailPage() {
         .eq('id', pack.id)
         
     } catch (error) {
-      console.error('Error opening in Google Maps:', error)
+      logger.error('Error opening in Google Maps:', error)
     }
   }
 
@@ -1191,12 +1192,12 @@ export default function PackDetailPage() {
           url: shareUrl,
         })
       } catch (error) {
-        console.log('Error sharing:', error)
+        logger.log('Error sharing:', error)
       }
     } else {
       // Fallback: copy link to clipboard
       navigator.clipboard.writeText(shareUrl)
-      console.log('Link copied to clipboard!')
+      logger.log('Link copied to clipboard!')
     }
   }
 
@@ -1211,7 +1212,7 @@ export default function PackDetailPage() {
       const message = await exportToGoogleMyMaps(pack, pins)
       return message
     } catch (error) {
-      console.error('Export error:', error)
+      logger.error('Export error:', error)
       throw new Error('Failed to export to Google My Maps. Please try again.')
     }
   }
@@ -1230,7 +1231,7 @@ export default function PackDetailPage() {
       await navigator.clipboard.writeText(text)
       return true
     } catch (error) {
-      console.error('Failed to copy:', error)
+      logger.error('Failed to copy:', error)
       return false
     }
   }
@@ -2313,7 +2314,7 @@ export default function PackDetailPage() {
                           openMyMapsImportPage()
                           setShowDeliveryModal(false)
                         } catch (error) {
-                          console.log(error instanceof Error ? error.message : 'Failed to export')
+                          logger.log(error instanceof Error ? error.message : 'Failed to export')
                         }
                       }}
                       className="flex-2 btn-primary py-3 flex items-center justify-center"
@@ -2452,7 +2453,7 @@ export default function PackDetailPage() {
                           await generateMyMapsKML()
                           openMyMapsImportPage()
                         } catch (error) {
-                          console.log(error instanceof Error ? error.message : 'Failed to export')
+                          logger.log(error instanceof Error ? error.message : 'Failed to export')
                         }
                       }}
                       className="p-6 border-2 border-coral-200 bg-coral-50 hover:bg-coral-100 rounded-2xl text-left transition-colors"

@@ -1,11 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const { logger } = require('../lib/logger');
 
 // Cleanup script to remove unnecessary image formats
 async function cleanupImages() {
   const publicDir = path.join(__dirname, '../public');
   
-  console.log('🧹 Starting image cleanup...');
+  logger.log('🧹 Starting image cleanup...');
 
   // Keep only these formats - remove the rest
   const keepFormats = [
@@ -33,25 +34,25 @@ async function cleanupImages() {
       if (shouldRemove) {
         try {
           fs.unlinkSync(filePath);
-          console.log(`🗑️ Removed: ${file}`);
+          logger.log(`🗑️ Removed: ${file}`);
         } catch (error) {
-          console.error(`❌ Error removing ${file}:`, error.message);
+          logger.error(`❌ Error removing ${file}:`, error.message);
         }
       } else {
-        console.log(`✅ Kept: ${file}`);
+        logger.log(`✅ Kept: ${file}`);
       }
     }
   }
 
-  console.log('🎉 Image cleanup complete!');
-  console.log('\n📋 What we kept:');
-  console.log('- Original .jpg files (fallback)');
-  console.log('- .webp files (optimized, 80% smaller)');
-  console.log('- .avif files (most optimized, 90% smaller)');
-  console.log('\n📋 What we removed:');
-  console.log('- Size-specific versions (-sm, -md, -lg)');
-  console.log('- Next.js Image component handles resizing automatically');
+  logger.log('🎉 Image cleanup complete!');
+  logger.log('\n📋 What we kept:');
+  logger.log('- Original .jpg files (fallback)');
+  logger.log('- .webp files (optimized, 80% smaller)');
+  logger.log('- .avif files (most optimized, 90% smaller)');
+  logger.log('\n📋 What we removed:');
+  logger.log('- Size-specific versions (-sm, -md, -lg)');
+  logger.log('- Next.js Image component handles resizing automatically');
 }
 
 // Run cleanup
-cleanupImages().catch(console.error); 
+cleanupImages().catch(logger.error); 

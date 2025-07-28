@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 import CloudLoader from '@/components/CloudLoader'
 import { useToast } from '@/components/ui/toast'
+import { logger } from '@/lib/logger'
 
 interface UserProfile {
   id?: string
@@ -96,7 +97,7 @@ export default function ProfilePage() {
         .maybeSingle()
 
       if (error) {
-        console.error('Error fetching profile from database:', error)
+        logger.error('Error fetching profile from database:', error)
       }
 
       // Merge local storage profile with database profile
@@ -119,7 +120,7 @@ export default function ProfilePage() {
       setFormData(mergedProfile)
       
     } catch (error) {
-      console.error('Error parsing user profile:', error)
+      logger.error('Error parsing user profile:', error)
       window.location.href = '/auth'
     } finally {
       setIsLoading(false)
@@ -151,7 +152,7 @@ export default function ProfilePage() {
 
     setIsSaving(true)
     try {
-      console.log('Saving profile data:', formData)
+      logger.log('Saving profile data:', formData)
       
       // Prepare profile data for database
       const profileData = {
@@ -168,7 +169,7 @@ export default function ProfilePage() {
         updated_at: new Date().toISOString()
       }
 
-      console.log('Attempting to save to database:', profileData)
+      logger.log('Attempting to save to database:', profileData)
       
       // First, check if user exists
       const { data: existingUser, error: checkError } = await supabase
@@ -177,12 +178,12 @@ export default function ProfilePage() {
         .eq('email', formData.email.trim())
         .maybeSingle()
 
-      console.log('Existing user check:', { existingUser, checkError })
+      logger.log('Existing user check:', { existingUser, checkError })
 
       let saveResult
       if (existingUser) {
         // Update existing user
-        console.log('Updating existing user with ID:', existingUser.id)
+        logger.log('Updating existing user with ID:', existingUser.id)
         saveResult = await supabase
           .from('users')
           .update(profileData)
@@ -190,17 +191,17 @@ export default function ProfilePage() {
           .select()
       } else {
         // Insert new user
-        console.log('Creating new user')
+        logger.log('Creating new user')
         saveResult = await supabase
           .from('users')
           .insert([profileData])
           .select()
       }
 
-      console.log('Database save result:', saveResult)
+      logger.log('Database save result:', saveResult)
 
       if (saveResult.error) {
-        console.error('Database save error:', saveResult.error)
+        logger.error('Database save error:', saveResult.error)
         showToast(`Profile save failed: ${saveResult.error.message || 'Unknown database error'}. Please try again or contact support if the issue persists.`, 'error')
         return
       }
@@ -212,12 +213,12 @@ export default function ProfilePage() {
         .eq('email', formData.email.trim())
         .single()
 
-      console.log('Verification query result:', { verifyData, verifyError })
+      logger.log('Verification query result:', { verifyData, verifyError })
 
       if (verifyError) {
-        console.warn('Could not verify saved data:', verifyError)
+        logger.warn('Could not verify saved data:', verifyError)
       } else {
-        console.log('Successfully verified saved data:', verifyData)
+        logger.log('Successfully verified saved data:', verifyData)
       }
 
       // Prepare profile data for localStorage (simplified version)
@@ -235,7 +236,7 @@ export default function ProfilePage() {
         updated_at: new Date().toISOString()
       }
 
-      console.log('Saving to localStorage:', localStorageProfile)
+      logger.log('Saving to localStorage:', localStorageProfile)
       
       // Save to localStorage
       localStorage.setItem('pinpacks_user_profile', JSON.stringify(localStorageProfile))
@@ -247,11 +248,11 @@ export default function ProfilePage() {
       window.dispatchEvent(new Event('storage'))
       
       showToast('Profile updated successfully!', 'success')
-      console.log('Profile updated successfully!')
-      console.log('Profile save completed successfully')
+      logger.log('Profile updated successfully!')
+      logger.log('Profile save completed successfully')
       
     } catch (err) {
-      console.error('Profile update error:', err)
+      logger.error('Profile update error:', err)
       showToast(`Failed to update profile: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again or contact support if the issue persists.`, 'error')
     } finally {
       setIsSaving(false)
@@ -294,7 +295,7 @@ export default function ProfilePage() {
       window.location.href = '/'
       
     } catch (error) {
-      console.error('Error deleting account:', error)
+      logger.error('Error deleting account:', error)
       showToast('Failed to delete account. Please try again or contact support.', 'error')
     }
   }

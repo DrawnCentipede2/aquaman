@@ -5,6 +5,7 @@ import { ShoppingCart, MapPin, Trash2, Plus, Minus, CreditCard, ArrowRight, Chec
 import PayPalCheckout from '@/components/PayPalCheckout'
 import { getPackDisplayImage } from '@/lib/utils'
 import CloudLoader from '@/components/CloudLoader'
+import { logger } from '@/lib/logger'
 
 export default function CartPage() {
   const [cartItems, setCartItems] = useState<any[]>([])
@@ -120,7 +121,7 @@ export default function CartPage() {
         throw new Error('Failed to complete order')
       }
     } catch (error) {
-      console.error('Payment completion error:', error)
+      logger.error('Payment completion error:', error)
       setPaymentStatus('error')
       setPaymentMessage('Payment completed but there was an issue processing your order. Please contact support.')
     }
@@ -128,7 +129,7 @@ export default function CartPage() {
 
   // Handle PayPal payment errors
   const handlePaymentError = (error: any) => {
-    console.error('PayPal payment error:', error)
+    logger.error('PayPal payment error:', error)
     setPaymentStatus('error')
     setPaymentMessage('Payment failed. Please try again or contact support if the issue persists.')
   }

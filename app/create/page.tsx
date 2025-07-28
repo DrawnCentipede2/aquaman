@@ -9,6 +9,7 @@ import { STANDARD_CATEGORIES } from '@/lib/categories'
 import { useToast } from '@/components/ui/toast'
 import { Toaster } from '@/components/ui/toaster'
 import { aggregateAndStorePackReviews } from '@/lib/reviews'
+import { logger } from '@/lib/logger'
 
 // Interface for a single pin
 interface Pin {
@@ -126,16 +127,16 @@ export default function CreatePackPage() {
 
   // Debug function to test Google Maps list loading
   const debugGoogleMapsList = () => {
-    console.log('Current googleMapsList state:', googleMapsList)
-    console.log('Current googleMapsListUrl state:', googleMapsListUrl)
-    console.log('Is edit mode:', isEditMode)
-    console.log('Edit pack ID:', editPackId)
+    logger.log('Current googleMapsList state:', googleMapsList)
+    logger.log('Current googleMapsListUrl state:', googleMapsListUrl)
+    logger.log('Is edit mode:', isEditMode)
+    logger.log('Edit pack ID:', editPackId)
   }
 
   // Function to load existing pack data for editing
   const loadExistingPackData = async () => {
     try {
-      console.log('Loading pack data for editing:', editPackId)
+      logger.log('Loading pack data for editing:', editPackId)
       
       // Get the pack details including maps_list_reference and categories
       const { data: packData, error: packError } = await supabase
@@ -147,7 +148,7 @@ export default function CreatePackPage() {
       if (packError) throw packError
       if (!packData) throw new Error('Pack not found')
 
-      console.log('Pack data loaded:', packData)
+      logger.log('Pack data loaded:', packData)
 
       // Set form data
       setPackTitle(packData.title || '')
@@ -159,12 +160,12 @@ export default function CreatePackPage() {
       setSelectedCategories(packData.categories || [])
 
       // Load Google Maps list reference if it exists
-      console.log('Checking for maps_list_reference:', packData.maps_list_reference)
-      console.log('Type of maps_list_reference:', typeof packData.maps_list_reference)
+      logger.log('Checking for maps_list_reference:', packData.maps_list_reference)
+      logger.log('Type of maps_list_reference:', typeof packData.maps_list_reference)
       
       if (packData.maps_list_reference && typeof packData.maps_list_reference === 'object') {
-        console.log('Loading Google Maps list:', packData.maps_list_reference)
-        console.log('Available keys:', Object.keys(packData.maps_list_reference))
+        logger.log('Loading Google Maps list:', packData.maps_list_reference)
+        logger.log('Available keys:', Object.keys(packData.maps_list_reference))
         
         const mapsListData = packData.maps_list_reference
         setGoogleMapsList({
@@ -174,9 +175,9 @@ export default function CreatePackPage() {
           description: mapsListData.description || 'Imported from Google Maps'
         })
         setGoogleMapsListUrl(mapsListData.original_url || mapsListData.expanded_url || mapsListData.url || '')
-        console.log('Google Maps list set successfully')
+        logger.log('Google Maps list set successfully')
       } else {
-        console.log('No maps_list_reference found or invalid format')
+        logger.log('No maps_list_reference found or invalid format')
         setGoogleMapsList(null)
         setGoogleMapsListUrl('')
       }
@@ -200,7 +201,7 @@ export default function CreatePackPage() {
         .eq('pin_pack_id', editPackId)
 
       if (pinsError) {
-        console.warn('Error loading pins:', pinsError)
+        logger.warn('Error loading pins:', pinsError)
         setPins([])
         setUploadedImages([])
         setMainImageIndex(-1)
@@ -218,7 +219,7 @@ export default function CreatePackPage() {
         })) || []
         
         setPins(pinsData)
-        console.log('Pins loaded:', pinsData)
+        logger.log('Pins loaded:', pinsData)
 
         // Collect all photos from pins and set as uploaded images
         const allPhotos: string[] = []
@@ -235,16 +236,16 @@ export default function CreatePackPage() {
         // Set main image index to the first image if available
         if (uniquePhotos.length > 0) {
           setMainImageIndex(0)
-          console.log('Set main image index to 0, total images:', uniquePhotos.length)
+          logger.log('Set main image index to 0, total images:', uniquePhotos.length)
         } else {
           setMainImageIndex(-1)
         }
 
-        console.log('Uploaded images set:', uniquePhotos)
+        logger.log('Uploaded images set:', uniquePhotos)
       }
 
     } catch (error) {
-      console.error('Error loading pack data:', error)
+      logger.error('Error loading pack data:', error)
       showToast('Failed to load pack data for editing', 'error')
       router.push('/manage')
     }
@@ -601,26 +602,26 @@ export default function CreatePackPage() {
       const placeData = await response.json()
       return placeData
     } catch (error) {
-      console.error('Error fetching place details:', error)
+      logger.error('Error fetching place details:', error)
       return null
     }
   }
 
   const extractQueryFromUrl = (url: string): string | null => {
-    console.log('Extracting query from URL:', url)
+    logger.log('Extracting query from URL:', url)
     
     try {
       // Handle different Google Maps URL formats
       const urlObj = new URL(url)
-      console.log('URL hostname:', urlObj.hostname)
-      console.log('URL pathname:', urlObj.pathname)
+      logger.log('URL hostname:', urlObj.hostname)
+      logger.log('URL pathname:', urlObj.pathname)
       
       // For short URLs like maps.app.goo.gl, try to get the query parameter
       if (urlObj.hostname.includes('maps.app.goo.gl')) {
         // For short URLs, we'll use the path as a query
         const path = urlObj.pathname.replace('/', '')
         if (path) {
-          console.log('Extracted from short URL:', path)
+          logger.log('Extracted from short URL:', path)
           return path
         }
       }
@@ -629,20 +630,20 @@ export default function CreatePackPage() {
       if (urlObj.hostname.includes('google')) {
         // Extract place name from the URL path
         const pathParts = urlObj.pathname.split('/')
-        console.log('Path parts:', pathParts)
+        logger.log('Path parts:', pathParts)
         
         // Look for the 'place' segment and get the next part
         const placeIndex = pathParts.findIndex(part => part === 'place')
-        console.log('Place index:', placeIndex)
+        logger.log('Place index:', placeIndex)
         
         if (placeIndex !== -1 && placeIndex + 1 < pathParts.length) {
           const placeName = pathParts[placeIndex + 1]
-          console.log('Place name found:', placeName)
+          logger.log('Place name found:', placeName)
           
           if (placeName && !placeName.startsWith('@')) {
             // Decode the place name (replace + with spaces and decode URI)
             const decodedName = decodeURIComponent(placeName.replace(/\+/g, ' '))
-            console.log('Decoded place name:', decodedName)
+            logger.log('Decoded place name:', decodedName)
             return decodedName
           }
         }
@@ -656,20 +657,20 @@ export default function CreatePackPage() {
           !part.startsWith('data=') &&
           part.length > 2
         )
-        console.log('Meaningful parts:', meaningfulParts)
+        logger.log('Meaningful parts:', meaningfulParts)
         
         if (meaningfulParts.length > 0) {
           const fallbackName = decodeURIComponent(meaningfulParts[0].replace(/\+/g, ' '))
-          console.log('Fallback name:', fallbackName)
+          logger.log('Fallback name:', fallbackName)
           return fallbackName
         }
       }
       
       // If we can't extract anything specific, use the full URL as a fallback
-      console.log('Using full URL as fallback')
+      logger.log('Using full URL as fallback')
       return url
     } catch (error) {
-      console.error('Error parsing URL:', error)
+      logger.error('Error parsing URL:', error)
       // If URL parsing fails, return the original string
       return url
     }
@@ -729,7 +730,7 @@ export default function CreatePackPage() {
       showToast('Place imported successfully!', 'success')
       
     } catch (error) {
-      console.error('Error adding place:', error)
+      logger.error('Error adding place:', error)
       showToast('Error importing place. Please try again.', 'error')
     } finally {
       setIsFetchingPlaceDetails(false)
@@ -797,7 +798,7 @@ export default function CreatePackPage() {
       showToast('Google Maps list imported successfully!', 'success')
       
     } catch (error) {
-      console.error('Error importing from list:', error)
+      logger.error('Error importing from list:', error)
       showToast('Error importing Google Maps list. Please try again.', 'error')
     }
   }
@@ -902,7 +903,7 @@ export default function CreatePackPage() {
         await createNewPack()
       }
     } catch (error) {
-      console.error('Error saving pack:', error)
+      logger.error('Error saving pack:', error)
       showToast(`Failed to ${isEditMode ? 'update' : 'create'} pack. Please try again.`, 'error')
     } finally {
       setIsSubmitting(false)
@@ -940,7 +941,7 @@ export default function CreatePackPage() {
       .select()
 
     if (packError) {
-      console.error('Error creating pin pack:', packError)
+      logger.error('Error creating pin pack:', packError)
       throw packError
     }
 
@@ -966,7 +967,7 @@ export default function CreatePackPage() {
         .select()
 
       if (pinsError) {
-        console.error('Error creating pins:', pinsError)
+        logger.error('Error creating pins:', pinsError)
         throw pinsError
       }
 
@@ -982,7 +983,7 @@ export default function CreatePackPage() {
         .insert(relationshipData)
 
       if (relationshipError) {
-        console.error('Error creating relationships:', relationshipError)
+        logger.error('Error creating relationships:', relationshipError)
         throw relationshipError
       }
     }
@@ -995,16 +996,16 @@ export default function CreatePackPage() {
 
     // Aggregate and store reviews for the pack (this happens in the background)
     try {
-      console.log('Starting review aggregation for new pack:', newPackId)
+      logger.log('Starting review aggregation for new pack:', newPackId)
       // Convert pins to match the reviews utility interface
       const pinsForReviews = pins.map(pin => ({
         ...pin,
         id: pin.id || `temp-${Date.now()}-${Math.random()}`
       }))
       await aggregateAndStorePackReviews(newPackId, pinsForReviews, supabase)
-      console.log('Review aggregation completed successfully')
+      logger.log('Review aggregation completed successfully')
     } catch (error) {
-      console.warn('Review aggregation failed, but pack was created successfully:', error)
+      logger.warn('Review aggregation failed, but pack was created successfully:', error)
       // Don't fail the pack creation if review aggregation fails
     }
 
@@ -1044,7 +1045,7 @@ export default function CreatePackPage() {
       .eq('id', editPackId)
 
     if (packError) {
-      console.error('Error updating pin pack:', packError)
+      logger.error('Error updating pin pack:', packError)
       throw packError
     }
 
@@ -1055,7 +1056,7 @@ export default function CreatePackPage() {
       .eq('pin_pack_id', editPackId)
 
     if (deleteRelationshipsError) {
-      console.error('Error deleting relationships:', deleteRelationshipsError)
+      logger.error('Error deleting relationships:', deleteRelationshipsError)
       throw deleteRelationshipsError
     }
 
@@ -1066,7 +1067,7 @@ export default function CreatePackPage() {
       .in('id', pins.filter(pin => pin.id).map(pin => pin.id))
 
     if (deletePinsError) {
-      console.error('Error deleting pins:', deletePinsError)
+      logger.error('Error deleting pins:', deletePinsError)
       throw deletePinsError
     }
 
@@ -1090,7 +1091,7 @@ export default function CreatePackPage() {
         .select()
 
       if (pinsError) {
-        console.error('Error creating pins:', pinsError)
+        logger.error('Error creating pins:', pinsError)
         throw pinsError
       }
 
@@ -1106,23 +1107,23 @@ export default function CreatePackPage() {
         .insert(relationshipData)
 
       if (relationshipError) {
-        console.error('Error creating relationships:', relationshipError)
+        logger.error('Error creating relationships:', relationshipError)
         throw relationshipError
       }
     }
 
     // Aggregate and store reviews for the updated pack (this happens in the background)
     try {
-      console.log('Starting review aggregation for updated pack:', editPackId)
+      logger.log('Starting review aggregation for updated pack:', editPackId)
       // Convert pins to match the reviews utility interface
       const pinsForReviews = pins.map(pin => ({
         ...pin,
         id: pin.id || `temp-${Date.now()}-${Math.random()}`
       }))
       await aggregateAndStorePackReviews(editPackId!, pinsForReviews, supabase)
-      console.log('Review aggregation completed successfully')
+      logger.log('Review aggregation completed successfully')
     } catch (error) {
-      console.warn('Review aggregation failed, but pack was updated successfully:', error)
+      logger.warn('Review aggregation failed, but pack was updated successfully:', error)
       // Don't fail the pack update if review aggregation fails
     }
 
@@ -1589,7 +1590,7 @@ export default function CreatePackPage() {
                             showToast('Failed to fetch place details. Please check the URL and try again.', 'error')
                           }
                         } catch (error) {
-                          console.error('Error fetching place details:', error)
+                          logger.error('Error fetching place details:', error)
                           showToast('Error fetching place details. Please try again.', 'error')
                         } finally {
                           setIsFetchingPlaceDetails(false)

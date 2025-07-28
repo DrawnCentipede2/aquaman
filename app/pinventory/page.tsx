@@ -7,6 +7,7 @@ import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { getPackDisplayImage } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 export default function PinventoryPage() {
   const router = useRouter()
@@ -59,17 +60,17 @@ export default function PinventoryPage() {
       
       // Clear localStorage purchased packs
       localStorage.removeItem('pinpacks_purchased')
-      console.log('Cleared localStorage cached packs')
+      logger.log('Cleared localStorage cached packs')
       
       // Debug: Show what user profile we have
-      console.log('Current user profile:', userProfile)
-      console.log('User email for filtering:', userProfile?.email)
+      logger.log('Current user profile:', userProfile)
+      logger.log('User email for filtering:', userProfile?.email)
       
       // Reload from database only
       await loadPurchasedPacks()
       
     } catch (error) {
-      console.error('Error syncing with database:', error)
+      logger.error('Error syncing with database:', error)
       setError('Failed to sync with database')
     }
   }
@@ -120,10 +121,10 @@ export default function PinventoryPage() {
       const userEmail = userProfile?.email
       let databasePackIds: string[] = []
       
-      console.log('🔍 Loading purchased packs for user email:', userEmail)
+      logger.log('🔍 Loading purchased packs for user email:', userEmail)
       
       if (userEmail) {
-        console.log('🔍 Querying database for orders with email:', userEmail)
+        logger.log('🔍 Querying database for orders with email:', userEmail)
         
         try {
           // First try to find orders by user_email (PinCloud email)
@@ -136,16 +137,16 @@ export default function PinventoryPage() {
             .eq('orders.status', 'completed')
             .eq('orders.user_email', userEmail)
           
-          console.log('🔍 Database query result (user_email):', { orderItems, orderError })
+          logger.log('🔍 Database query result (user_email):', { orderItems, orderError })
           
           if (!orderError && orderItems) {
             databasePackIds = orderItems.map(item => item.pin_pack_id)
-            console.log('🔍 Found database pack IDs (user_email):', databasePackIds)
+            logger.log('🔍 Found database pack IDs (user_email):', databasePackIds)
           } else if (orderError) {
-            console.error('Error fetching user orders by user_email:', orderError)
+            logger.error('Error fetching user orders by user_email:', orderError)
             
             // Fallback: try customer_email (PayPal email) if user_email doesn't work
-            console.log('🔍 Trying fallback query with customer_email...')
+            logger.log('🔍 Trying fallback query with customer_email...')
             
             const { data: fallbackOrderItems, error: fallbackError } = await supabase
               .from('order_items')
@@ -156,17 +157,17 @@ export default function PinventoryPage() {
               .eq('orders.status', 'completed')
               .eq('orders.customer_email', userEmail)
             
-            console.log('🔍 Fallback query result (customer_email):', { fallbackOrderItems, fallbackError })
+            logger.log('🔍 Fallback query result (customer_email):', { fallbackOrderItems, fallbackError })
             
             if (!fallbackError && fallbackOrderItems) {
               databasePackIds = fallbackOrderItems.map(item => item.pin_pack_id)
-              console.log('🔍 Found database pack IDs (customer_email fallback):', databasePackIds)
+              logger.log('🔍 Found database pack IDs (customer_email fallback):', databasePackIds)
             } else if (fallbackError) {
-              console.error('Error fetching user orders by customer_email:', fallbackError)
+              logger.error('Error fetching user orders by customer_email:', fallbackError)
               
               // If both queries fail, try direct orders query
               if (fallbackError.message.includes('relation') || fallbackError.message.includes('does not exist')) {
-                console.log('🔍 Orders table might not exist, trying direct orders query...')
+                logger.log('🔍 Orders table might not exist, trying direct orders query...')
                 
                 const { data: directOrders, error: directError } = await supabase
                   .from('orders')
@@ -174,7 +175,7 @@ export default function PinventoryPage() {
                   .or(`user_email.eq.${userEmail},customer_email.eq.${userEmail}`)
                   .eq('status', 'completed')
                 
-                console.log('🔍 Direct orders query result:', { directOrders, directError })
+                logger.log('🔍 Direct orders query result:', { directOrders, directError })
                 
                 if (!directError && directOrders && directOrders.length > 0) {
                   // Get order items for these orders
@@ -184,21 +185,21 @@ export default function PinventoryPage() {
                     .select('pin_pack_id')
                     .in('order_id', orderIds)
                   
-                  console.log('🔍 Direct order items result:', { directOrderItems, directItemsError })
+                  logger.log('🔍 Direct order items result:', { directOrderItems, directItemsError })
                   
                   if (!directItemsError && directOrderItems) {
                     databasePackIds = directOrderItems.map(item => item.pin_pack_id)
-                    console.log('🔍 Found database pack IDs (direct query):', databasePackIds)
+                    logger.log('🔍 Found database pack IDs (direct query):', databasePackIds)
                   }
                 }
               }
             }
           }
         } catch (error) {
-          console.error('🔍 Error in database query:', error)
+          logger.error('🔍 Error in database query:', error)
         }
       } else {
-        console.log('No user email found - skipping database orders')
+        logger.log('No user email found - skipping database orders')
       }
       
       purchasedPackIds.push(...databasePackIds)
@@ -206,7 +207,7 @@ export default function PinventoryPage() {
       // 2. Get from localStorage ONLY if user has legacy purchases
       // For new accounts, we should only rely on database orders
       const localStorageIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
-      console.log('🔍 Found localStorage pack IDs:', localStorageIds)
+      logger.log('🔍 Found localStorage pack IDs:', localStorageIds)
       
       // Only include localStorage IDs if user has database orders OR if this is a legacy user
       // This prevents new accounts from seeing old localStorage data
@@ -218,26 +219,26 @@ export default function PinventoryPage() {
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
           return typeof id === 'string' && uuidRegex.test(id)
         })
-        console.log('🔍 User has database orders, including valid localStorage IDs:', validLocalIds)
+        logger.log('🔍 User has database orders, including valid localStorage IDs:', validLocalIds)
       } else {
         // New account with no database orders - clear localStorage to prevent showing old data
-        console.log('🔍 New account detected (no database orders), clearing localStorage purchases')
+        logger.log('🔍 New account detected (no database orders), clearing localStorage purchases')
         localStorage.removeItem('pinpacks_purchased')
         validLocalIds = []
       }
       
       // Merge both sources and remove duplicates
       purchasedPackIds = Array.from(new Set([...purchasedPackIds, ...validLocalIds]))
-      console.log('🔍 Final combined pack IDs:', purchasedPackIds)
+      logger.log('🔍 Final combined pack IDs:', purchasedPackIds)
       
       // Update localStorage if we found invalid UUIDs
       if (validLocalIds.length !== localStorageIds.length) {
         localStorage.setItem('pinpacks_purchased', JSON.stringify(validLocalIds))
-        console.log(`Cleaned up ${localStorageIds.length - validLocalIds.length} invalid pack IDs from localStorage`)
+        logger.log(`Cleaned up ${localStorageIds.length - validLocalIds.length} invalid pack IDs from localStorage`)
       }
       
       if (purchasedPackIds.length === 0) {
-        console.log('🔍 No purchased pack IDs found')
+        logger.log('🔍 No purchased pack IDs found')
         setPurchasedPacks([])
         setGroupedPacks({})
         setLoading(false)
@@ -245,20 +246,20 @@ export default function PinventoryPage() {
       }
 
       // Fetch pack details from database
-      console.log('🔍 Fetching pack details for IDs:', purchasedPackIds)
+      logger.log('🔍 Fetching pack details for IDs:', purchasedPackIds)
       const { data: packsData, error: packsError } = await supabase
         .from('pin_packs')
         .select('*')
         .in('id', purchasedPackIds)
 
-      console.log('🔍 Pack details result:', { packsData, packsError })
+      logger.log('🔍 Pack details result:', { packsData, packsError })
 
       if (packsError) throw packsError
 
       setPurchasedPacks(packsData || [])
       
     } catch (err) {
-      console.error('Error loading purchased packs:', err)
+      logger.error('Error loading purchased packs:', err)
       setError('Failed to load your purchased packs. Please try again.')
     } finally {
       setLoading(false)
@@ -355,7 +356,7 @@ export default function PinventoryPage() {
       }))
       
     } catch (error) {
-      console.error('Error loading pack pins:', error)
+      logger.error('Error loading pack pins:', error)
     }
   }
 
@@ -372,16 +373,16 @@ export default function PinventoryPage() {
           url: shareUrl,
         })
       } catch (error) {
-        console.log('Error sharing:', error)
+        logger.log('Error sharing:', error)
       }
     } else {
       // Fallback: copy link to clipboard
       try {
         await navigator.clipboard.writeText(`${shareText} ${shareUrl}`)
-        console.log('Pack details copied to clipboard!')
+        logger.log('Pack details copied to clipboard!')
       } catch (error) {
-        console.error('Failed to copy:', error)
-        console.log('Unable to copy. Please share manually: ' + shareUrl)
+        logger.error('Failed to copy:', error)
+        logger.log('Unable to copy. Please share manually: ' + shareUrl)
       }
     }
   }
@@ -401,7 +402,7 @@ export default function PinventoryPage() {
           return
         }
       } catch (error) {
-        console.error('Error parsing maps list reference:', error)
+        logger.error('Error parsing maps list reference:', error)
         // Fall through to default behavior
       }
     }
@@ -460,8 +461,8 @@ export default function PinventoryPage() {
       setShowDeliveryModal(true)
       
     } catch (err) {
-      console.error('Error loading pack pins:', err)
-      console.log('Failed to load pack details. Please try again.')
+      logger.error('Error loading pack pins:', err)
+      logger.log('Failed to load pack details. Please try again.')
     }
   }
 
@@ -540,15 +541,15 @@ export default function PinventoryPage() {
           // Reload the purchased packs
           loadPurchasedPacks()
           
-          console.log(`Added test pack "${packs[0].title}" to your Pinventory!`)
+          logger.log(`Added test pack "${packs[0].title}" to your Pinventory!`)
         } else {
-          console.log('This pack is already in your Pinventory!')
+          logger.log('This pack is already in your Pinventory!')
         }
       } else {
-        console.log('No packs found in database. Please create a pack first by going to /create')
+        logger.log('No packs found in database. Please create a pack first by going to /create')
       }
     } catch (error) {
-      console.error('Error adding test pack:', error)
+      logger.error('Error adding test pack:', error)
     }
   }
 
@@ -558,7 +559,7 @@ export default function PinventoryPage() {
       // Get user email
       const userEmail = userProfile?.email
       if (!userEmail) {
-        console.log('No user email found. Please sign in first.')
+        logger.log('No user email found. Please sign in first.')
         return
       }
 
@@ -617,21 +618,21 @@ export default function PinventoryPage() {
           })
 
           if (completeOrderResponse.ok) {
-            console.log(`Test order created successfully! Order ID: ${order.id}`)
+            logger.log(`Test order created successfully! Order ID: ${order.id}`)
             // Reload purchased packs
             loadPurchasedPacks()
           } else {
-            console.log('Failed to complete test order')
+            logger.log('Failed to complete test order')
           }
         } else {
-          console.log('Failed to create test order')
+          logger.log('Failed to create test order')
         }
       } else {
-        console.log('No packs found in database')
+        logger.log('No packs found in database')
       }
     } catch (error) {
-      console.error('Error creating test order:', error)
-      console.log('Error creating test order: ' + error)
+      logger.error('Error creating test order:', error)
+      logger.log('Error creating test order: ' + error)
     }
   }
 
@@ -640,11 +641,11 @@ export default function PinventoryPage() {
     try {
       const userEmail = userProfile?.email
       if (!userEmail) {
-        console.log('No user email found. Please sign in first.')
+        logger.log('No user email found. Please sign in first.')
         return
       }
 
-      console.log('🔍 Checking database for user email:', userEmail)
+      logger.log('🔍 Checking database for user email:', userEmail)
 
       // Check if orders table exists and has data
       const { data: orders, error: ordersError } = await supabase
@@ -652,10 +653,10 @@ export default function PinventoryPage() {
         .select('*')
         .or(`user_email.eq.${userEmail},customer_email.eq.${userEmail}`)
 
-      console.log('🔍 Orders for user:', { orders, ordersError })
+      logger.log('🔍 Orders for user:', { orders, ordersError })
 
       if (ordersError) {
-        console.log('Error checking orders: ' + ordersError.message)
+        logger.log('Error checking orders: ' + ordersError.message)
         return
       }
 
@@ -667,15 +668,15 @@ export default function PinventoryPage() {
           .select('*')
           .in('order_id', orderIds)
 
-        console.log('🔍 Order items:', { orderItems, itemsError })
+        logger.log('🔍 Order items:', { orderItems, itemsError })
 
         if (itemsError) {
-          console.log('Error checking order items: ' + itemsError.message)
+          logger.log('Error checking order items: ' + itemsError.message)
           return
         }
 
         const packIds = orderItems?.map(item => item.pin_pack_id) || []
-        console.log('🔍 Pack IDs from orders:', packIds)
+        logger.log('🔍 Pack IDs from orders:', packIds)
 
         if (packIds.length > 0) {
           const { data: packs, error: packsError } = await supabase
@@ -683,17 +684,17 @@ export default function PinventoryPage() {
             .select('id, title')
             .in('id', packIds)
 
-          console.log('🔍 Packs found:', { packs, packsError })
-          console.log(`Found ${orders.length} orders, ${orderItems?.length || 0} items, ${packs?.length || 0} packs`)
+          logger.log('🔍 Packs found:', { packs, packsError })
+          logger.log(`Found ${orders.length} orders, ${orderItems?.length || 0} items, ${packs?.length || 0} packs`)
         } else {
-          console.log(`Found ${orders.length} orders but no order items`)
+          logger.log(`Found ${orders.length} orders but no order items`)
         }
       } else {
-        console.log('No orders found for this user')
+        logger.log('No orders found for this user')
       }
     } catch (error) {
-      console.error('Error checking database:', error)
-      console.log('Error checking database: ' + error)
+      logger.error('Error checking database:', error)
+      logger.log('Error checking database: ' + error)
     }
   }
 
@@ -702,11 +703,11 @@ export default function PinventoryPage() {
     try {
       const userEmail = userProfile?.email
       if (!userEmail) {
-        console.log('No user email found. Please sign in first.')
+        logger.log('No user email found. Please sign in first.')
         return
       }
 
-      console.log('🔗 Linking existing orders to PinCloud email:', userEmail)
+      logger.log('🔗 Linking existing orders to PinCloud email:', userEmail)
 
       // Find orders that have customer_email but no user_email
       const { data: orders, error: ordersError } = await supabase
@@ -715,10 +716,10 @@ export default function PinventoryPage() {
         .is('user_email', null)
         .not('customer_email', 'is', null)
 
-      console.log('🔗 Orders to link:', { orders, ordersError })
+      logger.log('🔗 Orders to link:', { orders, ordersError })
 
       if (ordersError) {
-        console.log('Error finding orders to link: ' + ordersError.message)
+        logger.log('Error finding orders to link: ' + ordersError.message)
         return
       }
 
@@ -730,20 +731,20 @@ export default function PinventoryPage() {
           .is('user_email', null)
 
         if (updateError) {
-          console.log('Error updating orders: ' + updateError.message)
+          logger.log('Error updating orders: ' + updateError.message)
           return
         }
 
-        console.log(`Successfully linked ${orders.length} orders to your PinCloud email!`)
+        logger.log(`Successfully linked ${orders.length} orders to your PinCloud email!`)
         
         // Reload purchased packs
         loadPurchasedPacks()
       } else {
-        console.log('No orders found that need linking')
+        logger.log('No orders found that need linking')
       }
     } catch (error) {
-      console.error('Error linking orders:', error)
-      console.log('Error linking orders: ' + error)
+      logger.error('Error linking orders:', error)
+      logger.log('Error linking orders: ' + error)
     }
   }
 
@@ -1080,7 +1081,7 @@ export default function PinventoryPage() {
                           openMyMapsImportPage()
                           setShowDeliveryModal(false)
                         } catch (error) {
-                          console.log(error instanceof Error ? error.message : 'Failed to export')
+                          logger.log(error instanceof Error ? error.message : 'Failed to export')
                         }
                       }}
                       className="flex-2 btn-primary py-3 flex items-center justify-center"

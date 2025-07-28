@@ -1,3 +1,4 @@
+import { logger } from './logger'
 // Google Maps API integration utilities
 // This handles fetching places from Google Maps lists and place details
 
@@ -109,7 +110,7 @@ export const initializeGoogleMaps = (): Promise<void> => {
 
 // Extract place ID from Google Maps URL
 export const extractPlaceId = (url: string): string | null => {
-  console.log('Extracting place ID from URL:', url)
+  logger.log('Extracting place ID from URL:', url)
   
   // Valid Google place IDs should:
   // - Start with specific prefixes (ChIJ, GhIJ, EhIJ, etc.)
@@ -169,25 +170,25 @@ export const extractPlaceId = (url: string): string | null => {
     const match = url.match(pattern)
     if (match && match[1]) {
       const potentialPlaceId = match[1]
-      console.log(`Potential place ID found using pattern ${i + 1}:`, potentialPlaceId)
+      logger.log(`Potential place ID found using pattern ${i + 1}:`, potentialPlaceId)
       
       // Check if it's a CID format (which is not a valid place ID)
       if (isCidFormat(potentialPlaceId)) {
-        console.log('Found CID format (hexadecimal coordinates), this is not a valid place ID:', potentialPlaceId)
+        logger.log('Found CID format (hexadecimal coordinates), this is not a valid place ID:', potentialPlaceId)
         continue // Skip CID format, it's not a place ID
       }
       
       // First try strict validation
       if (isValidPlaceId(potentialPlaceId)) {
-        console.log('Valid place ID confirmed:', potentialPlaceId)
+        logger.log('Valid place ID confirmed:', potentialPlaceId)
         return potentialPlaceId
       } else {
-        console.log('Invalid place ID format, trying next pattern...')
+        logger.log('Invalid place ID format, trying next pattern...')
       }
     }
   }
   
-  console.log('No valid place ID found in URL')
+  logger.log('No valid place ID found in URL')
   return null
 }
 
@@ -220,13 +221,13 @@ export const extractCoordinates = (url: string): { latitude: number; longitude: 
 
 // Get place details using Google Places API
 export const getPlaceDetails = async (placeId: string): Promise<PlaceDetails> => {
-  console.log('Getting place details for place ID:', placeId)
+  logger.log('Getting place details for place ID:', placeId)
   
   try {
     await initializeGoogleMaps()
-    console.log('Google Maps API initialized successfully')
+    logger.log('Google Maps API initialized successfully')
   } catch (initError) {
-    console.error('Failed to initialize Google Maps API:', initError)
+    logger.error('Failed to initialize Google Maps API:', initError)
     throw new Error(`Google Maps API initialization failed: ${initError}`)
   }
   
@@ -257,17 +258,17 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceDetails> =>
       ]
     }
     
-    console.log('Making Places API request with:', request)
+    logger.log('Making Places API request with:', request)
     
     service.getDetails(request, (place: any, status: any) => {
-      console.log('Places API response status:', status)
-      console.log('Places API response data:', place)
+      logger.log('Places API response status:', status)
+      logger.log('Places API response data:', place)
       
       if (status === (window as any).google.maps.places.PlacesServiceStatus.OK && place) {
-        console.log('Places API request successful')
+        logger.log('Places API request successful')
         resolve(place as PlaceDetails)
       } else {
-        console.error('Places API request failed with status:', status)
+        logger.error('Places API request failed with status:', status)
         
         // Provide more specific error messages
         let errorMessage = `Failed to get place details: ${status}`
@@ -290,7 +291,7 @@ export const getPlaceDetails = async (placeId: string): Promise<PlaceDetails> =>
 
 // Determine category based on Google place types
 const categorizePlace = (types: string[]): string => {
-  console.log('Categorizing place with types:', types)
+  logger.log('Categorizing place with types:', types)
   
   // Priority mapping - more specific types first
   const priorityMapping: { [key: string]: { category: string, priority: number } } = {
@@ -352,7 +353,7 @@ const categorizePlace = (types: string[]): string => {
     }
   }
   
-  console.log('Selected category:', bestMatch.category, 'from types:', types)
+  logger.log('Selected category:', bestMatch.category, 'from types:', types)
   return bestMatch.category
 }
 
@@ -364,7 +365,7 @@ const generateDescription = (place: PlaceDetails): string => {
 
 // Extract city, country, and zip code from address
 const extractCityCountryFromAddress = (address: string): { city: string, country: string, zip_code: string } => {
-  console.log('Extracting location from address:', address)
+  logger.log('Extracting location from address:', address)
   
   if (!address) {
     return { city: 'Unknown', country: 'Unknown', zip_code: '' }
@@ -424,13 +425,13 @@ const extractCityCountryFromAddress = (address: string): { city: string, country
     }
   }
   
-  console.log('Extracted location:', { city, country, zip_code })
+  logger.log('Extracted location:', { city, country, zip_code })
   return { city, country, zip_code }
 }
 
 // Extract business type from Google place types
 const extractBusinessType = (types: string[]): string => {
-  console.log('Extracting business type from types:', types)
+  logger.log('Extracting business type from types:', types)
   
   // Priority mapping for business types - more specific first
   const businessTypeMapping: { [key: string]: { type: string, priority: number } } = {
@@ -513,48 +514,48 @@ const extractBusinessType = (types: string[]): string => {
     }
   }
   
-  console.log('Selected business type:', bestMatch.type, 'from types:', types)
+  logger.log('Selected business type:', bestMatch.type, 'from types:', types)
   return bestMatch.type
 }
 
 // Import a single place from Google Maps URL
 export const importSinglePlace = async (url: string): Promise<ImportedPlace> => {
-  console.log('=== Starting importSinglePlace ===')
-  console.log('Input URL:', url)
+  logger.log('=== Starting importSinglePlace ===')
+  logger.log('Input URL:', url)
   
   try {
     // Check if this is a shortened URL that we should handle specially
     if (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) {
-      console.log('Detected shortened URL, using special handling')
+      logger.log('Detected shortened URL, using special handling')
       return await handleShortenedUrl(url)
     }
     
     // First, expand shortened URLs if needed (for other short URL formats)
     const expandedUrl = await expandShortenedUrl(url)
-    console.log('Working with URL:', expandedUrl)
+    logger.log('Working with URL:', expandedUrl)
     
     // First try to extract place ID (for maximum accuracy)
     const placeId = extractPlaceId(expandedUrl)
-    console.log('Extracted place ID:', placeId)
+    logger.log('Extracted place ID:', placeId)
     
     if (placeId) {
-      console.log('Place ID found, attempting to get place details...')
+      logger.log('Place ID found, attempting to get place details...')
       
       try {
         // Validate place ID format before making API call
         if (placeId.length < 15) {
-          console.warn('Place ID seems too short, might be invalid:', placeId)
+          logger.warn('Place ID seems too short, might be invalid:', placeId)
           throw new Error('Place ID format appears invalid (too short)')
         }
         
         if (!/^[a-zA-Z0-9_-]+$/.test(placeId)) {
-          console.warn('Place ID contains invalid characters:', placeId)
+          logger.warn('Place ID contains invalid characters:', placeId)
           throw new Error('Place ID format appears invalid (invalid characters)')
         }
         
         // Use Google Places API to get detailed information
         const placeDetails = await getPlaceDetails(placeId)
-        console.log('Place details received:', placeDetails)
+        logger.log('Place details received:', placeDetails)
         
         // Extract coordinates properly (they are functions in Google Maps API)
         const latitude = typeof (placeDetails.geometry.location as any).lat === 'function' 
@@ -564,7 +565,7 @@ export const importSinglePlace = async (url: string): Promise<ImportedPlace> => 
           ? (placeDetails.geometry.location as any).lng() 
           : (placeDetails.geometry.location as any).lng
         
-        console.log('Extracted coordinates:', { latitude, longitude })
+        logger.log('Extracted coordinates:', { latitude, longitude })
         
         // Extract city and country from address
         const addressInfo = extractCityCountryFromAddress(placeDetails.formatted_address)
@@ -592,34 +593,34 @@ export const importSinglePlace = async (url: string): Promise<ImportedPlace> => 
           needs_manual_edit: false
         }
         
-        console.log('Returning result from place ID:', result)
+        logger.log('Returning result from place ID:', result)
         return result
         
       } catch (apiError) {
-        console.error('Google Places API error with place ID:', apiError)
-        console.log('Falling back to text search method...')
+        logger.error('Google Places API error with place ID:', apiError)
+        logger.log('Falling back to text search method...')
         // Don't throw here, try the text search fallback below
       }
     }
     
     // Fallback 1: Try text search with place name
-    console.log('Trying text search fallback...')
+    logger.log('Trying text search fallback...')
     const placeName = extractPlaceName(expandedUrl)
-    console.log('Extracted place name:', placeName)
+    logger.log('Extracted place name:', placeName)
     
     if (placeName) {
       // Also try to get coordinates to improve search accuracy
       const coords = extractCoordinates(expandedUrl)
-      console.log('Extracted coordinates for search bias:', coords)
+      logger.log('Extracted coordinates for search bias:', coords)
       
       try {
         const searchCoords = (coords.latitude !== 0 || coords.longitude !== 0) 
           ? { lat: coords.latitude, lng: coords.longitude } 
           : undefined
           
-        console.log('Attempting text search with:', { placeName, searchCoords })
+        logger.log('Attempting text search with:', { placeName, searchCoords })
         const placeDetails = await searchPlaceByName(placeName, searchCoords)
-        console.log('Text search place details received:', placeDetails)
+        logger.log('Text search place details received:', placeDetails)
         
         // Extract coordinates properly (they are functions in Google Maps API)
         const latitude = typeof (placeDetails.geometry.location as any).lat === 'function' 
@@ -629,7 +630,7 @@ export const importSinglePlace = async (url: string): Promise<ImportedPlace> => 
           ? (placeDetails.geometry.location as any).lng() 
           : (placeDetails.geometry.location as any).lng
         
-        console.log('Text search extracted coordinates:', { latitude, longitude })
+        logger.log('Text search extracted coordinates:', { latitude, longitude })
         
         // Extract city and country from address
         const addressInfo = extractCityCountryFromAddress(placeDetails.formatted_address)
@@ -657,19 +658,19 @@ export const importSinglePlace = async (url: string): Promise<ImportedPlace> => 
           needs_manual_edit: false
         }
         
-        console.log('Returning result from text search:', result)
+        logger.log('Returning result from text search:', result)
         return result
         
       } catch (searchError) {
-        console.error('Text search also failed:', searchError)
+        logger.error('Text search also failed:', searchError)
         // Continue to final fallback
       }
     }
     
     // Final fallback: coordinate extraction only
-    console.log('All API methods failed, falling back to coordinate extraction')
+    logger.log('All API methods failed, falling back to coordinate extraction')
     const coords = extractCoordinates(expandedUrl)
-    console.log('Extracted coordinates:', coords)
+    logger.log('Extracted coordinates:', coords)
     
     const fallbackResult = {
       title: 'Imported Place',
@@ -681,15 +682,15 @@ export const importSinglePlace = async (url: string): Promise<ImportedPlace> => 
       needs_manual_edit: true
     }
     
-    console.log('Returning fallback result:', fallbackResult)
+    logger.log('Returning fallback result:', fallbackResult)
     return fallbackResult
     
   } catch (error) {
-    console.error('Error in importSinglePlace:', error)
+    logger.error('Error in importSinglePlace:', error)
     
     // Final fallback to coordinate extraction
     const coords = extractCoordinates(url)
-    console.log('Final fallback coordinates:', coords)
+    logger.log('Final fallback coordinates:', coords)
     
     const errorResult = {
       title: 'Imported Place',
@@ -701,7 +702,7 @@ export const importSinglePlace = async (url: string): Promise<ImportedPlace> => 
       needs_manual_edit: true
     }
     
-    console.log('Returning error fallback result:', errorResult)
+    logger.log('Returning error fallback result:', errorResult)
     return errorResult
   }
 }
@@ -751,7 +752,7 @@ const generateKMLFile = (pinPack: any, pins: any[]): string => {
 
 // Extract place name from Google Maps URL for text search
 export const extractPlaceName = (url: string): string | null => {
-  console.log('Extracting place name from URL:', url)
+  logger.log('Extracting place name from URL:', url)
   
   // Try different patterns to extract place name
   const patterns = [
@@ -785,19 +786,19 @@ export const extractPlaceName = (url: string): string | null => {
       
       // Skip if it's just numbers or very short
       if (placeName.length > 2 && !/^\d+$/.test(placeName)) {
-        console.log(`Place name found using pattern ${i + 1}:`, placeName)
+        logger.log(`Place name found using pattern ${i + 1}:`, placeName)
         return placeName
       }
     }
   }
   
-  console.log('No place name found in URL')
+  logger.log('No place name found in URL')
   return null
 }
 
 // Search for place using Google Places Text Search API
 export const searchPlaceByName = async (placeName: string, coordinates?: { lat: number, lng: number }): Promise<PlaceDetails> => {
-  console.log('Searching for place by name:', placeName, 'near coordinates:', coordinates)
+  logger.log('Searching for place by name:', placeName, 'near coordinates:', coordinates)
   
   await initializeGoogleMaps()
   
@@ -836,17 +837,17 @@ export const searchPlaceByName = async (placeName: string, coordinates?: { lat: 
       }
     }
     
-    console.log('Making Text Search request with:', request)
+    logger.log('Making Text Search request with:', request)
     
     service.textSearch(request, (results: any[], status: any) => {
-      console.log('Text Search response status:', status)
-      console.log('Text Search response data:', results)
+      logger.log('Text Search response status:', status)
+      logger.log('Text Search response data:', results)
       
       if (status === (window as any).google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-        console.log('Text Search successful, using first result')
+        logger.log('Text Search successful, using first result')
         resolve(results[0] as PlaceDetails)
       } else {
-        console.error('Text Search failed with status:', status)
+        logger.error('Text Search failed with status:', status)
         
         let errorMessage = `Text search failed: ${status}`
         
@@ -866,24 +867,24 @@ export const searchPlaceByName = async (placeName: string, coordinates?: { lat: 
 
 // Expand shortened Google Maps URLs (goo.gl) to full URLs
 export const expandShortenedUrl = async (url: string): Promise<string> => {
-  console.log('Expanding shortened URL:', url)
+  logger.log('Expanding shortened URL:', url)
   
   // Check if it's a shortened URL
   if (!url.includes('goo.gl') && !url.includes('maps.app.goo.gl')) {
-    console.log('Not a shortened URL, returning as-is')
+    logger.log('Not a shortened URL, returning as-is')
     return url
   }
   
   // For shortened URLs, we'll try a different approach
   // Since CORS prevents direct expansion, we'll use the Google Maps Embed API approach
   try {
-    console.log('Attempting to resolve shortened URL using alternative method...')
+    logger.log('Attempting to resolve shortened URL using alternative method...')
     
     // Extract the short code from the URL
     const shortCodeMatch = url.match(/maps\.app\.goo\.gl\/([a-zA-Z0-9]+)/)
     if (shortCodeMatch && shortCodeMatch[1]) {
       const shortCode = shortCodeMatch[1]
-      console.log('Extracted short code:', shortCode)
+      logger.log('Extracted short code:', shortCode)
       
       // Try to construct a searchable query using the short code
       // This is a fallback approach when we can't expand the URL
@@ -893,15 +894,15 @@ export const expandShortenedUrl = async (url: string): Promise<string> => {
     return url
     
   } catch (error) {
-    console.error('Error with shortened URL processing:', error)
+    logger.error('Error with shortened URL processing:', error)
     return url
   }
 }
 
 // Special handling for shortened URLs that can't be expanded
 export const handleShortenedUrl = async (url: string): Promise<ImportedPlace> => {
-  console.log('=== Handling shortened URL specially ===')
-  console.log('Shortened URL:', url)
+  logger.log('=== Handling shortened URL specially ===')
+  logger.log('Shortened URL:', url)
   
   // Extract the short code
   const shortCodeMatch = url.match(/maps\.app\.goo\.gl\/([a-zA-Z0-9]+)/)
@@ -910,7 +911,7 @@ export const handleShortenedUrl = async (url: string): Promise<ImportedPlace> =>
   }
   
   const shortCode = shortCodeMatch[1]
-  console.log('Short code:', shortCode)
+  logger.log('Short code:', shortCode)
   
   // Since we can't expand the URL directly, we'll ask the user to provide
   // the place name or we'll use a different approach
@@ -927,8 +928,8 @@ export const handleShortenedUrl = async (url: string): Promise<ImportedPlace> =>
 
 // Temporary debugging function to test place ID extraction
 export const debugPlaceIdExtraction = (url: string): void => {
-  console.log('=== DEBUG PLACE ID EXTRACTION ===')
-  console.log('Input URL:', url)
+  logger.log('=== DEBUG PLACE ID EXTRACTION ===')
+  logger.log('Input URL:', url)
   
   // Test all place ID patterns individually
   const placeIdPatterns = [
@@ -942,11 +943,11 @@ export const debugPlaceIdExtraction = (url: string): void => {
     { name: 'Direct path pattern', regex: /\/([a-zA-Z0-9_-]{20,})(?:\/|$)/ }
   ]
   
-  console.log('--- TESTING PLACE ID PATTERNS ---')
+  logger.log('--- TESTING PLACE ID PATTERNS ---')
   placeIdPatterns.forEach((pattern, index) => {
     const match = url.match(pattern.regex)
     if (match && match[1]) {
-      console.log(`✓ Pattern ${index + 1} (${pattern.name}) found:`, match[1])
+      logger.log(`✓ Pattern ${index + 1} (${pattern.name}) found:`, match[1])
       
       // Test validation
       const id = match[1]
@@ -955,17 +956,17 @@ export const debugPlaceIdExtraction = (url: string): void => {
         ['ChIJ', 'GhIJ', 'EhIJ', 'EkIJ', 'ElIJ', 'EmIJ', 'EnIJ', 'ChAJ', 'GhAJ', 'EhAJ', 'EkAJ', 'ElAJ', 'EmAJ', 'EnAJ']
         .some(prefix => id.startsWith(prefix))
       
-      console.log(`    - Length: ${id.length}`)
-      console.log(`    - Is CID format: ${isCid}`)
-      console.log(`    - Valid place ID: ${isValid}`)
-      console.log(`    - Characters: ${id.split('').slice(0, 15).join('')}...`)
+      logger.log(`    - Length: ${id.length}`)
+      logger.log(`    - Is CID format: ${isCid}`)
+      logger.log(`    - Valid place ID: ${isValid}`)
+      logger.log(`    - Characters: ${id.split('').slice(0, 15).join('')}...`)
     } else {
-      console.log(`✗ Pattern ${index + 1} (${pattern.name}): No match`)
+      logger.log(`✗ Pattern ${index + 1} (${pattern.name}): No match`)
     }
   })
   
   // Test place name extraction patterns
-  console.log('--- TESTING PLACE NAME PATTERNS ---')
+  logger.log('--- TESTING PLACE NAME PATTERNS ---')
   const placeNamePatterns = [
     { name: 'Standard place format', regex: /\/place\/([^\/\@\?]+)/ },
     { name: 'Maps place format', regex: /\/maps\/place\/([^\/\@\?]+)/ },
@@ -981,14 +982,14 @@ export const debugPlaceIdExtraction = (url: string): void => {
         .replace(/\+/g, ' ')
         .replace(/_/g, ' ')
         .trim()
-      console.log(`✓ Place name pattern ${index + 1} (${pattern.name}) found:`, placeName)
+      logger.log(`✓ Place name pattern ${index + 1} (${pattern.name}) found:`, placeName)
     } else {
-      console.log(`✗ Place name pattern ${index + 1} (${pattern.name}): No match`)
+      logger.log(`✗ Place name pattern ${index + 1} (${pattern.name}): No match`)
     }
   })
   
   // Test coordinate extraction
-  console.log('--- TESTING COORDINATE PATTERNS ---')
+  logger.log('--- TESTING COORDINATE PATTERNS ---')
   const coordPatterns = [
     { name: 'Standard @lat,lng', regex: /@(-?\d+\.?\d*),(-?\d+\.?\d*)/ },
     { name: '!3d!4d format', regex: /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/ },
@@ -1000,23 +1001,23 @@ export const debugPlaceIdExtraction = (url: string): void => {
     if (match && match[1] && match[2]) {
       const lat = parseFloat(match[1])
       const lng = parseFloat(match[2])
-      console.log(`✓ Coordinate pattern ${index + 1} (${pattern.name}) found:`, { lat, lng })
+      logger.log(`✓ Coordinate pattern ${index + 1} (${pattern.name}) found:`, { lat, lng })
     } else {
-      console.log(`✗ Coordinate pattern ${index + 1} (${pattern.name}): No match`)
+      logger.log(`✗ Coordinate pattern ${index + 1} (${pattern.name}): No match`)
     }
   })
   
   // Test final extraction functions
-  console.log('--- TESTING EXTRACTION FUNCTIONS ---')
+  logger.log('--- TESTING EXTRACTION FUNCTIONS ---')
   const extractedPlaceId = extractPlaceId(url)
   const extractedPlaceName = extractPlaceName(url)
   const extractedCoords = extractCoordinates(url)
   
-  console.log('Final extracted place ID:', extractedPlaceId)
-  console.log('Final extracted place name:', extractedPlaceName)
-  console.log('Final extracted coordinates:', extractedCoords)
+  logger.log('Final extracted place ID:', extractedPlaceId)
+  logger.log('Final extracted place name:', extractedPlaceName)
+  logger.log('Final extracted coordinates:', extractedCoords)
   
-  console.log('=== END DEBUG ===')
+  logger.log('=== END DEBUG ===')
 }
 
 export default {

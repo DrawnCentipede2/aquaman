@@ -19,7 +19,7 @@ export default function LazyGallery({ photos, packTitle, onImageClick }: LazyGal
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const index = parseInt(entry.target.getAttribute('data-index') || '0')
-            setVisibleImages(prev => new Set([...prev, index]))
+            setVisibleImages(prev => new Set(Array.from(prev).concat(index)))
           }
         })
       },
@@ -49,7 +49,7 @@ export default function LazyGallery({ photos, packTitle, onImageClick }: LazyGal
     <div className="w-full flex gap-2 h-80 rounded-2xl overflow-hidden">
       {/* Main photo - left side (takes 50% width) */}
       <div 
-        ref={(el) => imageRefs.current[0] = el}
+        ref={(el) => { imageRefs.current[0] = el }}
         data-index="0"
         className="flex-1 relative cursor-pointer group h-full overflow-hidden"
         onClick={() => onImageClick(0)}
@@ -79,7 +79,7 @@ export default function LazyGallery({ photos, packTitle, onImageClick }: LazyGal
           return (
             <div
               key={imageIndex}
-              ref={(el) => imageRefs.current[imageIndex] = el}
+              ref={(el) => { imageRefs.current[imageIndex] = el }}
               data-index={imageIndex.toString()}
               className="relative cursor-pointer group overflow-hidden"
               onClick={() => onImageClick(imageIndex)}

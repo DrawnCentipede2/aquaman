@@ -18,9 +18,9 @@ interface PinPackWithPhoto {
   city: string
   country: string
   pin_count: number
-  download_count: number
-  average_rating: number
-  rating_count: number
+  download_count?: number
+  average_rating?: number
+  rating_count?: number
   categories?: string[]
   coverPhoto?: string | null
 }
@@ -419,7 +419,7 @@ export default function BrowsePageOptimized() {
                 key={pack.id}
                 pack={pack}
                 isAuthenticated={isAuthenticated}
-                isInWishlist={wishlistItems.includes(pack.id)}
+                wishlistItems={wishlistItems}
                 onToggleWishlist={handleToggleWishlist}
                 onShowLoginModal={() => setShowLoginModal(true)}
                 getGoogleMapsRating={getGoogleMapsRating}

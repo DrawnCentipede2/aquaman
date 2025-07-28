@@ -78,13 +78,13 @@ function useImagePreloader(urls: string[], priority: boolean = false) {
       return Promise.resolve()
     }
 
-    setLoadingImages(prev => new Set([...prev, url]))
+    setLoadingImages(prev => new Set(Array.from(prev).concat([url])))
 
     return new Promise<void>((resolve, reject) => {
       const img = new Image()
       
       img.onload = () => {
-        setLoadedImages(prev => new Set([...prev, url]))
+        setLoadedImages(prev => new Set(Array.from(prev).concat([url])))
         setLoadingImages(prev => {
           const next = new Set(prev)
           next.delete(url)
@@ -158,69 +158,73 @@ export function useHighPerformanceBrowse() {
       setLoading(true)
       setError(null)
       
-      logger.log('🚀 Loading pin packs with high performance query...')
+      logger.log('Loading pin packs with high performance query...')
       
-      // Single ultra-optimized query with minimal data transfer
+      // First get all pin packs
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
-        .select(`
-          id,
-          title,
-          description,
-          price,
-          city,
-          country,
-          pin_count,
-          download_count,
-          average_rating,
-          rating_count,
-          categories,
-          created_at,
-          pin_pack_pins!inner(
-            pins!inner(
-              photos
-            )
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(100) // Limit initial load for better performance
 
       if (packError) throw packError
 
-      logger.log('🚀 Processing', packData?.length || 0, 'packs...')
+      logger.log('Processing', packData?.length || 0, 'packs...')
 
-      // Ultra-fast processing with minimal loops
-      const processedPacks: HighPerformancePinPack[] = []
-      const imageUrls: string[] = []
+      // For each pack, get the first available photo from its pins
+      const processedPacks = await Promise.all(
+        (packData || []).map(async (pack) => {
+          let coverPhoto: string | null = null
+          const preloadedImages: string[] = []
 
-      for (const pack of packData || []) {
-        let coverPhoto: string | null = null
-        const preloadedImages: string[] = []
+          try {
+            // Get first few pins with photos for this pack
+            const { data: pinData, error: pinError } = await supabase
+              .from('pin_pack_pins')
+              .select(`
+                pins (
+                  photos
+                )
+              `)
+              .eq('pin_pack_id', pack.id)
+              .limit(3) // Get up to 3 pins to check for photos
 
-        // Find first photo efficiently
-        if (pack.pin_pack_pins?.[0]?.pins?.photos?.[0]) {
-          coverPhoto = pack.pin_pack_pins[0].pins.photos[0]
-          imageUrls.push(coverPhoto)
-          
-          // Collect additional images for preloading
-          for (const pinPackPin of pack.pin_pack_pins.slice(0, 3)) {
-            if (pinPackPin.pins?.photos) {
-              preloadedImages.push(...pinPackPin.pins.photos.slice(0, 2))
+            if (!pinError && pinData) {
+              // Find first pin that has photos
+              const pinWithPhoto = pinData.find((item: any) => {
+                const pin = item.pins as any
+                return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
+              })
+              
+              if (pinWithPhoto) {
+                const pin = pinWithPhoto.pins as any
+                coverPhoto = pin.photos[0] // Add first photo as cover
+                
+                // Collect additional images for preloading
+                for (const pinItem of pinData.slice(0, 3)) {
+                  const pinPhotos = (pinItem.pins as any)?.photos
+                  if (pinPhotos && Array.isArray(pinPhotos)) {
+                    preloadedImages.push(...pinPhotos.slice(0, 2))
+                  }
+                }
+              }
             }
+          } catch (error) {
+            logger.warn('Error loading photos for pack:', pack.id, error)
           }
-        }
-
-        processedPacks.push({
-          ...pack,
-          coverPhoto,
-          preloadedImages
+          
+          return {
+            ...pack,
+            coverPhoto,
+            preloadedImages
+          }
         })
-      }
+      )
 
       // Cache processed data
       cacheRef.current.set(cacheKey, processedPacks)
       
-      logger.log('🚀 Processed', processedPacks.length, 'packs with', imageUrls.length, 'images')
+      logger.log('Processed', processedPacks.length, 'packs')
       
       setPinPacks(processedPacks)
     } catch (err) {
@@ -312,7 +316,7 @@ export function useHighPerformanceBrowse() {
     const startTime = performance.now()
     loadPinPacks().then(() => {
       const endTime = performance.now()
-      logger.log(`🚀 Data loading completed in ${endTime - startTime}ms`)
+      logger.log(`Data loading completed in ${endTime - startTime}ms`)
     })
   }, [loadPinPacks])
 
@@ -384,7 +388,7 @@ export function useOptimizedWishlist() {
       } else {
         // Add to wishlist
         currentWishlist.push(pack)
-        setWishlistItems(prev => new Set([...prev, packId]))
+        setWishlistItems(prev => new Set(Array.from(prev).concat([packId])))
       }
 
       localStorage.setItem('pinpacks_wishlist', JSON.stringify(currentWishlist))

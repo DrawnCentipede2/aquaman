@@ -6,6 +6,7 @@ import { MapPin, ArrowLeft, ExternalLink, ChevronDown, ChevronUp, Image as Image
 import { supabase } from '@/lib/supabase'
 import CloudLoader from '@/components/CloudLoader'
 import type { PinPack } from '@/lib/supabase'
+import { logger } from '@/lib/logger'
 
 interface PinPlace {
   id: string
@@ -49,7 +50,7 @@ export default function PurchasedPackDetailsPage() {
       }))
       setPins(parsedPins)
     } catch (e) {
-      console.error(e)
+      logger.error(e)
     } finally {
       setLoading(false)
     }

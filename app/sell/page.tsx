@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { logger } from '@/lib/logger'
 import { DollarSign, Users, Globe, Star, TrendingUp, CheckCircle, Heart, MapPin, Package, ArrowRight, Play, ChevronDown, ChevronUp, BarChart3, Target, Shield, Clock, Coffee, Camera, Utensils, Car } from 'lucide-react'
 
 // Hook for counter animation - counts from 0 to target value
@@ -185,7 +186,7 @@ const getInitialLocation = () => {
       return profile.location || 'your city'
     }
   } catch (error) {
-    console.warn('Error parsing user profile for location:', error)
+    logger.warn('Error parsing user profile for location:', error)
   }
   
   return ''
@@ -206,7 +207,7 @@ export default function SellPage() {
       // User is authenticated if they have either profile or user ID
       return !!(userProfile || savedUserId)
     } catch (error) {
-      console.warn('Error checking authentication:', error)
+      logger.warn('Error checking authentication:', error)
       return false
     }
   }
@@ -341,7 +342,7 @@ export default function SellPage() {
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !shouldAnimateStats) {
-          console.log('Stats section is visible, starting animation!')
+          logger.log('Stats section is visible, starting animation!')
           setShouldAnimateStats(true)
         }
       },

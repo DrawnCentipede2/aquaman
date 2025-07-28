@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { supabase } from './supabase'
+import { logger } from './logger'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,7 +15,7 @@ export const queryCreatorData = async (
   try {
     // Always decode the creator ID to handle URL-encoded emails consistently
     const decodedCreatorId = decodeURIComponent(creatorId)
-    console.log('Querying creator data for ID:', decodedCreatorId)
+    logger.log('Querying creator data for ID:', decodedCreatorId)
     
     // Check if creatorId looks like a UUID or an email
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedCreatorId)
@@ -22,7 +23,7 @@ export const queryCreatorData = async (
     let result
     if (isUUID) {
       // Query by UUID (id field)
-      console.log('Querying by UUID:', decodedCreatorId)
+      logger.log('Querying by UUID:', decodedCreatorId)
       result = await supabase
         .from('users')
         .select(selectFields)
@@ -30,7 +31,7 @@ export const queryCreatorData = async (
         .maybeSingle()
     } else {
       // Query by email (assuming creatorId is an email for legacy creators)
-      console.log('Querying by email:', decodedCreatorId)
+      logger.log('Querying by email:', decodedCreatorId)
       result = await supabase
         .from('users')
         .select(selectFields)
@@ -38,7 +39,7 @@ export const queryCreatorData = async (
         .maybeSingle()
     }
 
-    console.log('Creator data query result:', { 
+    logger.log('Creator data query result:', { 
       data: result.data, 
       error: result.error, 
       queryType: isUUID ? 'UUID' : 'email' 
@@ -50,7 +51,7 @@ export const queryCreatorData = async (
       queryType: isUUID ? 'UUID' : 'email'
     }
   } catch (error) {
-    console.error('Error in queryCreatorData:', error)
+    logger.error('Error in queryCreatorData:', error)
     return {
       data: null,
       error: error,
@@ -85,7 +86,7 @@ export const getPackDisplayImage = async (packId: string): Promise<string | null
     
     return null
   } catch (error) {
-    console.error('Error getting pack display image:', error)
+    logger.error('Error getting pack display image:', error)
     return null
   }
 } 

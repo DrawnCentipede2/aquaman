@@ -1,5 +1,6 @@
 // Validation utilities for API security
 import { z } from 'zod'
+import { logger } from './logger'
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 15 * 60 * 1000 // 15 minutes
@@ -159,7 +160,7 @@ export function logSecurityEvent(
   userEmail?: string,
   ip?: string
 ): void {
-  console.log(`[SECURITY] ${event}:`, {
+  logger.log(`[SECURITY] ${event}:`, {
     timestamp: new Date().toISOString(),
     userEmail,
     ip,

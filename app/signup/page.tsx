@@ -6,6 +6,7 @@ import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ui/toast'
+import { logger } from '@/lib/logger'
 
 export default function SignUpPage() {
   const router = useRouter()
@@ -33,7 +34,7 @@ export default function SignUpPage() {
 
     setIsLoading(true)
     try {
-      console.log('🔐 Starting signup process for:', formData.email)
+      logger.log('🔐 Starting signup process for:', formData.email)
       
       // Create user profile in database
       const { data: userData, error: userError } = await supabase
@@ -46,11 +47,11 @@ export default function SignUpPage() {
         .select()
 
       if (userError) {
-        console.error('User creation error:', userError)
+        logger.error('User creation error:', userError)
         throw userError
       }
 
-      console.log('✅ User created in database:', userData)
+      logger.log('✅ User created in database:', userData)
 
       // Save to localStorage for immediate access
       const userProfile = {
@@ -60,7 +61,7 @@ export default function SignUpPage() {
         created_at: new Date().toISOString()
       }
 
-      console.log('💾 Saving user profile to localStorage:', userProfile)
+      logger.log('💾 Saving user profile to localStorage:', userProfile)
       
       localStorage.setItem('pinpacks_user_profile', JSON.stringify(userProfile))
       localStorage.setItem('pinpacks_user_id', userProfile.email)
@@ -70,11 +71,11 @@ export default function SignUpPage() {
       // Clear any existing purchased packs from localStorage for new accounts
       // This ensures new users don't see old pack data from previous sessions
       localStorage.removeItem('pinpacks_purchased')
-      console.log('🧹 Cleared existing purchased packs from localStorage for new account')
+      logger.log('🧹 Cleared existing purchased packs from localStorage for new account')
 
       // Verify the profile was saved correctly
       const savedProfile = localStorage.getItem('pinpacks_user_profile')
-      console.log('🔍 Verification - Saved profile from localStorage:', savedProfile)
+      logger.log('🔍 Verification - Saved profile from localStorage:', savedProfile)
 
       // Check if user came from sell page (indicated by referrer or URL parameter)
       const cameFromSell = document.referrer.includes('/sell') || window.location.search.includes('from=sell')
@@ -83,10 +84,10 @@ export default function SignUpPage() {
         // Mark user as creator eligible and registered since they came from sell page
         localStorage.setItem('pinpacks_has_created_packs', 'true')
         localStorage.setItem('pinpacks_is_registered_creator', 'true')
-        console.log('🎯 User came from sell page, marked as creator')
+        logger.log('🎯 User came from sell page, marked as creator')
       }
 
-      console.log('📡 Triggering storage event to update navigation')
+      logger.log('📡 Triggering storage event to update navigation')
       // Trigger storage event to update navigation
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'pinpacks_user_profile',
@@ -95,23 +96,23 @@ export default function SignUpPage() {
       
       // Also trigger custom authentication event for immediate notification
       window.dispatchEvent(new CustomEvent('custom-auth-event'))
-      console.log('📡 Triggering custom authentication event')
+      logger.log('📡 Triggering custom authentication event')
 
       // Add a small delay to ensure localStorage is properly saved and Navigation component has time to process
-      console.log('⏳ Adding delay to ensure profile is properly loaded...')
+      logger.log('⏳ Adding delay to ensure profile is properly loaded...')
       await new Promise(resolve => setTimeout(resolve, 500))
 
       // Verify profile is still there after delay
       const profileAfterDelay = localStorage.getItem('pinpacks_user_profile')
-      console.log('🔍 Verification after delay - Profile still in localStorage:', profileAfterDelay)
+      logger.log('🔍 Verification after delay - Profile still in localStorage:', profileAfterDelay)
 
-      console.log('🚀 Redirecting to browse page')
+      logger.log('🚀 Redirecting to browse page')
       // Redirect to browse page
       router.push('/browse')
       
     } catch (err) {
       showToast('Failed to create profile. Please try again.', 'error')
-      console.error('❌ Sign up error:', err)
+      logger.error('❌ Sign up error:', err)
     } finally {
       setIsLoading(false)
     }

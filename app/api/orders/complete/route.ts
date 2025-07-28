@@ -45,9 +45,8 @@ export async function POST(request: NextRequest) {
       .single()
     
     if (updateError) {
-      console.error('Error updating order:', updateError)
       return NextResponse.json(
-        { error: 'Failed to update order' },
+        { error: 'Failed to update order', details: updateError.message },
         { status: 500 }
       )
     }
@@ -59,23 +58,22 @@ export async function POST(request: NextRequest) {
       .eq('order_id', orderId)
     
     if (itemsError) {
-      console.error('Error fetching order items:', itemsError)
+      // Log error but continue processing
+      return NextResponse.json(
+        { error: 'Failed to fetch order items', details: itemsError.message },
+        { status: 500 }
+      )
     } else if (orderItems && orderItems.length > 0) {
       // Increment download count for each purchased pack
-      console.log('🔍 Processing', orderItems.length, 'order items for download count increment')
       
       for (const item of orderItems) {
         try {
-          console.log('🔍 Attempting RPC call for pack:', item.pin_pack_id)
-          
           // Try using RPC function first
           const { error: rpcError } = await supabase.rpc('increment_download_count', {
             pack_id: item.pin_pack_id
           })
           
           if (rpcError) {
-            console.warn('🔍 RPC call failed, using fallback approach:', rpcError)
-            
             // Fallback: Get current count and increment
             const { data: currentPack, error: fetchError } = await supabase
               .from('pin_packs')
@@ -84,7 +82,8 @@ export async function POST(request: NextRequest) {
               .single()
             
             if (fetchError) {
-              console.error('🔍 Could not fetch current download count:', fetchError)
+              // Continue processing other items even if one fails
+              continue
             } else {
               const newCount = (currentPack.download_count || 0) + 1
               const { error: updateError } = await supabase
@@ -93,9 +92,8 @@ export async function POST(request: NextRequest) {
                 .eq('id', item.pin_pack_id)
               
               if (updateError) {
-                console.error('🔍 Fallback update also failed:', updateError)
-              } else {
-                console.log('🔍 Fallback update successful for pack:', item.pin_pack_id)
+                // Continue processing other items even if one fails
+                continue
               }
             }
             
@@ -108,13 +106,10 @@ export async function POST(request: NextRequest) {
                   download_type: 'purchase'
                 })
             } catch (downloadError) {
-              console.warn('🔍 Could not insert download record:', downloadError)
+              // Continue processing even if download record fails
             }
-          } else {
-            console.log('🔍 RPC call successful for pack:', item.pin_pack_id)
           }
         } catch (error) {
-          console.error('🔍 Error processing pack download count:', error)
           // Continue processing other items even if one fails
         }
       }
@@ -128,9 +123,9 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Order completion error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: errorMessage },
       { status: 500 }
     )
   }

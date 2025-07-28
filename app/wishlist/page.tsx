@@ -6,6 +6,7 @@ import CloudLoader from '@/components/CloudLoader'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { useToast } from '@/components/ui/toast'
+import { logger } from '@/lib/logger'
 
 // Rating cache for Google Maps ratings
 const ratingCache = new Map()
@@ -52,17 +53,17 @@ export default function WishlistPage() {
         const savedWishlist = localStorage.getItem('pinpacks_wishlist')
         if (savedWishlist) {
           const wishlist = JSON.parse(savedWishlist)
-          console.log('🔄 Wishlist - Loading wishlist items:', wishlist.length)
+          logger.log('🔄 Wishlist - Loading wishlist items:', wishlist.length)
           
           // Load photos for wishlist items
           const wishlistWithPhotos = await loadPhotosForWishlist(wishlist)
           setWishlistItems(wishlistWithPhotos)
-          console.log('✅ Wishlist - Loaded photos for wishlist items')
+          logger.log('✅ Wishlist - Loaded photos for wishlist items')
         } else {
           setWishlistItems([])
         }
       } catch (error) {
-        console.error('Error loading wishlist:', error)
+        logger.error('Error loading wishlist:', error)
         setWishlistItems([])
       } finally {
         setLoading(false)
@@ -78,7 +79,7 @@ export default function WishlistPage() {
       if (wishlist.length === 0) return wishlist
 
       const packIds = wishlist.map(pack => pack.id)
-      console.log('🔄 Wishlist - Loading photos for pack IDs:', packIds)
+      logger.log('🔄 Wishlist - Loading photos for pack IDs:', packIds)
 
       const { data: photoData, error: photoError } = await supabase
         .from('pin_pack_pins')
@@ -91,24 +92,24 @@ export default function WishlistPage() {
         .in('pin_pack_id', packIds)
 
       if (photoError) {
-        console.error('Error loading photos for wishlist:', photoError)
+        logger.error('Error loading photos for wishlist:', photoError)
         return wishlist
       }
 
-      console.log('🔄 Wishlist - Photo data received:', photoData?.length || 0, 'items')
+      logger.log('🔄 Wishlist - Photo data received:', photoData?.length || 0, 'items')
 
       // Create a map of pack_id to first photo
       const photoMap = new Map()
       photoData?.forEach((item: any) => {
         if (item.pins?.photos?.[0]) {
           photoMap.set(item.pin_pack_id, item.pins.photos[0])
-          console.log('🔄 Wishlist - Found photo for pack:', item.pin_pack_id)
+          logger.log('🔄 Wishlist - Found photo for pack:', item.pin_pack_id)
         } else {
-          console.log('🔄 Wishlist - No photo found for pack:', item.pin_pack_id)
+          logger.log('🔄 Wishlist - No photo found for pack:', item.pin_pack_id)
         }
       })
 
-      console.log('🔄 Wishlist - Photo map created with', photoMap.size, 'entries')
+      logger.log('🔄 Wishlist - Photo map created with', photoMap.size, 'entries')
 
       // Add photos to wishlist items
       const wishlistWithPhotos = wishlist.map(pack => ({
@@ -116,10 +117,10 @@ export default function WishlistPage() {
         coverPhoto: photoMap.get(pack.id) || null
       }))
 
-      console.log('🔄 Wishlist - Wishlist items with photos:', wishlistWithPhotos.filter(p => p.coverPhoto).length)
+      logger.log('🔄 Wishlist - Wishlist items with photos:', wishlistWithPhotos.filter(p => p.coverPhoto).length)
       return wishlistWithPhotos
     } catch (error) {
-      console.error('Error loading photos for wishlist:', error)
+      logger.error('Error loading photos for wishlist:', error)
       return wishlist
     }
   }
@@ -142,7 +143,7 @@ export default function WishlistPage() {
       
       showToast('Pack removed from wishlist', 'success')
     } catch (error) {
-      console.error('Error removing from wishlist:', error)
+      logger.error('Error removing from wishlist:', error)
       showToast('Failed to remove pack from wishlist', 'error')
     }
   }
@@ -239,11 +240,11 @@ export default function WishlistPage() {
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ aspectRatio: '4/3' }}
                           onError={(e) => {
-                            console.log('🔄 Wishlist - Image failed to load for pack:', pack.id)
+                            logger.log('🔄 Wishlist - image failed to load for pack:', pack.id);
                             (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
                           }}
                           onLoad={() => {
-                            console.log('✅ Wishlist - Image loaded successfully for pack:', pack.id);
+                            logger.log('✅ Wishlist - Image loaded successfully for pack:', pack.id);
                           }}
                         />
                       ) : (

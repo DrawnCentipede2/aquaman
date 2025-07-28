@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
 import { getPackDisplayImage, queryCreatorData } from '@/lib/utils'
 import dynamic from 'next/dynamic'
+import { logger } from '@/lib/logger'
 
 // Dynamically import non-critical components to reduce initial CSS load
 const DynamicCloudLoader = dynamic(() => import('@/components/CloudLoader'), {
@@ -43,15 +44,15 @@ export default function CreatorProfilePage() {
     const loadCreatorData = async () => {
       try {
         setError(null) // Clear any previous errors
-        console.log('Loading creator data for ID:', creatorId)
+        logger.log('Loading creator data for ID:', creatorId)
         
         // Use shared utility function for consistent querying
         const { data: creatorData, error, queryType } = await queryCreatorData(creatorId, 'name, email, bio, verified, city, country, occupation, social_links, profile_picture, created_at')
 
-        console.log('Creator data query result:', { creatorData, error, queryType })
+        logger.log('Creator data query result:', { creatorData, error, queryType })
 
         if (creatorData && !error) {
-          console.log('Setting creator data from database:', creatorData)
+          logger.log('Setting creator data from database:', creatorData)
           setCreator({
             id: creatorId,
             name: creatorData.name || creatorData.email?.split('@')[0].split('.').map((word: string) => 
@@ -76,7 +77,7 @@ My packs are carefully crafted based on years of exploration and conversations w
             socialLinks: creatorData.social_links || {}
           })
         } else if (error) {
-          console.warn('Creator data query failed:', error)
+          logger.warn('Creator data query failed:', error)
           // Fallback for backwards compatibility
           const fallbackName = queryType === 'UUID' 
             ? 'Local Creator' 
@@ -111,7 +112,7 @@ My packs are carefully crafted based on years of exploration and conversations w
           })
         }
       } catch (error) {
-        console.error('Error loading creator data:', error)
+        logger.error('Error loading creator data:', error)
         // Set fallback data for any unexpected errors
         const decodedCreatorId = decodeURIComponent(creatorId)
         const isUUIDFallback = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedCreatorId)
@@ -159,7 +160,7 @@ My packs are carefully crafted based on years of exploration and conversations w
         const wishlistIds = wishlist.map((item: any) => item.id)
         setWishlistItems(wishlistIds)
       } catch (error) {
-        console.error('Error loading wishlist:', error)
+        logger.error('Error loading wishlist:', error)
       }
     }
   }
@@ -179,7 +180,7 @@ My packs are carefully crafted based on years of exploration and conversations w
       
       if (isUUID) {
         // Query by UUID (creator_id field)
-        console.log('Loading packs for creator UUID:', decodedCreatorId)
+        logger.log('Loading packs for creator UUID:', decodedCreatorId)
         const result = await supabase
           .from('pin_packs')
           .select('*')
@@ -190,7 +191,7 @@ My packs are carefully crafted based on years of exploration and conversations w
         error = result.error
       } else {
         // Query by email (creator_id field for legacy packs)
-        console.log('Loading packs for creator email:', decodedCreatorId)
+        logger.log('Loading packs for creator email:', decodedCreatorId)
         const result = await supabase
           .from('pin_packs')
           .select('*')
@@ -201,7 +202,7 @@ My packs are carefully crafted based on years of exploration and conversations w
         error = result.error
       }
 
-      console.log(`Found ${packsData.length} packs for creator ${decodedCreatorId}`)
+      logger.log(`Found ${packsData.length} packs for creator ${decodedCreatorId}`)
       
       if (error) throw error
       
@@ -214,7 +215,7 @@ My packs are carefully crafted based on years of exploration and conversations w
             const imageUrl = await getPackDisplayImage(pack.id)
             return { id: pack.id, imageUrl }
           } catch (error) {
-            console.warn(`Failed to load image for pack ${pack.id}:`, error)
+            logger.warn(`Failed to load image for pack ${pack.id}:`, error)
             return { id: pack.id, imageUrl: null }
           }
         })
@@ -232,7 +233,7 @@ My packs are carefully crafted based on years of exploration and conversations w
       }
       
     } catch (error) {
-      console.error('Error loading creator packs:', error)
+      logger.error('Error loading creator packs:', error)
       setError('Failed to load creator packs')
     } finally {
       setLoading(false)

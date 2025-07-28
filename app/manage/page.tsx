@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { getPackDisplayImage } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
 import ConfirmModal from '@/components/ui/ConfirmModal'
+import { logger } from '@/lib/logger'
 
 // Interface for pin pack with analytics
 interface PinPackWithAnalytics {
@@ -79,24 +80,24 @@ export default function ManagePage() {
             
             if (userData && !error) {
               setUserId(userData.id) // Use the actual UUID from database
-              console.log('Authenticated user found, using UUID:', userData.id)
+              logger.log('Authenticated user found, using UUID:', userData.id)
             } else {
-              console.warn('Could not find user in database:', error)
+              logger.warn('Could not find user in database:', error)
               setUserId(profile.userId) // Fallback to stored userId
             }
           } catch (error) {
-            console.error('Error fetching user UUID:', error)
+            logger.error('Error fetching user UUID:', error)
             setUserId(profile.userId) // Fallback to stored userId
           }
           
-          console.log('Authenticated user found:', profile.email)
+          logger.log('Authenticated user found:', profile.email)
         } else if (savedUserId) {
           // User has old system ID - still allow them to use it
           setUserId(savedUserId)
-          console.log('Legacy user found:', savedUserId)
+          logger.log('Legacy user found:', savedUserId)
         } else {
           // No authentication found - redirect to sign in
-          console.log('Please sign in first to view your pin packs')
+          logger.log('Please sign in first to view your pin packs')
           router.push('/auth')
           return
         }
@@ -143,7 +144,7 @@ export default function ManagePage() {
       setLoading(true)
       setError(null)
       
-      console.log('Loading packs for user:', userId)
+      logger.log('Loading packs for user:', userId)
       
       // Try to get user's pin packs with new fields first
       let packs = []
@@ -163,7 +164,7 @@ export default function ManagePage() {
         if (packs.length === 0) {
           const userEmail = localStorage.getItem('pinpacks_user_email')
           if (userEmail) {
-            console.log('No packs found with exact user ID, trying email-based search...')
+            logger.log('No packs found with exact user ID, trying email-based search...')
             const emailDomain = userEmail.split('@')[0] // Get part before @
             
             const { data: emailPacks, error: emailError } = await supabase
@@ -174,13 +175,13 @@ export default function ManagePage() {
 
             if (!emailError && emailPacks) {
               packs = emailPacks
-              console.log(`Found ${emailPacks.length} packs via email search`)
+              logger.log(`Found ${emailPacks.length} packs via email search`)
             }
           }
         }
         
       } catch (creatorIdError) {
-        console.log('creator_id column not found, trying IP-based fallback...')
+        logger.log('creator_id column not found, trying IP-based fallback...')
         
         // Try IP-based lookup as secondary option
         const userIP = localStorage.getItem('pinpacks_user_ip')
@@ -193,9 +194,9 @@ export default function ManagePage() {
 
           if (!ipError && ipBasedPacks && ipBasedPacks.length > 0) {
             packs = ipBasedPacks
-            console.log('Found packs based on IP:', ipBasedPacks.length)
+            logger.log('Found packs based on IP:', ipBasedPacks.length)
           } else {
-            console.log('No IP-based packs found, loading all packs as final fallback...')
+            logger.log('No IP-based packs found, loading all packs as final fallback...')
             
             // Final fallback: load all packs (for older schema without creator_id)
             const { data: allPacks, error: allPacksError } = await supabase
@@ -207,7 +208,7 @@ export default function ManagePage() {
             packs = allPacks || []
           }
         } else {
-          console.log('No IP found, loading all packs as fallback...')
+          logger.log('No IP found, loading all packs as fallback...')
           
           // Fallback: load all packs (for older schema without creator_id)
           const { data: allPacks, error: allPacksError } = await supabase
@@ -220,7 +221,7 @@ export default function ManagePage() {
         }
       }
 
-      console.log('Loaded packs:', packs)
+      logger.log('Loaded packs:', packs)
 
       // For each pack, get recent download analytics
       const packsWithAnalytics: PinPackWithAnalytics[] = []
@@ -253,7 +254,7 @@ export default function ManagePage() {
       
     } catch (error) {
       setError('Failed to load your pin packs')
-      console.error('Error loading user packs:', error)
+      logger.error('Error loading user packs:', error)
     } finally {
       setLoading(false)
       packsLoadingRef.current = false // Reset loading ref
@@ -285,7 +286,7 @@ export default function ManagePage() {
         .delete()
         .eq('pin_pack_id', packId)
       if (relationshipDeleteError) {
-        console.error('Error deleting pin relationships:', relationshipDeleteError)
+        logger.error('Error deleting pin relationships:', relationshipDeleteError)
         throw relationshipDeleteError
       }
       const { data: pinRelationships, error: relationshipError } = await supabase
@@ -293,7 +294,7 @@ export default function ManagePage() {
         .select('pin_id')
         .eq('pin_pack_id', packId)
       if (relationshipError) {
-        console.error('Error getting pin relationships:', relationshipError)
+        logger.error('Error getting pin relationships:', relationshipError)
         throw relationshipError
       }
       if (pinRelationships && pinRelationships.length > 0) {
@@ -303,7 +304,7 @@ export default function ManagePage() {
           .delete()
           .in('id', pinIds)
         if (pinsDeleteError) {
-          console.error('Error deleting pins:', pinsDeleteError)
+          logger.error('Error deleting pins:', pinsDeleteError)
           throw pinsDeleteError
         }
       }
@@ -312,7 +313,7 @@ export default function ManagePage() {
         .delete()
         .eq('pin_pack_id', packId)
       if (downloadsDeleteError) {
-        console.error('Error deleting downloads:', downloadsDeleteError)
+        logger.error('Error deleting downloads:', downloadsDeleteError)
       }
       const { error: deleteError } = await supabase
         .from('pin_packs')
@@ -322,7 +323,7 @@ export default function ManagePage() {
       setUserPacks(userPacks.filter(pack => pack.id !== packId))
       showToast(`"${packTitle}" has been deleted successfully!`, 'success')
     } catch (error) {
-      console.error('Error deleting pin pack:', error)
+      logger.error('Error deleting pin pack:', error)
       showToast(`Failed to delete "${pendingDelete?.title}". Please try again or contact support if the issue persists.`, 'error')
     } finally {
       setIsDeleting(false)
@@ -354,7 +355,7 @@ export default function ManagePage() {
       
       showToast('Pin pack updated successfully!', 'success')
     } catch (error) {
-      console.error('Error updating pin pack:', error)
+      logger.error('Error updating pin pack:', error)
       showToast('Failed to update pin pack. Please try again.', 'error')
     }
   }

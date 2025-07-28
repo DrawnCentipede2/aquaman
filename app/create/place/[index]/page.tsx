@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { MapPin, Save, ArrowLeft, Upload, Globe, Star, Clock, Phone, ExternalLink, Trash2, ChevronUp, ChevronDown, Tag, Building, HelpCircle, X, Image as ImageIcon, Plus } from 'lucide-react'
-import { log } from 'console'
+import { logger } from '@/lib/logger'
 
 // Interface for a single pin (same as in main create page)
 interface Pin {
@@ -74,7 +74,7 @@ export default function IndividualPlacePage() {
           router.push('/create')
         }
       } catch (error) {
-        console.error('Error loading place data:', error)
+        logger.error('Error loading place data:', error)
         router.push('/create')
       } finally {
         setIsLoading(false)
@@ -125,13 +125,13 @@ export default function IndividualPlacePage() {
         const pins: Pin[] = JSON.parse(savedPins)
         pins[placeIndex] = updatedPin
         localStorage.setItem('pinpacks_create_pins', JSON.stringify(pins))
-        console.log('Pin saved successfully to localStorage', { placeIndex, title: updatedPin.title })
+        logger.log('Pin saved successfully to localStorage', { placeIndex, title: updatedPin.title })
       } else {
-        console.error('No saved pins found in localStorage - cannot save individual pin changes')
-        console.log('You may need to go back to the main create page and re-add this place')
+        logger.error('No saved pins found in localStorage - cannot save individual pin changes')
+        logger.log('You may need to go back to the main create page and re-add this place')
       }
     } catch (error) {
-      console.error('Error saving place data:', error)
+      logger.error('Error saving place data:', error)
     }
   }
 
@@ -163,7 +163,7 @@ export default function IndividualPlacePage() {
         }
         router.push('/create')
       } catch (error) {
-        console.error('Error deleting place:', error)
+        logger.error('Error deleting place:', error)
       }
     }
   }
@@ -255,7 +255,7 @@ export default function IndividualPlacePage() {
 
     // Check if user already has a photo
     if (pin?.photos && pin.photos.length >= 1) {
-      console.log('You can only upload 1 photo per place. Please remove the existing photo first.')
+      logger.log('You can only upload 1 photo per place. Please remove the existing photo first.')
       return
     }
 
@@ -266,13 +266,13 @@ export default function IndividualPlacePage() {
       
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        console.log(`File "${file.name}" is not an image. Please select only image files.`)
+        logger.log(`File "${file.name}" is not an image. Please select only image files.`)
         return
       }
       
       // Validate file size (max 10MB before compression)
       if (file.size > 10 * 1024 * 1024) {
-        console.log(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
+        logger.log(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
         return
       }
       
@@ -282,11 +282,11 @@ export default function IndividualPlacePage() {
       // Replace any existing photos with the new one
       updatePin({ photos: [compressedBase64] })
       
-      console.log(` Photo uploaded and compressed successfully!`)
+      logger.log(` Photo uploaded and compressed successfully!`)
       
     } catch (error) {
-      console.error('Error uploading photo:', error)
-      console.log('Error uploading photo. Please try again.')
+      logger.error('Error uploading photo:', error)
+      logger.log('Error uploading photo. Please try again.')
     } finally {
       setIsUploadingPhoto(false)
       // Reset file input

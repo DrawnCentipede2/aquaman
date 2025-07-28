@@ -4,6 +4,7 @@ import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { useState } from 'react'
 import { XCircle, Check, Loader2 } from 'lucide-react'
 import CloudLoader from '@/components/CloudLoader'
+import { logger } from '@/lib/logger'
 
 // PayPal checkout component interface
 interface PayPalCheckoutProps {
@@ -86,7 +87,7 @@ function PayPalButtonsComponent({
               intent: 'CAPTURE'
             })
           } catch (error) {
-            console.error('Error creating PayPal order:', error)
+            logger.error('Error creating PayPal order:', error)
             setIsProcessing(false)
             onError(error)
             throw error
@@ -110,7 +111,7 @@ function PayPalButtonsComponent({
               })
             }
           } catch (error) {
-            console.error('Error capturing PayPal payment:', error)
+            logger.error('Error capturing PayPal payment:', error)
             onError(error)
           } finally {
             setIsProcessing(false)
@@ -119,14 +120,14 @@ function PayPalButtonsComponent({
         
         // Handle payment errors
         onError={(error) => {
-          console.error('PayPal payment error:', error)
+          logger.error('PayPal payment error:', error)
           setIsProcessing(false)
           onError(error)
         }}
         
         // Handle cancelled payments
         onCancel={(data) => {
-          console.log('PayPal payment cancelled:', data)
+          logger.log('PayPal payment cancelled:', data)
           setIsProcessing(false)
         }}
       />

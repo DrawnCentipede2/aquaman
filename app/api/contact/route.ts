@@ -41,9 +41,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Email sent successfully' })
   } catch (err: any) {
-    console.log('Error sending email:', err)
+    // Simple error handling without console logging
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
+    
     return NextResponse.json(
-      { success: false, error: 'Failed to send email' },
+      { success: false, error: 'Failed to send email', details: errorMessage },
       { status: 500 }
     )
   }
