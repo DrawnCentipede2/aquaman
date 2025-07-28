@@ -140,7 +140,7 @@ A new React component that shows:
 
 2. **Environment Setup**:
    ```env
-   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_api_key_here
+   GOOGLE_MAPS_API_KEY_SERVER=your_api_key_here
    ```
 
 3. **Required Google APIs**:

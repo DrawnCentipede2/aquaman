@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get Google Places API key from environment
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    // Get Google Places API key from environment - use server-side key for better security
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY_SERVER || process.env.GOOGLE_MAPS_API_KEY_SERVER
     if (!apiKey) {
       return NextResponse.json(
         { error: 'Google Places API key not configured' },

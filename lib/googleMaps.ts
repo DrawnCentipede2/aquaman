@@ -79,9 +79,9 @@ interface ImportedPlace {
 
 // Get the Google Maps API key from environment variables
 const getApiKey = (): string => {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY_SERVER
   if (!apiKey) {
-    throw new Error('Google Maps API key is not configured. Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your environment variables.')
+    throw new Error('Google Maps API key is not configured. Please add GOOGLE_MAPS_API_KEY_SERVER to your environment variables.')
   }
   return apiKey
 }

@@ -18,8 +18,8 @@ const envSchema = z.object({
   GMAIL_USER: z.string().email('Invalid Gmail user email'),
   GMAIL_APP_PASSWORD: z.string().min(1, 'Gmail app password is required'),
   
-  // Optional
-  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().optional(),
+  // Google Maps API Keys
+  GOOGLE_MAPS_API_KEY_SERVER: z.string().optional(), // Server-side key (more permissive)
   
   // Node environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -71,9 +71,10 @@ export const config = {
     appPassword: env.GMAIL_APP_PASSWORD,
   },
   
-  // Google Maps (optional)
+  // Google Maps
   googleMaps: {
-    apiKey: env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+    apiKey: env.GOOGLE_MAPS_API_KEY_SERVER, // Client-side key
+    serverApiKey: env.GOOGLE_MAPS_API_KEY_SERVER, // Server-side key
   },
   
   // Security
