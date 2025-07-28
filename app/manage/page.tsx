@@ -1,0 +1,645 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { Download, Calendar, Edit, Eye, Trash2, Plus, TrendingUp, DollarSign, Users, Star, MapPin, Clock, BarChart3, Package } from 'lucide-react'
+import CloudLoader from '@/components/CloudLoader'
+import { supabase } from '@/lib/supabase'
+import { getPackDisplayImage } from '@/lib/utils'
+import { useToast } from '@/components/ui/toast'
+import ConfirmModal from '@/components/ui/ConfirmModal'
+
+// Interface for pin pack with analytics
+interface PinPackWithAnalytics {
+  id: string
+  title: string
+  description: string
+  price: number
+  city: string
+  country: string
+  created_at: string
+  creator_location: string
+  creator_id: string
+  pin_count: number
+  download_count: number
+  average_rating: number
+  rating_count: number
+  recent_downloads: number // Downloads in last 7 days
+  categories?: string[] // Array of category strings (up to 3)
+}
+
+export default function ManagePage() {
+  const router = useRouter()
+  const { showToast } = useToast()
+  // State for user's pin packs
+  const [userPacks, setUserPacks] = useState<PinPackWithAnalytics[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string>('')
+  const [packImages, setPackImages] = useState<{[key: string]: string}>({})
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string, title: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  
+  // Add refs to prevent redundant authentication calls
+  const authCheckedRef = useRef(false)
+  const authInProgressRef = useRef(false)
+  
+  // Add ref to prevent redundant pack loading calls
+  const packsLoadingRef = useRef(false)
+  const lastUserIdRef = useRef<string>('')
+
+  // Check for authenticated user and use email-based system
+  useEffect(() => {
+    // Prevent redundant authentication checks
+    if (authCheckedRef.current || authInProgressRef.current) {
+      return
+    }
+    
+    const checkAuth = async () => {
+      // Set flag to prevent concurrent auth checks
+      authInProgressRef.current = true
+      
+      try {
+        // Check if user is authenticated via new email system
+        const userProfile = localStorage.getItem('pinpacks_user_profile')
+        const savedUserId = localStorage.getItem('pinpacks_user_id')
+        
+        if (userProfile) {
+          // User is authenticated via email system
+          const profile = JSON.parse(userProfile)
+          
+          // Ensure we have the correct UUID for this user (same logic as create page)
+          try {
+            const { data: userData, error } = await supabase
+              .from('users')
+              .select('id, email')
+              .eq('email', profile.email)
+              .single()
+            
+            if (userData && !error) {
+              setUserId(userData.id) // Use the actual UUID from database
+              console.log('Authenticated user found, using UUID:', userData.id)
+            } else {
+              console.warn('Could not find user in database:', error)
+              setUserId(profile.userId) // Fallback to stored userId
+            }
+          } catch (error) {
+            console.error('Error fetching user UUID:', error)
+            setUserId(profile.userId) // Fallback to stored userId
+          }
+          
+          console.log('Authenticated user found:', profile.email)
+        } else if (savedUserId) {
+          // User has old system ID - still allow them to use it
+          setUserId(savedUserId)
+          console.log('Legacy user found:', savedUserId)
+        } else {
+          // No authentication found - redirect to sign in
+          console.log('Please sign in first to view your pin packs')
+          router.push('/auth')
+          return
+        }
+        
+        // Mark authentication as completed
+        authCheckedRef.current = true
+      } finally {
+        // Clear the in-progress flag
+        authInProgressRef.current = false
+      }
+    }
+    
+    checkAuth()
+    
+    // Cleanup function to reset flags if component unmounts
+    return () => {
+      authCheckedRef.current = false
+      authInProgressRef.current = false
+    }
+  }, [router]) // Keep router dependency but prevent redundant calls
+
+  // Load user's pin packs when user ID is available
+  useEffect(() => {
+    // Prevent redundant pack loading calls
+    if (!userId || userId === lastUserIdRef.current || packsLoadingRef.current) {
+      return
+    }
+    
+    // Update last userId and trigger pack loading
+    lastUserIdRef.current = userId
+    loadUserPacks()
+  }, [userId])
+
+  // Function to load user's pin packs with analytics
+  const loadUserPacks = async () => {
+    // Prevent concurrent pack loading
+    if (packsLoadingRef.current) {
+      return
+    }
+    
+    packsLoadingRef.current = true
+    
+    try {
+      setLoading(true)
+      setError(null)
+      
+      console.log('Loading packs for user:', userId)
+      
+      // Try to get user's pin packs with new fields first
+      let packs = []
+      
+      try {
+        // First try with the exact creator_id match
+        const { data: exactPacks, error: exactError } = await supabase
+          .from('pin_packs')
+          .select('*')
+          .eq('creator_id', userId)
+          .order('created_at', { ascending: false })
+
+        if (exactError) throw exactError
+        packs = exactPacks || []
+        
+        // If no packs found and user has email, try to find packs by email domain
+        if (packs.length === 0) {
+          const userEmail = localStorage.getItem('pinpacks_user_email')
+          if (userEmail) {
+            console.log('No packs found with exact user ID, trying email-based search...')
+            const emailDomain = userEmail.split('@')[0] // Get part before @
+            
+            const { data: emailPacks, error: emailError } = await supabase
+              .from('pin_packs')
+              .select('*')
+              .ilike('creator_id', `%${emailDomain}%`)
+              .order('created_at', { ascending: false })
+
+            if (!emailError && emailPacks) {
+              packs = emailPacks
+              console.log(`Found ${emailPacks.length} packs via email search`)
+            }
+          }
+        }
+        
+      } catch (creatorIdError) {
+        console.log('creator_id column not found, trying IP-based fallback...')
+        
+        // Try IP-based lookup as secondary option
+        const userIP = localStorage.getItem('pinpacks_user_ip')
+        if (userIP) {
+          const { data: ipBasedPacks, error: ipError } = await supabase
+            .from('pin_packs')
+            .select('*')
+            .ilike('creator_location', `%${userIP}%`)
+            .order('created_at', { ascending: false })
+
+          if (!ipError && ipBasedPacks && ipBasedPacks.length > 0) {
+            packs = ipBasedPacks
+            console.log('Found packs based on IP:', ipBasedPacks.length)
+          } else {
+            console.log('No IP-based packs found, loading all packs as final fallback...')
+            
+            // Final fallback: load all packs (for older schema without creator_id)
+            const { data: allPacks, error: allPacksError } = await supabase
+              .from('pin_packs')
+              .select('*')
+              .order('created_at', { ascending: false })
+
+            if (allPacksError) throw allPacksError
+            packs = allPacks || []
+          }
+        } else {
+          console.log('No IP found, loading all packs as fallback...')
+          
+          // Fallback: load all packs (for older schema without creator_id)
+          const { data: allPacks, error: allPacksError } = await supabase
+            .from('pin_packs')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+          if (allPacksError) throw allPacksError
+          packs = allPacks || []
+        }
+      }
+
+      console.log('Loaded packs:', packs)
+
+      // For each pack, get recent download analytics
+      const packsWithAnalytics: PinPackWithAnalytics[] = []
+      
+      for (const pack of packs || []) {
+        // Get downloads from last 7 days
+        const { data: recentDownloads } = await supabase
+          .from('pack_downloads')
+          .select('id')
+          .eq('pin_pack_id', pack.id)
+          .gte('downloaded_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+
+        packsWithAnalytics.push({
+          ...pack,
+          recent_downloads: recentDownloads?.length || 0
+        })
+      }
+
+      setUserPacks(packsWithAnalytics)
+      
+      // Load pack images
+      const images: {[key: string]: string} = {}
+      for (const pack of packsWithAnalytics) {
+        const imageUrl = await getPackDisplayImage(pack.id)
+        if (imageUrl) {
+          images[pack.id] = imageUrl
+        }
+      }
+      setPackImages(images)
+      
+    } catch (error) {
+      setError('Failed to load your pin packs')
+      console.error('Error loading user packs:', error)
+    } finally {
+      setLoading(false)
+      packsLoadingRef.current = false // Reset loading ref
+    }
+  }
+
+  // Function to delete a pin pack
+  const deletePinPack = async (packId: string, packTitle: string) => {
+    setPendingDelete({ id: packId, title: packTitle })
+    setShowConfirm(true)
+  }
+
+  // Function to handle delete button click
+  const handleDeleteClick = (packId: string, packTitle: string) => {
+    setPendingDelete({ id: packId, title: packTitle })
+    setShowConfirm(true)
+  }
+
+  // Function to actually delete the pack
+  const confirmDeletePack = async () => {
+    if (!pendingDelete) return
+    setIsDeleting(true)
+    try {
+      // Delete related data first
+      const packId = pendingDelete.id
+      const packTitle = pendingDelete.title
+      const { error: relationshipDeleteError } = await supabase
+        .from('pin_pack_pins')
+        .delete()
+        .eq('pin_pack_id', packId)
+      if (relationshipDeleteError) {
+        console.error('Error deleting pin relationships:', relationshipDeleteError)
+        throw relationshipDeleteError
+      }
+      const { data: pinRelationships, error: relationshipError } = await supabase
+        .from('pin_pack_pins')
+        .select('pin_id')
+        .eq('pin_pack_id', packId)
+      if (relationshipError) {
+        console.error('Error getting pin relationships:', relationshipError)
+        throw relationshipError
+      }
+      if (pinRelationships && pinRelationships.length > 0) {
+        const pinIds = pinRelationships.map(rel => rel.pin_id)
+        const { error: pinsDeleteError } = await supabase
+          .from('pins')
+          .delete()
+          .in('id', pinIds)
+        if (pinsDeleteError) {
+          console.error('Error deleting pins:', pinsDeleteError)
+          throw pinsDeleteError
+        }
+      }
+      const { error: downloadsDeleteError } = await supabase
+        .from('pack_downloads')
+        .delete()
+        .eq('pin_pack_id', packId)
+      if (downloadsDeleteError) {
+        console.error('Error deleting downloads:', downloadsDeleteError)
+      }
+      const { error: deleteError } = await supabase
+        .from('pin_packs')
+        .delete()
+        .eq('id', packId)
+      if (deleteError) throw deleteError
+      setUserPacks(userPacks.filter(pack => pack.id !== packId))
+      showToast(`"${packTitle}" has been deleted successfully!`, 'success')
+    } catch (error) {
+      console.error('Error deleting pin pack:', error)
+      showToast(`Failed to delete "${pendingDelete?.title}". Please try again or contact support if the issue persists.`, 'error')
+    } finally {
+      setIsDeleting(false)
+      setShowConfirm(false)
+      setPendingDelete(null)
+    }
+  }
+
+  // Function to edit pin pack - opens create page in edit mode
+  const editPinPack = (pack: PinPackWithAnalytics) => {
+    // Open the create page in edit mode for comprehensive editing
+    router.push(`/create?edit=${pack.id}`)
+  }
+
+  // Function to update pin pack
+  const updatePinPack = async (packId: string, updates: { title?: string, description?: string }) => {
+    try {
+      const { error } = await supabase
+        .from('pin_packs')
+        .update(updates)
+        .eq('id', packId)
+
+      if (error) throw error
+
+      // Update local state
+      setUserPacks(userPacks.map(pack => 
+        pack.id === packId ? { ...pack, ...updates } : pack
+      ))
+      
+      showToast('Pin pack updated successfully!', 'success')
+    } catch (error) {
+      console.error('Error updating pin pack:', error)
+      showToast('Failed to update pin pack. Please try again.', 'error')
+    }
+  }
+
+  // Function to get analytics summary
+  const getAnalyticsSummary = () => {
+    const totalPacks = userPacks.length
+    const totalDownloads = userPacks.reduce((sum, pack) => sum + (pack.download_count || 0), 0)
+    const totalRecentDownloads = userPacks.reduce((sum, pack) => sum + pack.recent_downloads, 0)
+    const totalEarnings = userPacks.reduce((sum, pack) => sum + (pack.price * (pack.download_count || 0)), 0)
+    
+    return { totalPacks, totalDownloads, totalRecentDownloads, totalEarnings }
+  }
+
+  const analytics = getAnalyticsSummary()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-25 flex items-center justify-center">
+        <div className="text-center">
+                  <CloudLoader size="lg" text="Loading your pin packs..." />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-25">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        {/* Header */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center mb-4">
+                <Package className="h-8 w-8 text-coral-500 mr-3" />
+                <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
+                  Manage Your Packs
+                </h1>
+              </div>
+              <p className="text-xl text-gray-600">
+                Track performance and manage your pin pack collections
+              </p>
+            </div>
+            <a 
+              href="/create"
+              className="btn-primary flex items-center"
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Create New Pack
+            </a>
+          </div>
+        </div>
+
+        {/* Analytics Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-coral-100 rounded-full flex items-center justify-center mr-4">
+                <Package className="h-6 w-6 text-coral-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Packs</p>
+                <p className="text-2xl font-bold text-gray-900">{analytics.totalPacks}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+                <Download className="h-6 w-6 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Downloads</p>
+                <p className="text-2xl font-bold text-gray-900">{analytics.totalDownloads}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                <TrendingUp className="h-6 w-6 text-green-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Recent Downloads</p>
+                <p className="text-2xl font-bold text-gray-900">{analytics.totalRecentDownloads}</p>
+                <p className="text-xs text-gray-400">Last 7 days</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-airbnb p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
+                <DollarSign className="h-6 w-6 text-yellow-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Total Earnings</p>
+                <p className="text-2xl font-bold text-gray-900">${analytics.totalEarnings.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="card-airbnb p-6 mb-8 bg-red-50 border border-red-200">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                <Trash2 className="h-6 w-6 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-red-900">Error</h3>
+                <p className="text-red-700">{error}</p>
+                <button 
+                  onClick={loadUserPacks}
+                  className="text-red-600 hover:text-red-800 font-medium mt-2"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pin Packs Grid */}
+        {userPacks.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-6">
+              <Package className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">No pin packs yet</h3>
+            <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+              Create your first pin pack and start sharing your favorite places with travelers.
+            </p>
+            <a 
+              href="/create"
+              className="btn-primary inline-flex items-center text-lg px-8 py-4"
+            >
+              <Package className="h-5 w-5 mr-2" />
+              Create Your First Pack
+            </a>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userPacks.map((pack) => (
+              <div 
+                key={pack.id} 
+                className="card-airbnb group cursor-pointer"
+                onClick={() => router.push(`/pack/${pack.id}`)}
+              >
+                {/* Pack Image with Google Maps Background */}
+                <div className="relative h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
+                  {/* Inner container that scales - maintains boundaries */}
+                  <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
+                    <img 
+                      src={packImages[pack.id] || "/google-maps-bg.svg"}
+                      alt={`${pack.title} cover`}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      style={{ aspectRatio: '4/3' }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+                  </div>
+                  
+                  {/* Price Badge */}
+                  <div className="absolute top-3 left-3">
+                    <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-semibold text-gray-900">
+                      {pack.price === 0 ? 'Free' : `$${pack.price}`}
+                    </span>
+                  </div>
+
+                  {/* Pin Count */}
+                  <div className="absolute top-3 right-3">
+                    <span className="bg-coral-500 text-white px-2 py-1 rounded-lg text-sm font-medium">
+                      {pack.pin_count} pins
+                    </span>
+                  </div>
+
+                  {/* Recent Activity Badge */}
+                  {pack.recent_downloads > 0 && (
+                    <div className="absolute bottom-3 left-3">
+                      <span className="bg-green-500 text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center">
+                        <TrendingUp className="h-3 w-3 mr-1" />
+                        {pack.recent_downloads} recent
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pack Content */}
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-coral-600 transition-colors">
+                        {pack.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 flex items-center mt-1">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {pack.city}, {pack.country}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">
+                    {pack.description || 'No description provided'}
+                  </p>
+
+                  {/* Categories Display */}
+                  {pack.categories && pack.categories.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {pack.categories.map((category, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center bg-coral-100 text-coral-800 px-2 py-1 rounded-full text-xs font-medium"
+                        >
+                          {category}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Stats Row */}
+                  <div className="flex items-center justify-between mb-4 text-sm text-gray-500">
+                    <div className="flex items-center">
+                      <Download className="h-3 w-3 mr-1" />
+                      <span>{pack.download_count || 0} downloads</span>
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="h-3 w-3 mr-1" />
+                      <span>{new Date(pack.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        editPinPack(pack)
+                      }}
+                      className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center"
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/pack/${pack.id}`)
+                      }}
+                      className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      View
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteClick(pack.id, pack.title)
+                      }}
+                      className="px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <ConfirmModal
+        open={showConfirm}
+        title={`Delete "${pendingDelete?.title}"?`}
+        message={`This will permanently remove the pin pack and all its pins, downloads, and ratings. This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeletePack}
+        onCancel={() => { setShowConfirm(false); setPendingDelete(null) }}
+        loading={isDeleting}
+      />
+    </div>
+  )
+} 

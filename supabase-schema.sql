@@ -1,0 +1,232 @@
+-- Google Pins Marketplace Database Schema
+-- Run this in your Supabase SQL editor to create the required tables
+
+-- Enable RLS (Row Level Security) - Supabase recommendation
+-- For MVP, we'll keep it simple without complex policies
+
+-- Table to store individual pins
+CREATE TABLE pins (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    google_maps_url TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'other',
+    latitude DECIMAL(10, 8) NOT NULL DEFAULT 0,
+    longitude DECIMAL(11, 8) NOT NULL DEFAULT 0,
+    
+    -- Enhanced place information from Google Places API
+    address TEXT,
+    city TEXT,
+    country TEXT,
+    zip_code TEXT,
+    business_type TEXT,
+    phone TEXT,
+    website TEXT,
+    rating DECIMAL(3, 2),
+    rating_count INTEGER,
+    business_status TEXT, -- 'OPERATIONAL', 'CLOSED_TEMPORARILY', 'CLOSED_PERMANENTLY'
+    current_opening_hours JSONB, -- Store opening hours as JSON
+    reviews JSONB, -- Store recent reviews as JSON array
+    place_id TEXT, -- Google Places API place ID for future reference
+    needs_manual_edit BOOLEAN DEFAULT FALSE,
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    creator_location TEXT,
+    creator_ip TEXT,
+    CONSTRAINT valid_latitude CHECK (latitude >= -90 AND latitude <= 90),
+    CONSTRAINT valid_longitude CHECK (longitude >= -180 AND longitude <= 180),
+    CONSTRAINT valid_rating CHECK (rating IS NULL OR (rating >= 0 AND rating <= 5))
+);
+
+-- Table to store pin packs (collections of pins)
+CREATE TABLE pin_packs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    city TEXT NOT NULL,
+    country TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    creator_location TEXT,
+    creator_id TEXT, -- Simple creator ID for MVP (can be localStorage ID)
+    pin_count INTEGER NOT NULL DEFAULT 0,
+    download_count INTEGER NOT NULL DEFAULT 0,
+    average_rating DECIMAL(3, 2) DEFAULT 0.00,
+    rating_count INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT positive_price CHECK (price >= 0)
+);
+
+-- Junction table to link pins to pin packs (many-to-many relationship)
+CREATE TABLE pin_pack_pins (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pin_pack_id UUID NOT NULL REFERENCES pin_packs(id) ON DELETE CASCADE,
+    pin_id UUID NOT NULL REFERENCES pins(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(pin_pack_id, pin_id)
+);
+
+-- Table to track downloads
+CREATE TABLE pack_downloads (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pin_pack_id UUID NOT NULL REFERENCES pin_packs(id) ON DELETE CASCADE,
+    downloaded_at TIMESTAMPTZ DEFAULT NOW(),
+    download_type TEXT DEFAULT 'view', -- 'view', 'kml', 'qr', etc.
+    user_location TEXT,
+    user_ip TEXT
+);
+
+-- Table to store ratings and reviews
+CREATE TABLE pack_ratings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pin_pack_id UUID NOT NULL REFERENCES pin_packs(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    review TEXT,
+    reviewer_location TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Table to store edit requests for place information
+CREATE TABLE place_edit_requests (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    pin_id UUID NOT NULL REFERENCES pins(id) ON DELETE CASCADE,
+    user_id TEXT, -- Simple user ID for MVP
+    field_name TEXT NOT NULL, -- 'title', 'address', 'phone', etc.
+    current_value TEXT,
+    requested_value TEXT NOT NULL,
+    status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT
+);
+
+-- Create indexes for better performance
+CREATE INDEX idx_pins_category ON pins(category);
+CREATE INDEX idx_pins_created_at ON pins(created_at);
+CREATE INDEX idx_pins_city_country ON pins(city, country);
+CREATE INDEX idx_pins_rating ON pins(rating);
+CREATE INDEX idx_pins_business_status ON pins(business_status);
+CREATE INDEX idx_pins_place_id ON pins(place_id);
+CREATE INDEX idx_pin_packs_city_country ON pin_packs(city, country);
+CREATE INDEX idx_pin_packs_created_at ON pin_packs(created_at);
+CREATE INDEX idx_pin_packs_creator_id ON pin_packs(creator_id);
+CREATE INDEX idx_pin_pack_pins_pack_id ON pin_pack_pins(pin_pack_id);
+CREATE INDEX idx_pin_pack_pins_pin_id ON pin_pack_pins(pin_id);
+CREATE INDEX idx_pack_downloads_pack_id ON pack_downloads(pin_pack_id);
+CREATE INDEX idx_pack_downloads_date ON pack_downloads(downloaded_at);
+CREATE INDEX idx_pack_ratings_pack_id ON pack_ratings(pin_pack_id);
+CREATE INDEX idx_edit_requests_pin_id ON place_edit_requests(pin_id);
+CREATE INDEX idx_edit_requests_status ON place_edit_requests(status);
+CREATE INDEX idx_edit_requests_created_at ON place_edit_requests(created_at);
+
+-- Enable RLS on all tables (required by Supabase)
+ALTER TABLE pins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pin_packs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pin_pack_pins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pack_downloads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pack_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE place_edit_requests ENABLE ROW LEVEL SECURITY;
+
+-- Create permissive policies for MVP (anyone can read/write)
+-- In production, you'd want more restrictive policies
+
+-- Pins policies
+CREATE POLICY "Anyone can view pins" ON pins
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert pins" ON pins
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete pins" ON pins
+    FOR DELETE USING (true);
+
+-- Pin packs policies
+CREATE POLICY "Anyone can view pin packs" ON pin_packs
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert pin packs" ON pin_packs
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete pin packs" ON pin_packs
+    FOR DELETE USING (true);
+
+-- Pin pack pins policies
+CREATE POLICY "Anyone can view pin pack pins" ON pin_pack_pins
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert pin pack pins" ON pin_pack_pins
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete pin pack pins" ON pin_pack_pins
+    FOR DELETE USING (true);
+
+-- Pack downloads policies
+CREATE POLICY "Anyone can view downloads" ON pack_downloads
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert downloads" ON pack_downloads
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete downloads" ON pack_downloads
+    FOR DELETE USING (true);
+
+-- Pack ratings policies
+CREATE POLICY "Anyone can view ratings" ON pack_ratings
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert ratings" ON pack_ratings
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can delete ratings" ON pack_ratings
+    FOR DELETE USING (true);
+
+-- Place edit requests policies
+CREATE POLICY "Anyone can view edit requests" ON place_edit_requests
+    FOR SELECT USING (true);
+
+CREATE POLICY "Anyone can insert edit requests" ON place_edit_requests
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Anyone can update edit requests" ON place_edit_requests
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Anyone can delete edit requests" ON place_edit_requests
+    FOR DELETE USING (true);
+
+-- Optional: Create a view for easier querying of complete pin packs
+CREATE VIEW pin_pack_details AS
+SELECT 
+    pp.id,
+    pp.title,
+    pp.description,
+    pp.price,
+    pp.city,
+    pp.country,
+    pp.created_at,
+    pp.creator_location,
+    COUNT(ppp.pin_id) as actual_pin_count
+FROM pin_packs pp
+LEFT JOIN pin_pack_pins ppp ON pp.id = ppp.pin_pack_id
+GROUP BY pp.id, pp.title, pp.description, pp.price, pp.city, pp.country, pp.created_at, pp.creator_location;
+
+-- Insert some sample data for testing (optional)
+-- You can uncomment these after creating the tables
+
+/*
+-- Sample pin pack
+INSERT INTO pin_packs (title, description, price, city, country, creator_location, pin_count) VALUES
+('Best Coffee Shops in Barcelona', 'My favorite local coffee spots that tourists never find', 0.00, 'Barcelona', 'Spain', 'Barcelona, Spain', 3);
+
+-- Get the ID of the pack we just created (replace with actual ID from above)
+-- INSERT INTO pins (title, description, google_maps_url, category, latitude, longitude, creator_location) VALUES
+-- ('Café Central', 'Amazing cortado and local atmosphere', 'https://maps.google.com/?q=Café+Central+Barcelona', 'cafe', 41.3851, 2.1734, 'Barcelona, Spain'),
+-- ('Hidden Gems Coffee', 'Best kept secret in Gràcia neighborhood', 'https://maps.google.com/?q=Hidden+Gems+Coffee+Barcelona', 'cafe', 41.4036, 2.1588, 'Barcelona, Spain'),
+-- ('Roastery Local', 'They roast their own beans daily', 'https://maps.google.com/?q=Roastery+Local+Barcelona', 'cafe', 41.3888, 2.1590, 'Barcelona, Spain');
+
+-- Link pins to pack (you'll need to replace the UUIDs with actual ones)
+-- INSERT INTO pin_pack_pins (pin_pack_id, pin_id) VALUES 
+-- ('your-pack-id', 'your-pin-id-1'),
+-- ('your-pack-id', 'your-pin-id-2'),
+-- ('your-pack-id', 'your-pin-id-3');
+*/ 
