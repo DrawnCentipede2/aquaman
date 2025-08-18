@@ -22,7 +22,7 @@ export function usePinPacks() {
       // First get all pin packs
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
-        .select('id, title, description, price, city, country, pin_count, download_count, average_rating, rating_count, categories, created_at')
+        .select('id, title, description, price, city, country, creator_location, pin_count, download_count, average_rating, rating_count, categories, created_at')
         .order('created_at', { ascending: false })
 
       if (packError) throw packError
