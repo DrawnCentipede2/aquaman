@@ -6,13 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:photos": "tsx scripts/migrate-pin-photos-to-storage.ts",
+    "migrate:photos:dry": "tsx scripts/migrate-pin-photos-to-storage.ts --dry-run"
   },
   "dependencies": {
     "@paypal/react-paypal-js": "^8.8.3",
     "@radix-ui/react-switch": "^1.2.5",
     "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.38.4",
     "@types/nodemailer": "^6.4.17",
     "autoprefixer": "^10.4.16",
     "class-variance-authority": "^0.7.1",
@@ -24,18 +25,20 @@
     "postcss": "^8.4.32",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.34.3",
     "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^3.3.6",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.55.0",
     "@types/node": "^20",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "eslint": "^8",
     "eslint-config-next": "^15.3.4",
+    "sharp": "^0.34.3",
+    "tsx": "^4.20.4",
     "typescript": "^5.8.3"
   }
 }

@@ -63,30 +63,35 @@ export const queryCreatorData = async (
 // Function to get the first available photo from a pack's pins
 export const getPackDisplayImage = async (packId: string): Promise<string | null> => {
   try {
-    const { data: packPinsData, error } = await supabase
-      .from('pin_pack_pins')
-      .select(`
-        pins (
-          id,
-          photos
-        )
-      `)
-      .eq('pin_pack_id', packId)
-      .limit(10)
-
-    if (error || !packPinsData) return null
-
-    // Find first pin with photos
-    for (const packPin of packPinsData) {
-      const pin = packPin.pins as any
-      if (pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0) {
-        return pin.photos[0]
-      }
-    }
-    
+    // Avoid fetching photos by default to reduce egress; this util can be adapted to fetch from CDN URLs later
     return null
+
   } catch (error) {
     logger.error('Error getting pack display image:', error)
     return null
   }
 } 
+
+// Transform a Supabase Storage public URL to the Image Transformation endpoint
+// Example:
+//  https://<project>.supabase.co/storage/v1/object/public/pin-photos/pins/<id>/0.webp
+// → https://<project>.supabase.co/storage/v1/render/image/public/pin-photos/pins/<id>/0.webp?width=600&quality=70
+export function toTransformedImageUrl(
+  url: string,
+  opts: { width?: number; height?: number; quality?: number } = {}
+): string {
+  try {
+    if (!url || typeof url !== 'string') return url
+    // Allow enabling via env flag; default to off to avoid 403 if transformations aren't enabled
+    if (process.env.NEXT_PUBLIC_SUPABASE_TRANSFORM_ENABLED !== 'true') return url
+    if (!url.includes('/storage/v1/object/public/')) return url
+    const width = opts.width ?? 600
+    const quality = opts.quality ?? 70
+    const heightParam = opts.height ? `&height=${opts.height}` : ''
+    return url
+      .replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')
+      .concat(`?width=${width}${heightParam}&quality=${quality}`)
+  } catch {
+    return url
+  }
+}

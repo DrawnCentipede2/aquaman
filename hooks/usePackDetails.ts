@@ -45,18 +45,19 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
 
       logger.log('🔍 Loading pack details for ID:', packId)
 
-      // Single optimized query for pack + pins + photos
+      // Single optimized query for pack + pins (exclude photos here to reduce payload)
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
         .select(`
-          *,
+          id, title, description, price, city, country, creator_location, pin_count, download_count,
+          average_rating, rating_count, categories, creator_id, reviews, created_at,
           pin_pack_pins(
             pins(
               id, title, description, google_maps_url, category,
               latitude, longitude, created_at, address, city, country,
               zip_code, business_type, phone, website, rating, rating_count,
               business_status, current_opening_hours, reviews, place_id,
-              needs_manual_edit, updated_at, photos
+              needs_manual_edit, updated_at
             )
           )
         `)
@@ -98,7 +99,7 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
         place_id: item.pins.place_id,
         needs_manual_edit: item.pins.needs_manual_edit,
         updated_at: item.pins.updated_at,
-        photos: item.pins.photos || []
+        photos: [] // defer photo loading to on-demand UI actions
       })) || []
 
       logger.log('🔍 Pins data processed:', pinsData.length, 'pins')
@@ -166,15 +167,12 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
         logger.log('🔍 No creator_id found in pack data')
       }
 
-      // Load similar packs with optimized query (limit to reduce load time)
+      // Load similar packs with optimized query (exclude photos; add on-demand later)
       try {
         const { data: similarData, error: similarError } = await supabase
           .from('pin_packs')
           .select(`
-            id, title, description, city, country, pin_count, download_count,
-            pin_pack_pins!inner(
-              pins!inner(photos)
-            )
+            id, title, description, city, country, pin_count, download_count
           `)
           .or(`city.eq.${packData.city},country.eq.${packData.country}`)
           .neq('id', packId)
@@ -182,33 +180,19 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
 
         if (!similarError && similarData) {
           // Process similar packs with cover photos
-          const similarPacksWithPhotos = similarData.map((similarPack: any) => {
-            let coverPhoto = null
-            
-            // Find first pin with photos
-            if (similarPack.pin_pack_pins && Array.isArray(similarPack.pin_pack_pins)) {
-              for (const pinPackPin of similarPack.pin_pack_pins) {
-                if (pinPackPin.pins?.photos && Array.isArray(pinPackPin.pins.photos) && pinPackPin.pins.photos.length > 0) {
-                  coverPhoto = pinPackPin.pins.photos[0]
-                  break
-                }
-              }
-            }
-            
-            return {
-              id: similarPack.id,
-              title: similarPack.title,
-              description: similarPack.description,
-              city: similarPack.city,
-              country: similarPack.country,
-              pin_count: similarPack.pin_count,
-              download_count: similarPack.download_count,
-              coverPhoto,
-              price: 0, // Default price for similar packs
-              created_at: new Date().toISOString(), // Default creation date
-              creator_location: similarPack.city // Use city as creator location
-            }
-          })
+          const similarPacksWithPhotos = similarData.map((similarPack: any) => ({
+            id: similarPack.id,
+            title: similarPack.title,
+            description: similarPack.description,
+            city: similarPack.city,
+            country: similarPack.country,
+            pin_count: similarPack.pin_count,
+            download_count: similarPack.download_count,
+            coverPhoto: null,
+            price: 0,
+            created_at: new Date().toISOString(),
+            creator_location: similarPack.city
+          }))
           
           setSimilarPacks(similarPacksWithPhotos)
         } else {

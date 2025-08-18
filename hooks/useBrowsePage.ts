@@ -22,7 +22,7 @@ export function usePinPacks() {
       // First get all pin packs
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
-        .select('*')
+        .select('id, title, description, price, city, country, pin_count, download_count, average_rating, rating_count, categories, created_at')
         .order('created_at', { ascending: false })
 
       if (packError) throw packError
@@ -32,15 +32,9 @@ export function usePinPacks() {
         (packData || []).map(async (pack) => {
           try {
             // Get first pin with photos for this pack
-            const { data: pinData, error: pinError } = await supabase
-              .from('pin_pack_pins')
-              .select(`
-                pins (
-                  photos
-                )
-              `)
-              .eq('pin_pack_id', pack.id)
-              .limit(10) // Get up to 10 pins to check for photos
+            // Skip fetching photos in browse hook to reduce egress
+            const pinData = null as any
+            const pinError = null as any
 
             if (!pinError && pinData) {
               // Find first pin that has photos
@@ -49,13 +43,7 @@ export function usePinPacks() {
                 return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
               })
               
-              if (pinWithPhoto) {
-                const pin = pinWithPhoto.pins as any
-                return {
-                  ...pack,
-                  coverPhoto: pin.photos[0] // Add first photo as cover
-                }
-              }
+              // Do not attach coverPhoto in list context
             }
           } catch (error) {
             logger.warn('Error loading photos for pack:', pack.id, error)

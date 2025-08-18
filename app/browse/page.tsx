@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { MapPin, Download, Star, Users, Search, Filter, QrCode, Heart, Calendar, Globe2, X, Sliders, CheckCircle, ShoppingCart, CreditCard, Package, User } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { PinPack } from '@/lib/supabase'
-import { getPackDisplayImage } from '@/lib/utils'
+import { getPackDisplayImage, toTransformedImageUrl } from '@/lib/utils'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
 import { logger } from '@/lib/logger'
 
@@ -349,7 +349,7 @@ export default function BrowsePage() {
       setDisplayedPacks(packsWithoutPhotos)
       setInitialLoadComplete(true)
       setHasMorePacks(packsWithoutPhotos.length === 8)
-      // 2. Progressive photo loading: first 4 packs
+      // Progressive photo loading in small batches to balance UX and egress
       const firstBatch = packsWithoutPhotos.slice(0, 4)
       const restBatch = packsWithoutPhotos.slice(4)
       try {
@@ -361,13 +361,11 @@ export default function BrowsePage() {
       } catch (photoError) {
         logger.error('Error loading first batch photos:', photoError)
       }
-      // 3. Progressive photo loading: rest in batches of 4
       for (let i = 0; i < restBatch.length; i += 4) {
         const batch = restBatch.slice(i, i + 4)
         try {
           const batchWithPhotos = await loadPhotosForPacks(batch)
           setDisplayedPacks(prev => {
-            // Replace the packs in the correct positions
             const updated = [...prev]
             for (let j = 0; j < batchWithPhotos.length; j++) {
               updated[4 + i + j] = batchWithPhotos[j]
@@ -377,7 +375,6 @@ export default function BrowsePage() {
         } catch (photoError) {
           logger.error('Error loading progressive batch photos:', photoError)
         }
-        // Small delay between batches for UI responsiveness
         await new Promise(res => setTimeout(res, 200))
       }
       // 4. Load all remaining packs for pagination asynchronously (unchanged)
@@ -449,7 +446,7 @@ export default function BrowsePage() {
         .from('pin_pack_pins')
         .select('pin_pack_id, pin_id')
         .in('pin_pack_id', uncachedPackIds)
-        .limit(uncachedPackIds.length * 5) // Reasonable limit for photos per pack
+        .limit(uncachedPackIds.length * 3)
 
       if (packPinError) {
         throw packPinError
@@ -470,10 +467,9 @@ export default function BrowsePage() {
       // OPTIMIZED: Simple query to get photos for these pins
       const { data: photoData, error: photoError } = await supabase
         .from('pins')
-        .select('id, photos')
+        .select('id, cover_photo')
         .in('id', pinIds)
-        .not('photos', 'is', null)
-        .limit(pinIds.length)
+        .not('cover_photo', 'is', null)
 
       const queryEndTime = performance.now()
       const queryDuration = queryEndTime - queryStartTime
@@ -485,6 +481,14 @@ export default function BrowsePage() {
       }
 
       // Performance monitoring for data processing
+      const getThumbWidth = () => {
+        if (typeof window === 'undefined') return 600
+        const w = window.innerWidth
+        if (w < 480) return 400
+        if (w < 1024) return 600
+        return 800
+      }
+      const thumbWidth = getThumbWidth()
       const processingStartTime = performance.now()
       
       // OPTIMIZED: Create efficient lookup maps
@@ -501,8 +505,8 @@ export default function BrowsePage() {
       
       // Build pin to photo mapping
       photoData?.forEach(item => {
-        if (item.photos?.[0]) {
-          photoMap.set(item.id, item.photos[0])
+        if (item.cover_photo) {
+          photoMap.set(item.id, item.cover_photo)
         }
       })
       
@@ -512,8 +516,9 @@ export default function BrowsePage() {
         for (const pinId of packPinIds) {
           if (photoMap.has(pinId)) {
             const photo = photoMap.get(pinId)
-            packPhotoMap.set(packId, photo)
-            photoCache.set(packId, photo) // Cache the result
+            const transformed = typeof photo === 'string' ? toTransformedImageUrl(photo, { width: thumbWidth, quality: 70 }) : photo
+            packPhotoMap.set(packId, transformed)
+            photoCache.set(packId, transformed) // Cache the result
             break // Use first photo found
           }
         }
@@ -577,8 +582,6 @@ export default function BrowsePage() {
       
       // Load photos for the next batch with optimized query
       const nextBatchWithPhotos = await loadPhotosForPacks(nextBatch)
-      
-      // Add the packs with photos to displayed packs
       setDisplayedPacks(prev => {
         const updatedPacks = [...prev, ...nextBatchWithPhotos]
         return updatedPacks

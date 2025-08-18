@@ -153,7 +153,7 @@ export default function ManagePage() {
         // First try with the exact creator_id match
         const { data: exactPacks, error: exactError } = await supabase
           .from('pin_packs')
-          .select('*')
+          .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
           .eq('creator_id', userId)
           .order('created_at', { ascending: false })
 
@@ -169,7 +169,7 @@ export default function ManagePage() {
             
             const { data: emailPacks, error: emailError } = await supabase
               .from('pin_packs')
-              .select('*')
+              .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
               .ilike('creator_id', `%${emailDomain}%`)
               .order('created_at', { ascending: false })
 
@@ -188,7 +188,7 @@ export default function ManagePage() {
         if (userIP) {
           const { data: ipBasedPacks, error: ipError } = await supabase
             .from('pin_packs')
-            .select('*')
+            .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
             .ilike('creator_location', `%${userIP}%`)
             .order('created_at', { ascending: false })
 
@@ -201,7 +201,7 @@ export default function ManagePage() {
             // Final fallback: load all packs (for older schema without creator_id)
             const { data: allPacks, error: allPacksError } = await supabase
               .from('pin_packs')
-              .select('*')
+              .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
               .order('created_at', { ascending: false })
 
             if (allPacksError) throw allPacksError
@@ -213,7 +213,7 @@ export default function ManagePage() {
           // Fallback: load all packs (for older schema without creator_id)
           const { data: allPacks, error: allPacksError } = await supabase
             .from('pin_packs')
-            .select('*')
+            .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
             .order('created_at', { ascending: false })
 
           if (allPacksError) throw allPacksError

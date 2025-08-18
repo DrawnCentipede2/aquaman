@@ -163,7 +163,7 @@ export function useHighPerformanceBrowse() {
       // First get all pin packs
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
-        .select('*')
+        .select('id, title, description, price, city, country, creator_location, pin_count, download_count, average_rating, rating_count, categories, created_at')
         .order('created_at', { ascending: false })
         .limit(100) // Limit initial load for better performance
 
@@ -179,15 +179,9 @@ export function useHighPerformanceBrowse() {
 
           try {
             // Get first few pins with photos for this pack
-            const { data: pinData, error: pinError } = await supabase
-              .from('pin_pack_pins')
-              .select(`
-                pins (
-                  photos
-                )
-              `)
-              .eq('pin_pack_id', pack.id)
-              .limit(3) // Get up to 3 pins to check for photos
+            // Skip fetching photos to reduce egress in high-performance list
+            const pinData = null as any
+            const pinError = null as any
 
             if (!pinError && pinData) {
               // Find first pin that has photos
@@ -196,18 +190,7 @@ export function useHighPerformanceBrowse() {
                 return pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0
               })
               
-              if (pinWithPhoto) {
-                const pin = pinWithPhoto.pins as any
-                coverPhoto = pin.photos[0] // Add first photo as cover
-                
-                // Collect additional images for preloading
-                for (const pinItem of pinData.slice(0, 3)) {
-                  const pinPhotos = (pinItem.pins as any)?.photos
-                  if (pinPhotos && Array.isArray(pinPhotos)) {
-                    preloadedImages.push(...pinPhotos.slice(0, 2))
-                  }
-                }
-              }
+              // Do not attach photos in list context
             }
           } catch (error) {
             logger.warn('Error loading photos for pack:', pack.id, error)

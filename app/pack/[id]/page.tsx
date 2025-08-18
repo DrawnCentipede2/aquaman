@@ -628,7 +628,7 @@ export default function PackDetailPage() {
       // First, get the main pack information from database (including stored reviews)
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
-        .select('*')
+        .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories, reviews, maps_list_reference')
         .eq('id', packId)
         .maybeSingle()
 
@@ -642,63 +642,41 @@ export default function PackDetailPage() {
       // Load pins and other data asynchronously after pack is shown
       setTimeout(async () => {
         try {
-          // Load pins
+          // Load pins (exclude photos for initial payload)
           const { data: packPinsData, error: pinsError } = await supabase
             .from('pin_pack_pins')
-            .select('pins(*)')
+            .select(`
+              pins(
+                id, title, description, google_maps_url, category,
+                latitude, longitude, created_at, address, city, country,
+                zip_code, business_type, phone, website, rating, rating_count,
+                business_status, current_opening_hours, reviews, place_id,
+                needs_manual_edit, updated_at, cover_photo
+              )
+            `)
             .eq('pin_pack_id', packId)
           
           if (!pinsError && packPinsData) {
             const pinsData = packPinsData.map((item: any) => ({
               ...item.pins,
               name: item.pins.title,
-              photos: item.pins.photos || []
+              photos: []
             }))
             setPins(pinsData)
           }
 
-          // Load similar packs from the same city
+          // Load similar packs from the same city (exclude photos to reduce egress)
           const { data: similarData, error: similarError } = await supabase
             .from('pin_packs')
-            .select('*')
+            .select('id, title, description, city, country, pin_count, download_count, average_rating, rating_count, created_at')
             .eq('city', packData.city)
             .neq('id', packId)
             .limit(6)
 
           if (!similarError && similarData && similarData.length > 0) {
-            // Load cover photos for similar packs
-            const similarPacksWithPhotos = await Promise.all(
-              similarData.map(async (similarPack) => {
-                try {
-                  const { data: similarPackPins, error: similarPinsError } = await supabase
-                    .from('pin_pack_pins')
-                    .select('pins(photos)')
-                    .eq('pin_pack_id', similarPack.id)
-                    .limit(1)
-
-                  let coverPhoto = null
-                  if (!similarPinsError && similarPackPins && similarPackPins.length > 0) {
-                    const pin = similarPackPins[0].pins as any
-                    if (pin?.photos && Array.isArray(pin.photos) && pin.photos.length > 0) {
-                      coverPhoto = pin.photos[0]
-                    }
-                  }
-
-                  return {
-                    ...similarPack,
-                    coverPhoto
-                  }
-                } catch (error) {
-                  logger.warn('Error loading photos for similar pack:', similarPack.id, error)
-                  return {
-                    ...similarPack,
-                    coverPhoto: null
-                  }
-                }
-              })
-            )
-            
-            setSimilarPacks(similarPacksWithPhotos)
+            // Do not fetch photos here; set placeholder coverPhoto
+            const similarPacksNoPhotos = similarData.map((p: any) => ({ ...p, coverPhoto: null }))
+            setSimilarPacks(similarPacksNoPhotos)
           }
         } catch (err) {
           logger.error('Error loading data async:', err)
@@ -1123,7 +1101,7 @@ export default function PackDetailPage() {
       // Reload the pack data to get updated reviews
       const { data: updatedPackData, error: packError } = await supabase
         .from('pin_packs')
-        .select('*')
+        .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories, reviews')
         .eq('id', pack.id)
         .single()
       

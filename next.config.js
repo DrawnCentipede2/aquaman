@@ -21,6 +21,13 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     unoptimized: false,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'hxjrybelttfypibstpkv.supabase.co',
+        pathname: '/storage/v1/**',
+      },
+    ],
   },
   
   // Configure webpack for better CSS handling and bundle optimization
