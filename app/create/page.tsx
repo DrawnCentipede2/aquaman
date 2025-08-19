@@ -20,6 +20,7 @@ interface Pin {
   category: string
   latitude: number
   longitude: number
+  place_id?: string
   photos?: string[]
   rating?: number
   rating_count?: number
@@ -616,14 +617,10 @@ export default function CreatePackPage() {
       logger.log('URL hostname:', urlObj.hostname)
       logger.log('URL pathname:', urlObj.pathname)
       
-      // For short URLs like maps.app.goo.gl, try to get the query parameter
+      // For short URLs like maps.app.goo.gl, return the full URL so the server can resolve it
       if (urlObj.hostname.includes('maps.app.goo.gl')) {
-        // For short URLs, we'll use the path as a query
-        const path = urlObj.pathname.replace('/', '')
-        if (path) {
-          logger.log('Extracted from short URL:', path)
-          return path
-        }
+        logger.log('Short URL detected, returning full URL for server-side resolution')
+        return url
       }
       
       // For regular Google Maps URLs (google.com, google.de, etc.)
@@ -677,8 +674,15 @@ export default function CreatePackPage() {
   }
 
   // Check if URL is already imported
-  const isUrlAlreadyImported = (url: string): boolean => {
-    return pins.some(pin => pin.google_maps_url === url)
+  const isUrlAlreadyImported = (url: string, incomingPlaceId?: string): boolean => {
+    // Duplicate if same URL already present
+    const byUrl = pins.some(pin => pin.google_maps_url === url)
+    if (byUrl) return true
+    // Duplicate if a matching place_id exists
+    if (incomingPlaceId) {
+      return pins.some(pin => pin.place_id && pin.place_id === incomingPlaceId)
+    }
+    return false
   }
 
   // Add single place from Google Maps URL with API integration
@@ -695,6 +699,12 @@ export default function CreatePackPage() {
     try {
       // Fetch place details from Google Maps API
       const placeDetails = await fetchPlaceDetails(singlePlaceUrl)
+      // If we got a place_id, use it for dedupe
+      if (placeDetails?.place_id && isUrlAlreadyImported(singlePlaceUrl, placeDetails.place_id)) {
+        showToast('This place is already in your list.', 'info')
+        setIsFetchingPlaceDetails(false)
+        return
+      }
       
       let pinData: Pin
       
@@ -708,6 +718,7 @@ export default function CreatePackPage() {
           latitude: placeDetails.geometry?.location?.lat || 0,
           longitude: placeDetails.geometry?.location?.lng || 0,
           photos: uploadedImages,
+          place_id: placeDetails.place_id,
           rating: placeDetails.rating,
           rating_count: placeDetails.user_ratings_total,
           business_type: placeDetails.types?.[0] || 'establishment'
@@ -956,6 +967,7 @@ export default function CreatePackPage() {
         category: pin.category || 'other',
         latitude: pin.latitude || 0,
         longitude: pin.longitude || 0,
+        place_id: pin.place_id || null,
         photos: pin.photos || [], // Use the pin's own photos instead of all uploadedImages
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -1080,6 +1092,7 @@ export default function CreatePackPage() {
         category: pin.category || 'other',
         latitude: pin.latitude || 0,
         longitude: pin.longitude || 0,
+        place_id: pin.place_id || null,
         photos: pin.photos || [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -1562,6 +1575,7 @@ export default function CreatePackPage() {
                     <button
                       onClick={async () => {
                         // Check if URL is already imported
+                        // We'll check duplicates by URL and by place_id once fetched
                         if (isUrlAlreadyImported(placesInput)) {
                           showToast('This place has already been imported. Please try a different URL.', 'info')
                           return
@@ -1570,6 +1584,11 @@ export default function CreatePackPage() {
                         setIsFetchingPlaceDetails(true)
                         try {
                           const placeDetails = await fetchPlaceDetails(placesInput)
+                          if (placeDetails?.place_id && isUrlAlreadyImported(placesInput, placeDetails.place_id)) {
+                            showToast('This place is already in your list.', 'info')
+                            setIsFetchingPlaceDetails(false)
+                            return
+                          }
                           if (placeDetails) {
                             const newPin: Pin = {
                               title: placeDetails.name || 'Imported Place',
@@ -1579,6 +1598,7 @@ export default function CreatePackPage() {
                               latitude: placeDetails.geometry?.location?.lat || 0,
                               longitude: placeDetails.geometry?.location?.lng || 0,
                               photos: uploadedImages,
+                              place_id: placeDetails.place_id,
                               rating: placeDetails.rating,
                               rating_count: placeDetails.user_ratings_total,
                               business_type: placeDetails.types?.[0] || 'establishment'
