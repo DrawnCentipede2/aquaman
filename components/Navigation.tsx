@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from 'react'
 import { User, Plus, Heart, ShoppingCart, Package, Settings, ChevronDown, Globe, DollarSign, Bell, HelpCircle, LogOut, X, Check, CreditCard, Shield, Lock } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { logger } from '@/lib/logger'
+import { supabase } from '@/lib/supabase'
 
 // Function to get (and if necessary migrate) the user profile from localStorage
 const getStoredProfile = () => {
@@ -370,7 +371,11 @@ export default function Navigation() {
   }
 
   // Handle logout function
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch {}
+
     localStorage.removeItem('pinpacks_user_profile')
     localStorage.removeItem('pinpacks_user_id')
     localStorage.removeItem('pinpacks_user_email')
