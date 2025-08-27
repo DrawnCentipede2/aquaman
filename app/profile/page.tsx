@@ -509,7 +509,7 @@ export default function ProfilePage() {
                   type="url"
                   value={formData.social_links?.website || ''}
                   onChange={(e) => handleSocialLinkChange('website', e.target.value)}
-                  placeholder="https://yourwebsite.com"
+                  placeholder="https://pincloud.co"
                   className="input-airbnb w-full"
                 />
               </div>

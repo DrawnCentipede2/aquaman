@@ -39,3 +39,68 @@ __image_cache__/
 
 # Vercel output folder (optional — only generated locally during dev)
 .vercel/
+
+# Security-sensitive files
+*.sql
+*.md
+*.log
+*.report.html
+lighthouse*.html
+localhost*.html
+*.tsbuildinfo
+*.swcrc
+.editorconfig
+.prettierrc*
+.eslintrc*
+babel.config.*
+jest.config.*
+cypress.config.*
+playwright.config.*
+webpack.config.*
+rollup.config.*
+vite.config.*
+
+# Sensitive directories
+.scripts/
+.env/
+config/
+secrets/
+credentials/
+auth/
+keys/
+passwords/
+backup/
+temp/
+tmp/
+*.bak
+*.old
+*.orig
+
+# Performance and audit reports
+*.report.html
+lighthouse-*.html
+performance-*.md
+audit-*.md
+security-*.md
+
+# Database and migration files
+database-*.sql
+migration-*.sql
+*-migration.sql
+add-*.sql
+fix-*.sql
+update-*.sql
+delete-*.sql
+
+# Configuration files that shouldn't be committed
+.env.example
+.env.template
+config.local.*
+settings.local.*
+*.local.json
+*.local.yaml
+*.local.yml
+
+# Secure directory containing sensitive files
+.secure/
+**/.secure/**

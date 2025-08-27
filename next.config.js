@@ -24,7 +24,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'hxjrybelttfypibstpkv.supabase.co',
+        hostname: '*.supabase.co',
         pathname: '/storage/v1/**',
       },
     ],
@@ -52,7 +52,7 @@ const nextConfig = {
     return config
   },
   
-  // Configure headers for better resource loading and caching
+  // Configure security headers and caching
   async headers() {
     return [
       {
@@ -69,6 +69,39 @@ const nextConfig = {
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff'
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block'
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin'
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'geolocation=(), microphone=(), camera=()'
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' https://*.supabase.co https://*.paypal.com; frame-src 'self' https://*.paypal.com; object-src 'none'; base-uri 'self'; form-action 'self';"
+          }
+        ]
+      },
+      {
+        source: '/api/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate'
+          },
+          {
+            key: 'X-RateLimit-Limit',
+            value: '100'
+          },
+          {
+            key: 'X-RateLimit-Window',
+            value: '900000' // 15 minutes in milliseconds
           }
         ]
       },

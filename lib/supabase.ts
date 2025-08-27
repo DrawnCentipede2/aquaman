@@ -1,12 +1,46 @@
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { clientConfig, config } from '@/lib/env'
 
-// Supabase configuration
-// These values come from your Supabase project settings
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Client-side Supabase configuration
+// Use NEXT_PUBLIC_ prefixed environment variables for client-side access
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+// Validate required environment variables
+if (!supabaseUrl) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL is required. Please check your .env.local file.')
+}
+
+if (!supabaseKey) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is required. Please check your .env.local file.')
+}
 
 // Create a single supabase client for interacting with your database
 export const supabase = createClient(supabaseUrl, supabaseKey)
+
+// Server-side Supabase client (for API routes)
+export const createServerSupabaseClient = (cookieStore?: any) => {
+  return createServerClient(
+    config.supabase.url,
+    config.supabase.anonKey,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore?.get(name)?.value
+        },
+      },
+    }
+  )
+}
+
+// Admin Supabase client (for admin operations)
+export const createAdminSupabaseClient = () => {
+  return createClient(
+    config.supabase.url,
+    config.supabase.serviceRoleKey
+  )
+}
 
 // Database types for our application
 export interface Pin {

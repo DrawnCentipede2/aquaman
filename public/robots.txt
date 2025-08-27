@@ -1,0 +1,67 @@
+# Robots.txt for Google Pins Marketplace
+# This file tells search engine crawlers which pages they can and cannot access
+
+User-agent: *
+# Allow crawling of public pages only
+Allow: /
+Allow: /browse
+Allow: /about
+Allow: /contact
+Allow: /privacy
+Allow: /terms
+Allow: /help
+
+# Disallow crawling of ALL private/authenticated areas
+Disallow: /api/
+Disallow: /auth
+Disallow: /admin
+Disallow: /manage
+Disallow: /create
+Disallow: /edit
+Disallow: /profile
+Disallow: /cart
+Disallow: /sell
+Disallow: /signup
+Disallow: /dashboard
+Disallow: /creator-dashboard
+Disallow: /pinventory
+Disallow: /wishlist
+Disallow: /account
+Disallow: /settings
+Disallow: /user
+Disallow: /my*
+
+# Disallow access to sensitive files and directories
+Disallow: /*.env*
+Disallow: /*.log*
+Disallow: /*.sql*
+Disallow: /*.md*
+Disallow: /*.json*
+Disallow: /*.yaml*
+Disallow: /*.yml*
+Disallow: /*config*
+Disallow: /*secret*
+Disallow: /*key*
+Disallow: /*password*
+Disallow: /*auth*
+Disallow: /*credential*
+Disallow: /*report*
+Disallow: /*lighthouse*
+Disallow: /*localhost*
+
+# Block access to development files
+Disallow: /*test*
+Disallow: /*dev*
+Disallow: /*debug*
+Disallow: /*temp*
+Disallow: /*backup*
+
+# Block access to hidden directories
+Disallow: /.git/
+Disallow: /.env/
+Disallow: /node_modules/
+Disallow: /_next/
+Disallow: /.next/
+
+# Sitemap location
+Sitemap: https://pincloud.co/sitemap.xml

@@ -119,8 +119,8 @@ export const securityHeaders = {
 
 // CORS configuration
 export const corsConfig = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com', 'https://www.yourdomain.com']
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://pincloud.co', 'https://www.pincloud.co']
     : ['http://localhost:3000', 'http://localhost:3001'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],

@@ -76,7 +76,7 @@ GOOGLE_MAPS_API_KEY_SERVER=your_server_key_with_more_permissions
 2. Navigate to **APIs & Services > Credentials**
 3. Edit your client-side API key
 4. Set **Application restrictions**: HTTP referrers (web sites)
-5. Add **Website restrictions**: `yourdomain.com/*`
+5. Add **Website restrictions**: `pincloud.co/*`
 6. Set **API restrictions**: Only Maps JavaScript API, Places API
 
 #### Server-Side Key Configuration:

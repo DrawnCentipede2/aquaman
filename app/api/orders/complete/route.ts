@@ -115,10 +115,20 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Return success response
+    // Return sanitized order data (remove sensitive payment details)
+    const sanitizedOrder = {
+      id: updatedOrder.id,
+      total_amount: updatedOrder.total_amount,
+      currency: updatedOrder.currency,
+      status: updatedOrder.status,
+      created_at: updatedOrder.created_at,
+      completed_at: updatedOrder.completed_at,
+      // Exclude sensitive data: paypal_order_id, paypal_payer_id, paypal_payment_id, customer_email
+    }
+
     return NextResponse.json({
       success: true,
-      order: updatedOrder,
+      order: sanitizedOrder,
       message: 'Order completed successfully'
     })
     

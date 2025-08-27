@@ -117,11 +117,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Query is required' }, { status: 400 })
   }
 
-  // Use server-side API key for better security
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY_SERVER || process.env.GOOGLE_MAPS_API_KEY_SERVER
-  
+  // Use server-side API key only - NEVER expose to client
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY_SERVER
+
   if (!apiKey) {
-    return NextResponse.json({ error: 'Google Maps API key not configured' }, { status: 500 })
+    // Log error but don't expose configuration details
+    console.error('Google Maps API key not configured')
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 })
   }
 
   try {

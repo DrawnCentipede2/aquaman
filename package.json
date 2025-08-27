@@ -7,6 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "security:audit": "node scripts/security-audit.js",
+    "security:dorks": "node scripts/google-dorks-monitor.js",
+    "env:test": "node scripts/test-env.js",
+    "env:fix": "node scripts/fix-env.js",
+    "env:correct": "node scripts/create-corrected-env.js",
     "migrate:photos": "tsx scripts/migrate-pin-photos-to-storage.ts",
     "migrate:photos:dry": "tsx scripts/migrate-pin-photos-to-storage.ts --dry-run"
   },
