@@ -12,7 +12,7 @@ async function optimizeImages() {
     'Family.jpg',
     'Adventure.jpg',
     'Romantic.jpg',
-    'Hidden_Gems.jpg'
+    'Hidden Gems.jpg'
   ];
 
   logger.log('🖼️ Starting image optimization...');

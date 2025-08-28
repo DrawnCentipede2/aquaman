@@ -1763,7 +1763,7 @@ export default function PackDetailPage() {
                       className="w-full btn-primary flex items-center justify-center text-lg py-4"
                     >
                       <CreditCard className="h-5 w-5 mr-2" />
-                      Pay ${pack.price}
+                      Unlock pin pack for only ${pack.price}
                     </button>
                     
                     {/* Add to cart button */}

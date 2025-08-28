@@ -29,6 +29,9 @@ interface PinPackWithAnalytics {
   categories?: string[] // Array of category strings (up to 3)
 }
 
+// Base row returned from Supabase (without computed recent_downloads)
+type PackRow = Omit<PinPackWithAnalytics, 'recent_downloads'>
+
 export default function ManagePage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -70,27 +73,9 @@ export default function ManagePage() {
           // User is authenticated via email system
           const profile = JSON.parse(userProfile)
           
-          // Ensure we have the correct UUID for this user (same logic as create page)
-          try {
-            const { data: userData, error } = await supabase
-              .from('users')
-              .select('id, email')
-              .eq('email', profile.email)
-              .single()
-            
-            if (userData && !error) {
-              setUserId(userData.id) // Use the actual UUID from database
-              logger.log('Authenticated user found, using UUID:', userData.id)
-            } else {
-              logger.warn('Could not find user in database:', error)
-              setUserId(profile.userId) // Fallback to stored userId
-            }
-          } catch (error) {
-            logger.error('Error fetching user UUID:', error)
-            setUserId(profile.userId) // Fallback to stored userId
-          }
-          
-          logger.log('Authenticated user found:', profile.email)
+          // Use email-first identity (matches pin_packs.creator_id and RLS policies)
+          setUserId(profile.email)
+          logger.log('Authenticated user found (email mode):', profile.email)
         } else if (savedUserId) {
           // User has old system ID - still allow them to use it
           setUserId(savedUserId)
@@ -146,79 +131,31 @@ export default function ManagePage() {
       
       logger.log('Loading packs for user:', userId)
       
-      // Try to get user's pin packs with new fields first
-      let packs = []
-      
-      try {
-        // First try with the exact creator_id match
-        const { data: exactPacks, error: exactError } = await supabase
+      // Email-first lookup for user's pin packs
+      let packs: PackRow[] = []
+      const storedEmail = localStorage.getItem('pinpacks_user_email')
+      const email = storedEmail || (userId && userId.includes('@') ? userId : null)
+      const legacyId = localStorage.getItem('pinpacks_user_id')
+
+      if (email) {
+        const { data: emailPacks } = await supabase
           .from('pin_packs')
           .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
-          .eq('creator_id', userId)
+          .eq('creator_id', email)
           .order('created_at', { ascending: false })
+        packs = (emailPacks || []) as PackRow[]
+        logger.log(`Loaded ${packs.length} packs by email`)
+      }
 
-        if (exactError) throw exactError
-        packs = exactPacks || []
-        
-        // If no packs found and user has email, try to find packs by email domain
-        if (packs.length === 0) {
-          const userEmail = localStorage.getItem('pinpacks_user_email')
-          if (userEmail) {
-            logger.log('No packs found with exact user ID, trying email-based search...')
-            const emailDomain = userEmail.split('@')[0] // Get part before @
-            
-            const { data: emailPacks, error: emailError } = await supabase
-              .from('pin_packs')
-              .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
-              .ilike('creator_id', `%${emailDomain}%`)
-              .order('created_at', { ascending: false })
-
-            if (!emailError && emailPacks) {
-              packs = emailPacks
-              logger.log(`Found ${emailPacks.length} packs via email search`)
-            }
-          }
-        }
-        
-      } catch (creatorIdError) {
-        logger.log('creator_id column not found, trying IP-based fallback...')
-        
-        // Try IP-based lookup as secondary option
-        const userIP = localStorage.getItem('pinpacks_user_ip')
-        if (userIP) {
-          const { data: ipBasedPacks, error: ipError } = await supabase
-            .from('pin_packs')
-            .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
-            .ilike('creator_location', `%${userIP}%`)
-            .order('created_at', { ascending: false })
-
-          if (!ipError && ipBasedPacks && ipBasedPacks.length > 0) {
-            packs = ipBasedPacks
-            logger.log('Found packs based on IP:', ipBasedPacks.length)
-          } else {
-            logger.log('No IP-based packs found, loading all packs as final fallback...')
-            
-            // Final fallback: load all packs (for older schema without creator_id)
-            const { data: allPacks, error: allPacksError } = await supabase
-              .from('pin_packs')
-              .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
-              .order('created_at', { ascending: false })
-
-            if (allPacksError) throw allPacksError
-            packs = allPacks || []
-          }
-        } else {
-          logger.log('No IP found, loading all packs as fallback...')
-          
-          // Fallback: load all packs (for older schema without creator_id)
-          const { data: allPacks, error: allPacksError } = await supabase
-            .from('pin_packs')
-            .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
-            .order('created_at', { ascending: false })
-
-          if (allPacksError) throw allPacksError
-          packs = allPacks || []
-        }
+      // Fallback: legacy UUID-based packs
+      if (packs.length === 0 && legacyId) {
+        const { data: legacyPacks } = await supabase
+          .from('pin_packs')
+          .select('id, title, description, price, city, country, created_at, creator_location, creator_id, pin_count, download_count, average_rating, rating_count, categories')
+          .eq('creator_id', legacyId)
+          .order('created_at', { ascending: false })
+        packs = (legacyPacks || []) as PackRow[]
+        logger.log(`Loaded ${packs.length} packs by legacy ID fallback`)
       }
 
       logger.log('Loaded packs:', packs)

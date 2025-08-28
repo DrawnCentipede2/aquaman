@@ -67,7 +67,7 @@ export default function CreatePackPage() {
   
   // State for form submission
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [userId, setUserId] = useState<string>('')
+  const [userEmail, setUserEmail] = useState<string>('')
 
   // State for success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -551,31 +551,13 @@ export default function CreatePackPage() {
     }
   }, [country, city])
 
-  // Check for authenticated user
+  // Check for authenticated user (email-first, no DB call)
   useEffect(() => {
     const checkAuth = async () => {
       const userProfile = localStorage.getItem('pinpacks_user_profile')
-      const savedUserId = localStorage.getItem('pinpacks_user_id')
-      
       if (userProfile) {
         const profile = JSON.parse(userProfile)
-        try {
-          const { data: userData, error } = await supabase
-            .from('users')
-            .select('id, email')
-            .eq('email', profile.email)
-            .single()
-          
-          if (userData && !error) {
-            setUserId(userData.id)
-          } else {
-            setUserId(profile.userId)
-          }
-        } catch (error) {
-          setUserId(profile.userId)
-        }
-      } else if (savedUserId) {
-        setUserId(savedUserId)
+        setUserEmail(profile.email)
       } else {
         window.location.href = '/auth'
         return
@@ -938,73 +920,30 @@ export default function CreatePackPage() {
       city: city.trim() || 'Unknown',
       country: country.trim() || 'Unknown',
       price: price === '' ? 0 : Number(price),
-      creator_id: userId,
+      email: userEmail,
       pin_count: pins.length,
       categories: selectedCategories,
       maps_list_reference: mapsListReference,
       created_at: new Date().toISOString()
     }
 
-    // Insert pin pack
-    const { data: packResponse, error: packError } = await supabase
-      .from('pin_packs')
-      .insert([pinPackData])
-      .select()
-
-    if (packError) {
-      logger.error('Error creating pin pack:', packError)
-      throw packError
+    // Create via server API (uses service role and enforces email in creator_id)
+    const resp = await fetch('/api/packs/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...pinPackData,
+        pins,
+      }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Unknown error' }))
+      logger.error('Error creating pin pack:', err)
+      throw new Error(err.error || 'Failed to create pack')
     }
+    const { id: newPackId } = await resp.json()
 
-    const newPackId = packResponse[0].id
-
-    // If there are pins, create them
-    if (pins.length > 0) {
-      const pinData = pins.map(pin => ({
-        title: pin.title.trim(),
-        description: pin.description.trim() || 'Amazing place to visit',
-        google_maps_url: pin.google_maps_url.trim(),
-        category: pin.category || 'other',
-        latitude: pin.latitude || 0,
-        longitude: pin.longitude || 0,
-        place_id: pin.place_id || null,
-        photos: pin.photos || [], // Use the pin's own photos instead of all uploadedImages
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }))
-
-      const { data: createdPins, error: pinsError } = await supabase
-        .from('pins')
-        .insert(pinData)
-        .select()
-
-      if (pinsError) {
-        logger.error('Error creating pins:', pinsError)
-        throw pinsError
-      }
-
-      // Create relationships
-      const relationshipData = createdPins.map(pin => ({
-        pin_pack_id: newPackId,
-        pin_id: pin.id,
-        created_at: new Date().toISOString()
-      }))
-
-      const { error: relationshipError } = await supabase
-        .from('pin_pack_pins')
-        .insert(relationshipData)
-
-      if (relationshipError) {
-        logger.error('Error creating relationships:', relationshipError)
-        throw relationshipError
-      }
-    }
-
-    // Update pin count
-    await supabase
-      .from('pin_packs')
-      .update({ pin_count: pins.length })
-      .eq('id', newPackId)
+    // Server already created pins and relationships and updated counts
 
     // Aggregate and store reviews for the pack (this happens in the background)
     try {

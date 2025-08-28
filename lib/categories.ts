@@ -12,7 +12,7 @@ export const STANDARD_CATEGORIES = [
   'Relaxation',
   'Solo Travel',
   'Friends Group',
-  'Hidden_Gems'
+  'Hidden Gems'
 ] as const
 
 export type Category = typeof STANDARD_CATEGORIES[number]
@@ -29,7 +29,7 @@ export const CATEGORY_DESCRIPTIONS: Record<Category, string> = {
   'Relaxation': 'Peaceful retreats for rejuvenation and wellness',
   'Solo Travel': 'Independent adventures for the free-spirited explorer',
   'Friends Group': 'Social destinations perfect for group experiences and celebrations',
-  'Hidden_Gems': 'Secret spots and local favorites that only insiders know about'
+  'Hidden Gems': 'Secret spots and local favorites that only insiders know about'
 }
 
 // Category icons for UI components
@@ -44,7 +44,7 @@ export const CATEGORY_ICONS: Record<Category, string> = {
   'Relaxation': 'Leaf',
   'Solo Travel': 'User',
   'Friends Group': 'Users',
-  'Hidden_Gems': 'MapPin'
+  'Hidden Gems': 'MapPin'
 }
 
 // Category colors for UI components
@@ -59,7 +59,7 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   'Relaxation': 'from-teal-400 to-cyan-500',
   'Solo Travel': 'from-indigo-400 to-purple-500',
   'Friends Group': 'from-pink-400 to-rose-500',
-  'Hidden_Gems': 'from-amber-400 to-orange-500'
+  'Hidden Gems': 'from-amber-400 to-orange-500'
 }
 
 // Category background colors for UI components
@@ -74,7 +74,7 @@ export const CATEGORY_BG_COLORS: Record<Category, string> = {
   'Relaxation': 'bg-gradient-to-br from-teal-50 to-cyan-50',
   'Solo Travel': 'bg-gradient-to-br from-indigo-50 to-purple-50',
   'Friends Group': 'bg-gradient-to-br from-pink-50 to-rose-50',
-  'Hidden_Gems': 'bg-gradient-to-br from-amber-50 to-orange-50'
+  'Hidden Gems': 'bg-gradient-to-br from-amber-50 to-orange-50'
 }
 
 // Helper function to validate if a category is valid

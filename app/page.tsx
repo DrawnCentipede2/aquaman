@@ -368,11 +368,11 @@ export default function LandingPage() {
             {/* Hidden Gems - Bottom half (6 cols, 1 row) */}
             <div 
               className="col-span-6 md:col-span-3 row-span-1 group cursor-pointer"
-              onClick={() => window.location.href = '/browse?category=Hidden_Gems'}
+              onClick={() => window.location.href = '/browse?category=Hidden Gems'}
             >
               <div className="relative h-full rounded-2xl overflow-hidden shadow-sm hover:scale-105 transition-all duration-300">
                 <Image 
-                  src="/Hidden_Gems.jpg"
+                  src="/Hidden Gems.jpg"
                   alt="Hidden Gems"
                   fill
                   sizes="(max-width: 768px) 50vw, 25vw"
