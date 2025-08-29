@@ -234,25 +234,29 @@ export default function WishlistPage() {
                     <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
                       {/* Display actual photo if available, otherwise Google Maps background */}
                       {pack.coverPhoto ? (
-                        <img 
-                          src={pack.coverPhoto}
-                          alt={`${pack.title} cover`}
-                          className="absolute inset-0 w-full h-full object-cover"
-                          style={{ aspectRatio: '4/3' }}
-                          onError={(e) => {
-                            logger.log('🔄 Wishlist - image failed to load for pack:', pack.id);
-                            (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
-                          }}
-                          onLoad={() => {
-                            logger.log('✅ Wishlist - Image loaded successfully for pack:', pack.id);
-                          }}
-                        />
+                        <picture>
+                          <source srcSet={pack.coverPhoto.replace(/\.(jpg|jpeg|png)$/i, '.webp')} type="image/webp" />
+                          <img 
+                            src={pack.coverPhoto}
+                            alt={`${pack.title} cover`}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            style={{ aspectRatio: '4/3' }}
+                            loading="lazy"
+                            decoding="async"
+                            onError={(e) => {
+                              logger.log('🔄 Wishlist - image failed to load for pack:', pack.id);
+                              (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                            }}
+                          />
+                        </picture>
                       ) : (
                         <img 
                           src="/google-maps-bg.svg"
                           alt="Map background"
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ aspectRatio: '4/3' }}
+                          loading="lazy"
+                          decoding="async"
                         />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>

@@ -5,6 +5,7 @@ import { addSecurityHeaders, sanitizeInput } from '@/lib/auth'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log('[packs/create] request body keys:', Object.keys(body))
 
     // Expect email-first identity from client
     const email: string = typeof body.email === 'string' ? body.email.trim() : ''
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
       pin_count: Array.isArray(body.pins) ? body.pins.length : Number(body.pin_count) || 0,
       categories: Array.isArray(body.categories) ? body.categories.slice(0, 3) : [],
       maps_list_reference: body.maps_list_reference ?? null,
+      status: sanitizeInput(body.status || 'pending'), // Default to pending for review
       created_at: new Date().toISOString(),
     }
 
@@ -40,10 +42,12 @@ export async function POST(request: NextRequest) {
     }
 
     const newPackId = createdPack.id as string
+    console.log('[packs/create] created pin_packs id:', newPackId)
 
     // Create pins if provided
     let createdPins = [] as { id: string }[]
     if (Array.isArray(body.pins) && body.pins.length > 0) {
+      console.log('[packs/create] inserting pins count:', body.pins.length)
       const pinsInsert = body.pins.map((p: any) => ({
         title: sanitizeInput(p.title || 'Imported Place'),
         description: sanitizeInput(p.description || 'Amazing place to visit'),
@@ -67,6 +71,7 @@ export async function POST(request: NextRequest) {
       }
 
       createdPins = (pinsData || []) as { id: string }[]
+      console.log('[packs/create] pins created:', createdPins.length)
 
       // Create relationships
       const relationships = createdPins.map((pin) => ({
@@ -91,6 +96,7 @@ export async function POST(request: NextRequest) {
 
     return addSecurityHeaders(NextResponse.json({ id: newPackId }, { status: 201 }))
   } catch (error: any) {
+    console.error('[packs/create] unexpected error:', error?.message || error)
     return addSecurityHeaders(NextResponse.json({ error: error?.message || 'Unexpected error' }, { status: 500 }))
   }
 }

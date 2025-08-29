@@ -61,16 +61,68 @@ export const queryCreatorData = async (
 }
 
 // Function to get the first available photo from a pack's pins
+const packCoverCache = new Map<string, string | null>()
+
+// Fetch and cache a representative cover image for a pack from its pins
 export const getPackDisplayImage = async (packId: string): Promise<string | null> => {
   try {
-    // Avoid fetching photos by default to reduce egress; this util can be adapted to fetch from CDN URLs later
-    return null
+    if (!packId) return null
+
+    // Serve from cache if available
+    if (packCoverCache.has(packId)) {
+      return packCoverCache.get(packId) ?? null
+    }
+
+    // 1) Get related pin ids for this pack
+    const { data: packPinData, error: packPinError } = await supabase
+      .from('pin_pack_pins')
+      .select('pin_id')
+      .eq('pin_pack_id', packId)
+
+    if (packPinError) {
+      logger.warn('getPackDisplayImage: error loading pin relations', packPinError)
+      packCoverCache.set(packId, null)
+      return null
+    }
+
+    const pinIds = (packPinData || []).map((r: any) => r.pin_id)
+    if (pinIds.length === 0) {
+      packCoverCache.set(packId, null)
+      return null
+    }
+
+    // 2) Get cover_photo (preferred) or legacy photos[0] for these pins
+    const { data: pinsData, error: pinsError } = await supabase
+      .from('pins')
+      .select('id, cover_photo, photos')
+      .in('id', pinIds)
+
+    if (pinsError) {
+      logger.warn('getPackDisplayImage: error loading pins', pinsError)
+      packCoverCache.set(packId, null)
+      return null
+    }
+
+    // 3) Find the first available image
+    let chosen: string | null = null
+    for (const p of pinsData || []) {
+      const cover = (p?.cover_photo as string | null) || null
+      const legacy = Array.isArray(p?.photos) && p.photos.length > 0 ? (p.photos[0] as string) : null
+      if (cover || legacy) {
+        chosen = cover || legacy
+        break
+      }
+    }
+
+    // Cache and return
+    packCoverCache.set(packId, chosen)
+    return chosen
 
   } catch (error) {
     logger.error('Error getting pack display image:', error)
     return null
   }
-} 
+}
 
 // Transform a Supabase Storage public URL to the Image Transformation endpoint
 // Example:

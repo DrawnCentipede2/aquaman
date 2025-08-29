@@ -449,15 +449,20 @@ export default function ManagePage() {
                 <div className="relative h-48 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 overflow-hidden">
                   {/* Inner container that scales - maintains boundaries */}
                   <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
-                    <img 
-                      src={packImages[pack.id] || "/google-maps-bg.svg"}
-                      alt={`${pack.title} cover`}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      style={{ aspectRatio: '4/3' }}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
-                      }}
-                    />
+                    <picture>
+                      <source srcSet={(packImages[pack.id] || "/google-maps-bg.svg").replace(/\.(jpg|jpeg|png)$/i, '.webp')} type="image/webp" />
+                      <img 
+                        src={packImages[pack.id] || "/google-maps-bg.svg"}
+                        alt={`${pack.title} cover`}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        style={{ aspectRatio: '4/3' }}
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "/google-maps-bg.svg";
+                        }}
+                      />
+                    </picture>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                   </div>
                   

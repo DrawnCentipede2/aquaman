@@ -738,41 +738,6 @@ export default function Navigation() {
 
                     {/* Quick Settings - Only essential items */}
                     <div className="py-2">
-                      {/* Currency - Quick selector */}
-                      <button
-                        onClick={() => {
-                          setShowCurrencyModal(true)
-                          setIsDropdownOpen(false)
-                        }}
-                        className="flex items-center justify-between w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          <DollarSign className="h-4 w-4 mr-3 text-gray-500" />
-                          Currency
-                        </div>
-                        <span className="text-xs text-gray-500 font-medium">
-                          {currencies.find(c => c.code === selectedCurrency)?.code || 'USD'}
-                        </span>
-                      </button>
-                      
-                      {/* Language & Region - Quick selector */}
-                      <button
-                        onClick={() => {
-                          setShowLanguageModal(true)
-                          setIsDropdownOpen(false)
-                        }}
-                        className="flex items-center justify-between w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center">
-                          <Globe className="h-4 w-4 mr-3 text-gray-500" />
-                          Language
-                        </div>
-                        <span className="text-xs text-gray-500 font-medium">
-                          {selectedLanguage.split(' ')[0]}
-                        </span>
-                      </button>
-                      
-                      <div className="border-t border-gray-100 my-2"></div>
                       
                       {/* Pinventory */}
                       <a
@@ -783,41 +748,7 @@ export default function Navigation() {
                         <Package className="h-4 w-4 mr-3 text-gray-500" />
                         Pinventory
                       </a>
-                      
-                      {/* Payment Methods */}
-                      <button
-                        onClick={() => {
-                          setShowPaymentModal(true)
-                          setIsDropdownOpen(false)
-                        }}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <CreditCard className="h-4 w-4 mr-3 text-gray-500" />
-                        Payment Methods
-                      </button>
-                      
-                      {/* Privacy & Security */}
-                      <button
-                        onClick={() => {
-                          setShowPrivacyModal(true)
-                          setIsDropdownOpen(false)
-                        }}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <Shield className="h-4 w-4 mr-3 text-gray-500" />
-                        Privacy & Security
-                      </button>
-                      
-                      {/* Notifications */}
-                      <button
-                        onClick={() => {
-                          showToast('Notification preferences: Email notifications ON, Push notifications OFF, Marketing emails ON. Feature coming soon!', 'info')
-                        }}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <Bell className="h-4 w-4 mr-3 text-gray-500" />
-                        Notifications
-                      </button>
+                     
                       
                       {/* Support */}
                       <Link 

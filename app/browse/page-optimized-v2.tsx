@@ -265,11 +265,16 @@ export default function BrowsePageOptimizedV2() {
                 {/* Pack thumbnail */}
                 <div className="flex-shrink-0">
                   <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden relative">
-                    <img 
-                      src={addedPackImage || "/google-maps-bg.svg"}
-                      alt="Pack thumbnail"
-                      className="w-full h-full object-cover"
-                    />
+                    <picture>
+                      <source srcSet={(addedPackImage || "/google-maps-bg.svg").replace(/\.(jpg|jpeg|png)$/i, '.webp')} type="image/webp" />
+                      <img 
+                        src={addedPackImage || "/google-maps-bg.svg"}
+                        alt="Pack thumbnail"
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </picture>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                     
                     {/* Small pin count badge */}

@@ -54,7 +54,7 @@ export interface Pin {
   created_at: string
   creator_location: string
   creator_ip: string
-  photos?: string[] // Array of base64 encoded images
+  photos?: string[] // Array of image URLs from Supabase Storage
 }
 
 export interface PinPack {

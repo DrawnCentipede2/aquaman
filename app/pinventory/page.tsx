@@ -108,155 +108,57 @@ export default function PinventoryPage() {
     }
   }, [purchasedPacks])
 
-  // Load purchased packs from database orders and localStorage (for backward compatibility)
+  // Load purchased packs using server API (admin Supabase) with localStorage fallback
   const loadPurchasedPacks = async () => {
     try {
       setLoading(true)
       
-      // Get purchased pack IDs from both sources
-      let purchasedPackIds: string[] = []
-      
-      // 1. Get from database orders (new PayPal purchases)
-      // Only get orders for the current user's email
       const userEmail = userProfile?.email
-      let databasePackIds: string[] = []
-      
       logger.log('🔍 Loading purchased packs for user email:', userEmail)
-      
+
+      let packsFromServer: PinPack[] = []
+
       if (userEmail) {
-        logger.log('🔍 Querying database for orders with email:', userEmail)
-        
-        try {
-          // First try to find orders by user_email (PinCloud email)
-          const { data: orderItems, error: orderError } = await supabase
-            .from('order_items')
-            .select(`
-              pin_pack_id,
-              orders!inner(status, user_email)
-            `)
-            .eq('orders.status', 'completed')
-            .eq('orders.user_email', userEmail)
-          
-          logger.log('🔍 Database query result (user_email):', { orderItems, orderError })
-          
-          if (!orderError && orderItems) {
-            databasePackIds = orderItems.map(item => item.pin_pack_id)
-            logger.log('🔍 Found database pack IDs (user_email):', databasePackIds)
-          } else if (orderError) {
-            logger.error('Error fetching user orders by user_email:', orderError)
-            
-            // Fallback: try customer_email (PayPal email) if user_email doesn't work
-            logger.log('🔍 Trying fallback query with customer_email...')
-            
-            const { data: fallbackOrderItems, error: fallbackError } = await supabase
-              .from('order_items')
-              .select(`
-                pin_pack_id,
-                orders!inner(status, customer_email)
-              `)
-              .eq('orders.status', 'completed')
-              .eq('orders.customer_email', userEmail)
-            
-            logger.log('🔍 Fallback query result (customer_email):', { fallbackOrderItems, fallbackError })
-            
-            if (!fallbackError && fallbackOrderItems) {
-              databasePackIds = fallbackOrderItems.map(item => item.pin_pack_id)
-              logger.log('🔍 Found database pack IDs (customer_email fallback):', databasePackIds)
-            } else if (fallbackError) {
-              logger.error('Error fetching user orders by customer_email:', fallbackError)
-              
-              // If both queries fail, try direct orders query
-              if (fallbackError.message.includes('relation') || fallbackError.message.includes('does not exist')) {
-                logger.log('🔍 Orders table might not exist, trying direct orders query...')
-                
-                const { data: directOrders, error: directError } = await supabase
-                  .from('orders')
-                  .select('id, customer_email, user_email, status')
-                  .or(`user_email.eq.${userEmail},customer_email.eq.${userEmail}`)
-                  .eq('status', 'completed')
-                
-                logger.log('🔍 Direct orders query result:', { directOrders, directError })
-                
-                if (!directError && directOrders && directOrders.length > 0) {
-                  // Get order items for these orders
-                  const orderIds = directOrders.map(o => o.id)
-                  const { data: directOrderItems, error: directItemsError } = await supabase
-                    .from('order_items')
-                    .select('pin_pack_id')
-                    .in('order_id', orderIds)
-                  
-                  logger.log('🔍 Direct order items result:', { directOrderItems, directItemsError })
-                  
-                  if (!directItemsError && directOrderItems) {
-                    databasePackIds = directOrderItems.map(item => item.pin_pack_id)
-                    logger.log('🔍 Found database pack IDs (direct query):', databasePackIds)
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          logger.error('🔍 Error in database query:', error)
-        }
-      } else {
-        logger.log('No user email found - skipping database orders')
-      }
-      
-      purchasedPackIds.push(...databasePackIds)
-      
-      // 2. Get from localStorage ONLY if user has legacy purchases
-      // For new accounts, we should only rely on database orders
-      const localStorageIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
-      logger.log('🔍 Found localStorage pack IDs:', localStorageIds)
-      
-      // Only include localStorage IDs if user has database orders OR if this is a legacy user
-      // This prevents new accounts from seeing old localStorage data
-      let validLocalIds: string[] = []
-      
-      if (databasePackIds.length > 0) {
-        // User has database orders, so they might have legacy localStorage purchases too
-        validLocalIds = localStorageIds.filter((id: string) => {
-          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-          return typeof id === 'string' && uuidRegex.test(id)
+        // Use server API (admin client) to fetch purchased packs
+        const res = await fetch('/api/purchases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: userEmail })
         })
-        logger.log('🔍 User has database orders, including valid localStorage IDs:', validLocalIds)
-      } else {
-        // New account with no database orders - clear localStorage to prevent showing old data
-        logger.log('🔍 New account detected (no database orders), clearing localStorage purchases')
-        localStorage.removeItem('pinpacks_purchased')
-        validLocalIds = []
-      }
-      
-      // Merge both sources and remove duplicates
-      purchasedPackIds = Array.from(new Set([...purchasedPackIds, ...validLocalIds]))
-      logger.log('🔍 Final combined pack IDs:', purchasedPackIds)
-      
-      // Update localStorage if we found invalid UUIDs
-      if (validLocalIds.length !== localStorageIds.length) {
-        localStorage.setItem('pinpacks_purchased', JSON.stringify(validLocalIds))
-        logger.log(`Cleaned up ${localStorageIds.length - validLocalIds.length} invalid pack IDs from localStorage`)
-      }
-      
-      if (purchasedPackIds.length === 0) {
-        logger.log('🔍 No purchased pack IDs found')
-        setPurchasedPacks([])
-        setGroupedPacks({})
-        setLoading(false)
-        return
+
+        if (res.ok) {
+          const json = await res.json()
+          packsFromServer = json.packs || []
+          logger.log('🔍 Packs from server API:', packsFromServer?.length || 0)
+        } else {
+          logger.error('Failed to fetch purchases from server API')
+        }
       }
 
-      // Fetch pack details from database
-      logger.log('🔍 Fetching pack details for IDs:', purchasedPackIds)
-      const { data: packsData, error: packsError } = await supabase
-        .from('pin_packs')
-        .select('*')
-        .in('id', purchasedPackIds)
+      // Fallback: legacy localStorage purchases (only UUIDs)
+      const localStorageIds = JSON.parse(localStorage.getItem('pinpacks_purchased') || '[]')
+      let legacyPacks: PinPack[] = []
+      if (Array.isArray(localStorageIds) && localStorageIds.length > 0) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        const validIds = localStorageIds.filter((id: string) => typeof id === 'string' && uuidRegex.test(id))
+        if (validIds.length > 0) {
+          const { data: packsData, error: packsError } = await supabase
+            .from('pin_packs')
+            .select('*')
+            .in('id', validIds)
+          if (!packsError && packsData) {
+            legacyPacks = packsData as any
+          }
+        }
+      }
 
-      logger.log('🔍 Pack details result:', { packsData, packsError })
+      // Merge server packs with legacy packs (unique by id)
+      const byId: { [id: string]: PinPack } = {}
+      for (const p of packsFromServer) byId[p.id] = p
+      for (const p of legacyPacks) byId[p.id] = p
+      const finalPacks = Object.values(byId)
 
-      if (packsError) throw packsError
-
-      setPurchasedPacks(packsData || [])
+      setPurchasedPacks(finalPacks)
       
     } catch (err) {
       logger.error('Error loading purchased packs:', err)
@@ -871,11 +773,16 @@ export default function PinventoryPage() {
                               <div className="flex items-start space-x-4 mb-4">
                                 {/* Thumbnail */}
                                 <div className="w-16 h-16 bg-gradient-to-br from-coral-100 via-coral-50 to-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
-                                  <img 
-                                    src={packImages[pack.id] || "/google-maps-bg.svg"}
-                                    alt="Pack thumbnail"
-                                    className="w-full h-full object-cover"
-                                  />
+                                  <picture>
+                                    <source srcSet={(packImages[pack.id] || "/google-maps-bg.svg").replace(/\.(jpg|jpeg|png)$/i, '.webp')} type="image/webp" />
+                                    <img 
+                                      src={packImages[pack.id] || "/google-maps-bg.svg"}
+                                      alt="Pack thumbnail"
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
+                                  </picture>
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
                                   <div className="absolute bottom-1 right-1">
                                     <span className="bg-black/50 backdrop-blur-sm text-white px-1 py-0.5 rounded text-xs font-medium">

@@ -199,55 +199,29 @@ export default function IndividualPlacePage() {
   }
 
   // Photo upload helper functions
-  const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = error => reject(error)
-    })
+  const uploadFileToStorage = async (file: File): Promise<string | null> => {
+    try {
+      const { uploadImageToStorage, generateTempPinImagePath } = await import('@/lib/imageUpload')
+      
+      // Generate a temporary path for the image during pin creation
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const path = `temp/${tempId}/${Date.now()}.webp`
+      
+      const result = await uploadImageToStorage(file, path)
+      
+      if (result.url) {
+        return result.url
+      } else {
+        console.error('Upload error:', result.error)
+        return null
+      }
+    } catch (error) {
+      console.error('File upload error:', error)
+      return null
+    }
   }
 
-  // Compress image to reduce payload size
-  const compressImage = (file: File, maxWidth: number = 600, quality: number = 0.7): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      const img = new Image()
-      
-      img.onload = () => {
-        // Calculate new dimensions while maintaining aspect ratio
-        let { width, height } = img
-        
-        // Only resize if image is larger than maxWidth
-        if (width > maxWidth || height > maxWidth) {
-          if (width > height) {
-            if (width > maxWidth) {
-              height = (height * maxWidth) / width
-              width = maxWidth
-            }
-          } else {
-            if (height > maxWidth) {
-              width = (width * maxWidth) / height
-              height = maxWidth
-            }
-          }
-        }
-        
-        // Set canvas dimensions
-        canvas.width = width
-        canvas.height = height
-        
-        // Draw image on canvas and compress
-        ctx!.drawImage(img, 0, 0, width, height)
-        const compressedBase64 = canvas.toDataURL('image/jpeg', quality)
-        resolve(compressedBase64)
-      }
-      
-      img.onerror = () => reject(new Error('Failed to load image'))
-      img.src = URL.createObjectURL(file)
-    })
-  }
+  // (Reserved) Compress image to reduce payload size - not used currently
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -270,23 +244,26 @@ export default function IndividualPlacePage() {
         return
       }
       
-      // Validate file size (max 10MB before compression)
+      // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         logger.log(`File "${file.name}" is too large. Please select images smaller than 10MB.`)
         return
       }
       
-      // Compress image to reduce payload size
-      const compressedBase64 = await compressImage(file, 600, 0.7)
+      // Upload image to Supabase Storage
+      const imageUrl = await uploadFileToStorage(file)
       
-      // Replace any existing photos with the new one
-      updatePin({ photos: [compressedBase64] })
-      
-      logger.log(` Photo uploaded and compressed successfully!`)
+      if (imageUrl) {
+        // Replace any existing photos with the new one
+        updatePin({ photos: [imageUrl] })
+        logger.log('📸 Photo uploaded successfully!')
+      } else {
+        logger.log('❌ Failed to upload photo. Please try again.')
+      }
       
     } catch (error) {
       logger.error('Error uploading photo:', error)
-      logger.log('Error uploading photo. Please try again.')
+      logger.log('❌ Error uploading photo. Please try again.')
     } finally {
       setIsUploadingPhoto(false)
       // Reset file input

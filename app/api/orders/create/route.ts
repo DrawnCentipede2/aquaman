@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { cookies } from 'next/headers'
 import { requireAuth, checkRateLimit, sanitizeInput, addSecurityHeaders } from '@/lib/auth'
 import { logger } from '@/lib/logger'
@@ -21,18 +22,16 @@ export async function POST(request: NextRequest) {
       ))
     }
 
-    // Require authentication
+    // Try cookie-based auth first, but allow trusted email from body in fallback for PayPal flow
+    let userEmail: string | null = null
     const authResult = await requireAuth(request)
-    if (!authResult.success) {
-      logger.warn('Unauthorized order creation attempt', { ip: clientIP })
-      return authResult.response!
+    if (authResult.success && authResult.user?.email) {
+      userEmail = authResult.user.email
     }
-
-    const user = authResult.user
 
     // Parse and validate request body
     const body = await request.json()
-    const { cartItems, totalAmount, processingFee, userLocation, userIp } = body
+    const { cartItems, totalAmount, processingFee, userLocation, userIp, customerEmail, userEmail: bodyUserEmail } = body
 
     // Validate required fields
     if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
@@ -63,12 +62,24 @@ export async function POST(request: NextRequest) {
     const sanitizedLocation = sanitizeInput(userLocation || '')
     const sanitizedUserIp = sanitizeInput(userIp || clientIP)
 
-    // Create Supabase client
+    // Create Supabase clients
     const cookieStore = cookies()
     const supabase = createClient(cookieStore)
+    const admin = createAdminClient()
     
-    // Create the order record with authenticated user's email
-    const { data: order, error: orderError } = await supabase
+    // Resolve effective email (cookie-auth wins; then body-provided email)
+    const effectiveEmail = userEmail || bodyUserEmail || customerEmail || null
+
+    if (!effectiveEmail) {
+      logger.warn('Order creation missing user email', { ip: clientIP })
+      return addSecurityHeaders(NextResponse.json(
+        { error: 'User email required' },
+        { status: 400 }
+      ))
+    }
+
+    // Create the order record
+    const { data: order, error: orderError } = await admin
       .from('orders')
       .insert({
         total_amount: totalAmount,
@@ -77,14 +88,14 @@ export async function POST(request: NextRequest) {
         status: 'pending',
         user_location: sanitizedLocation,
         user_ip: sanitizedUserIp,
-        customer_email: user.email, // Use authenticated user's email
-        user_email: user.email // PinCloud user email for account linking
+        customer_email: effectiveEmail,
+        user_email: effectiveEmail
       })
       .select()
       .single()
 
     if (orderError) {
-      logger.error('Failed to create order', { error: orderError, userEmail: user.email })
+      logger.error('Failed to create order', { error: orderError, userEmail: effectiveEmail })
       return addSecurityHeaders(NextResponse.json(
         { error: 'Failed to create order' },
         { status: 500 }
@@ -98,13 +109,13 @@ export async function POST(request: NextRequest) {
       price: item.price
     }))
     
-    const { error: itemsError } = await supabase
+    const { error: itemsError } = await admin
       .from('order_items')
       .insert(orderItems)
 
     if (itemsError) {
       // Clean up the order if items failed to create
-      await supabase.from('orders').delete().eq('id', order.id)
+      await admin.from('orders').delete().eq('id', order.id)
 
       logger.error('Failed to create order items', { error: itemsError, orderId: order.id })
       return addSecurityHeaders(NextResponse.json(
@@ -113,7 +124,7 @@ export async function POST(request: NextRequest) {
       ))
     }
 
-    logger.log('Order created successfully', { orderId: order.id, userEmail: user.email })
+    logger.log('Order created successfully', { orderId: order.id, userEmail: effectiveEmail })
 
     // Return sanitized order data (remove sensitive payment details)
     const sanitizedOrder = {

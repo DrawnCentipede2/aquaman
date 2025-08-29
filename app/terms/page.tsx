@@ -314,9 +314,8 @@ export default function TermsPage() {
                 <strong>Questions:</strong> If you have questions about these Terms, please contact us:
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div>Email: legal@pincloud.com</div>
-                <div>Address: [Your Business Address]</div>
-                <div>Phone: [Your Phone Number]</div>
+                <div>Email: info@pincloud.com</div>
+                <div>Address: Berlin, Germany</div>
               </div>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { cookies } from 'next/headers'
 
 // Complete an order after successful PayPal payment
@@ -27,9 +28,10 @@ export async function POST(request: NextRequest) {
     // Create Supabase client
     const cookieStore = cookies()
     const supabase = createClient(cookieStore)
+    const admin = createAdminClient()
     
     // Update the order with PayPal details and mark as completed
-    const { data: updatedOrder, error: updateError } = await supabase
+    const { data: updatedOrder, error: updateError } = await admin
       .from('orders')
       .update({
         status: 'completed',
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Get order items to increment download counts
-    const { data: orderItems, error: itemsError } = await supabase
+    const { data: orderItems, error: itemsError } = await admin
       .from('order_items')
       .select('pin_pack_id')
       .eq('order_id', orderId)
@@ -69,13 +71,13 @@ export async function POST(request: NextRequest) {
       for (const item of orderItems) {
         try {
           // Try using RPC function first
-          const { error: rpcError } = await supabase.rpc('increment_download_count', {
+          const { error: rpcError } = await admin.rpc('increment_download_count', {
             pack_id: item.pin_pack_id
           })
           
           if (rpcError) {
             // Fallback: Get current count and increment
-            const { data: currentPack, error: fetchError } = await supabase
+            const { data: currentPack, error: fetchError } = await admin
               .from('pin_packs')
               .select('download_count')
               .eq('id', item.pin_pack_id)
@@ -86,7 +88,7 @@ export async function POST(request: NextRequest) {
               continue
             } else {
               const newCount = (currentPack.download_count || 0) + 1
-              const { error: updateError } = await supabase
+              const { error: updateError } = await admin
                 .from('pin_packs')
                 .update({ download_count: newCount })
                 .eq('id', item.pin_pack_id)
@@ -99,7 +101,7 @@ export async function POST(request: NextRequest) {
             
             // Also try to insert download record manually
             try {
-              await supabase
+              await admin
                 .from('pack_downloads')
                 .insert({
                   pin_pack_id: item.pin_pack_id,

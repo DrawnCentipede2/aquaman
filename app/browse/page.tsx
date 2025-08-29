@@ -325,7 +325,7 @@ export default function BrowsePage() {
     try {
       setError(null)
       const startTime = performance.now()
-      // 1. Fetch the first 8 packs (no photos yet)
+      // 1. Fetch the first 8 APPROVED packs (no photos yet)
       const { data: packData, error: packError } = await supabase
         .from('pin_packs')
         .select(`
@@ -342,6 +342,7 @@ export default function BrowsePage() {
           categories,
           created_at
         `)
+        .eq('status', 'approved') // Only show approved packs
         .order('created_at', { ascending: false })
         .limit(8)
       if (packError) throw packError
@@ -377,7 +378,7 @@ export default function BrowsePage() {
         }
         await new Promise(res => setTimeout(res, 200))
       }
-      // 4. Load all remaining packs for pagination asynchronously (unchanged)
+      // 4. Load all remaining APPROVED packs for pagination asynchronously
       setTimeout(() => {
         supabase
           .from('pin_packs')
@@ -395,6 +396,7 @@ export default function BrowsePage() {
             categories,
             created_at
           `)
+          .eq('status', 'approved') // Only show approved packs
           .order('created_at', { ascending: false })
           .limit(50)
           .then(({ data: allPacksData, error: allPacksError }) => {
@@ -465,11 +467,12 @@ export default function BrowsePage() {
       const pinIds = Array.from(new Set(packPinData.map(item => item.pin_id)))
 
       // OPTIMIZED: Simple query to get photos for these pins
+      // IMPORTANT: Also fetch legacy photos array to provide a fallback
+      // for records that haven't been migrated to cover_photo yet
       const { data: photoData, error: photoError } = await supabase
         .from('pins')
-        .select('id, cover_photo')
+        .select('id, cover_photo, photos')
         .in('id', pinIds)
-        .not('cover_photo', 'is', null)
 
       const queryEndTime = performance.now()
       const queryDuration = queryEndTime - queryStartTime
@@ -503,10 +506,16 @@ export default function BrowsePage() {
         packPinMap.get(item.pin_pack_id).push(item.pin_id)
       })
       
-      // Build pin to photo mapping
-      photoData?.forEach(item => {
-        if (item.cover_photo) {
-          photoMap.set(item.id, item.cover_photo)
+      // Build pin to photo mapping with fallback to legacy photos[0]
+      photoData?.forEach((item: any) => {
+        const cover = item?.cover_photo as string | null | undefined
+        const legacyFirstPhoto = Array.isArray(item?.photos) && item.photos.length > 0
+          ? (item.photos[0] as string)
+          : null
+
+        const chosen = cover || legacyFirstPhoto || null
+        if (chosen) {
+          photoMap.set(item.id, chosen)
         }
       })
       
@@ -516,7 +525,10 @@ export default function BrowsePage() {
         for (const pinId of packPinIds) {
           if (photoMap.has(pinId)) {
             const photo = photoMap.get(pinId)
-            const transformed = typeof photo === 'string' ? toTransformedImageUrl(photo, { width: thumbWidth, quality: 70 }) : photo
+            // Only transform Supabase Storage public URLs. Data URLs and other hosts pass through.
+            const transformed = typeof photo === 'string'
+              ? toTransformedImageUrl(photo, { width: thumbWidth, quality: 70 })
+              : photo
             packPhotoMap.set(packId, transformed)
             photoCache.set(packId, transformed) // Cache the result
             break // Use first photo found

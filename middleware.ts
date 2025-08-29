@@ -114,8 +114,8 @@ export function middleware(request: NextRequest) {
   // Block access to sensitive directories
   for (const dir of SENSITIVE_DIRECTORIES) {
     if (pathname.startsWith(dir) && !pathname.startsWith('/api/public')) {
-      // Allow public API routes but block everything else in /api/
-      if (pathname.startsWith('/api/') && !pathname.match(/^\/api\/(places|contact)/)) {
+      // Allow specific API routes but block everything else in /api/
+      if (pathname.startsWith('/api/') && !pathname.match(/^\/api\/(places|contact|packs|storage|orders|purchases)/)) {
         return new NextResponse('Access Denied', {
           status: 403,
           headers: {
@@ -140,9 +140,9 @@ export function middleware(request: NextRequest) {
   // Content Security Policy
   response.headers.set('Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline'; " +
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.paypal.com https://www.paypalobjects.com; " +
     "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
+    "img-src 'self' data: https: blob:; " +
     "font-src 'self' https:; " +
     "connect-src 'self' https://*.supabase.co https://*.paypal.com; " +
     "frame-src 'self' https://*.paypal.com; " +
@@ -150,6 +150,7 @@ export function middleware(request: NextRequest) {
     "base-uri 'self'; " +
     "form-action 'self';"
   )
+  
 
   return response
 }

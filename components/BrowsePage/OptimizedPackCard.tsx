@@ -114,17 +114,21 @@ export default function OptimizedPackCard({
         <div className="absolute inset-0 group-hover:scale-110 transition-transform duration-300 ease-out">
           {/* Display actual photo if available and visible, otherwise Google Maps background */}
           {isVisible && pack.coverPhoto && !imageError ? (
-            <img 
-              src={pack.coverPhoto}
-              alt={`${pack.title} cover`}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${
-                imageLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-              style={{ aspectRatio: '4/3' }}
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-              loading="lazy"
-            />
+            <picture>
+              <source srcSet={pack.coverPhoto.replace(/\.(jpg|jpeg|png)$/i, '.webp')} type="image/webp" />
+              <img 
+                src={pack.coverPhoto}
+                alt={`${pack.title} cover`}
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${
+                  imageLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{ aspectRatio: '4/3' }}
+                loading="lazy"
+                decoding="async"
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+              />
+            </picture>
           ) : (
             <img 
               src="/google-maps-bg.svg"
@@ -133,6 +137,8 @@ export default function OptimizedPackCard({
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               }`}
               style={{ aspectRatio: '4/3' }}
+              loading="lazy"
+              decoding="async"
               onLoad={handleImageLoad}
             />
           )}

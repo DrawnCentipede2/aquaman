@@ -642,7 +642,7 @@ export default function PackDetailPage() {
       // Load pins and other data asynchronously after pack is shown
       setTimeout(async () => {
         try {
-          // Load pins (exclude photos for initial payload)
+          // Load pins with photos for gallery (cover_photo preferred; fallback to photos array)
           const { data: packPinsData, error: pinsError } = await supabase
             .from('pin_pack_pins')
             .select(`
@@ -651,7 +651,7 @@ export default function PackDetailPage() {
                 latitude, longitude, created_at, address, city, country,
                 zip_code, business_type, phone, website, rating, rating_count,
                 business_status, current_opening_hours, reviews, place_id,
-                needs_manual_edit, updated_at, cover_photo
+                needs_manual_edit, updated_at, cover_photo, photos
               )
             `)
             .eq('pin_pack_id', packId)
@@ -660,7 +660,9 @@ export default function PackDetailPage() {
             const pinsData = packPinsData.map((item: any) => ({
               ...item.pins,
               name: item.pins.title,
-              photos: []
+              photos: Array.isArray(item.pins.photos) && item.pins.photos.length > 0
+                ? item.pins.photos
+                : (item.pins.cover_photo ? [item.pins.cover_photo] : [])
             }))
             setPins(pinsData)
           }
@@ -674,9 +676,37 @@ export default function PackDetailPage() {
             .limit(6)
 
           if (!similarError && similarData && similarData.length > 0) {
-            // Do not fetch photos here; set placeholder coverPhoto
-            const similarPacksNoPhotos = similarData.map((p: any) => ({ ...p, coverPhoto: null }))
-            setSimilarPacks(similarPacksNoPhotos)
+            // Fetch a cover photo per similar pack from its pins (cover_photo preferred; fallback to photos[0])
+            const baseSimilar = similarData.map((p: any) => ({ ...p, coverPhoto: null }))
+            setSimilarPacks(baseSimilar)
+
+            try {
+              const similarIds = baseSimilar.map((p: any) => p.id)
+              const { data: spp, error: sppError } = await supabase
+                .from('pin_pack_pins')
+                .select('pin_pack_id, pins!inner(cover_photo, photos)')
+                .in('pin_pack_id', similarIds)
+
+              if (!sppError && spp) {
+                const coverByPack = new Map<string, string>()
+                for (const row of spp) {
+                  if (coverByPack.has(row.pin_pack_id)) continue
+                  const cover = (row?.pins?.cover_photo as string | null) || null
+                  const legacy = Array.isArray(row?.pins?.photos) && row.pins.photos.length > 0
+                    ? (row.pins.photos[0] as string)
+                    : null
+                  const chosen = cover || legacy
+                  if (chosen) coverByPack.set(row.pin_pack_id, chosen)
+                }
+
+                setSimilarPacks(prev => prev.map((p: any) => ({
+                  ...p,
+                  coverPhoto: coverByPack.get(p.id) || null
+                })))
+              }
+            } catch (e) {
+              // Non-fatal
+            }
           }
         } catch (err) {
           logger.error('Error loading data async:', err)

@@ -105,6 +105,37 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
       logger.log('🔍 Pins data processed:', pinsData.length, 'pins')
       setPins(pinsData)
 
+      // Load photos for pins (cover_photo preferred, fallback to legacy photos[0])
+      try {
+        const pinIds = pinsData.map((p: any) => p.id)
+        if (pinIds.length > 0) {
+          const { data: pinsPhotoData, error: pinsPhotoError } = await supabase
+            .from('pins')
+            .select('id, cover_photo, photos')
+            .in('id', pinIds)
+
+          if (!pinsPhotoError && pinsPhotoData) {
+            const photoMap = new Map<string, string[]>()
+            pinsPhotoData.forEach((row: any) => {
+              const cover = (row?.cover_photo as string | null) || null
+              const legacy = Array.isArray(row?.photos) ? row.photos as string[] : []
+              const images: string[] = []
+              if (cover) images.push(cover)
+              if (legacy && legacy.length > 0) images.push(...legacy)
+              photoMap.set(row.id, images)
+            })
+
+            const enrichedPins = pinsData.map((p: any) => ({
+              ...p,
+              photos: photoMap.get(p.id) || []
+            }))
+            setPins(enrichedPins)
+          }
+        }
+      } catch (photoErr) {
+        logger.warn('🔍 Skipping pin photos enrichment due to error:', photoErr)
+      }
+
       // Process reviews
       if (packData.reviews && Array.isArray(packData.reviews) && packData.reviews.length > 0) {
         logger.log('🔍 Using existing pack reviews:', packData.reviews.length, 'reviews')
@@ -179,8 +210,8 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
           .limit(6) // Reduced from 8 to 6 for faster loading
 
         if (!similarError && similarData) {
-          // Process similar packs with cover photos
-          const similarPacksWithPhotos = similarData.map((similarPack: any) => ({
+          // Process similar packs (cover photos added in a follow-up query)
+          const baseSimilarPacks = similarData.map((similarPack: any) => ({
             id: similarPack.id,
             title: similarPack.title,
             description: similarPack.description,
@@ -193,8 +224,39 @@ export function usePackDetails(packId: string): UsePackDetailsResult {
             created_at: new Date().toISOString(),
             creator_location: similarPack.city
           }))
-          
-          setSimilarPacks(similarPacksWithPhotos)
+
+          setSimilarPacks(baseSimilarPacks)
+
+          // Enrich similar packs with a cover photo from their pins
+          try {
+            const similarIds = baseSimilarPacks.map((p: any) => p.id)
+            if (similarIds.length > 0) {
+              const { data: spp, error: sppError } = await supabase
+                .from('pin_pack_pins')
+                .select('pin_pack_id, pins!inner(id, cover_photo, photos)')
+                .in('pin_pack_id', similarIds)
+
+              if (!sppError && spp) {
+                const coverByPack = new Map<string, string>()
+                spp.forEach((row: any) => {
+                  if (coverByPack.has(row.pin_pack_id)) return
+                  const cover = (row?.pins?.cover_photo as string | null) || null
+                  const legacy = Array.isArray(row?.pins?.photos) && row.pins.photos.length > 0
+                    ? (row.pins.photos[0] as string)
+                    : null
+                  const chosen = cover || legacy
+                  if (chosen) coverByPack.set(row.pin_pack_id, chosen)
+                })
+
+                setSimilarPacks(prev => prev.map((p: any) => ({
+                  ...p,
+                  coverPhoto: coverByPack.get(p.id) || null
+                })))
+              }
+            }
+          } catch (enrichErr) {
+            logger.warn('🔍 Skipping similar packs photo enrichment due to error:', enrichErr)
+          }
         } else {
           setSimilarPacks([])
         }

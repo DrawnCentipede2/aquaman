@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { MapPin, Plus, Trash2, Save, X, ChevronDown, Download } from 'lucide-react'
+import { MapPin, Plus, Trash2, Save, X, ChevronDown, Download, HelpCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getAllCountries, getCitiesForCountry } from '@/lib/countries-cities'
 import { STANDARD_CATEGORIES } from '@/lib/categories'
@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/toast'
 import { Toaster } from '@/components/ui/toaster'
 import { aggregateAndStorePackReviews } from '@/lib/reviews'
 import { logger } from '@/lib/logger'
+import { uploadMultipleImages, generateTempPinImagePath, dataUrlToFile } from '@/lib/imageUpload'
 
 // Interface for a single pin
 interface Pin {
@@ -85,6 +86,10 @@ export default function CreatePackPage() {
   
   // State for loading place details
   const [isFetchingPlaceDetails, setIsFetchingPlaceDetails] = useState(false)
+
+  // State for help popups
+  const [showPlaceHelp, setShowPlaceHelp] = useState(false)
+  const [showListHelp, setShowListHelp] = useState(false)
 
   // Country and city dropdown state
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
@@ -286,13 +291,14 @@ export default function CreatePackPage() {
   }, [selectedCityIndex])
 
   // Image upload functions
-  const handleImageUpload = (files: FileList | null) => {
+  const handleImageUpload = async (files: FileList | null) => {
     if (!files) return
     
     setIsUploading(true)
     const newImages: string[] = []
     let processedCount = 0
     
+    // Process files as base64 for now - will upload to storage later when pack is created
     Array.from(files).forEach((file) => {
       if (file.type.startsWith('image/')) {
         const reader = new FileReader()
@@ -855,14 +861,15 @@ export default function CreatePackPage() {
       return
     }
 
-    if (pins.length !== Number(numberOfPlaces)) {
-      showToast(`You specified ${numberOfPlaces} places but added ${pins.length} places. Please add the correct number of places.`, 'error')
+    // Check that we have at least the minimum number of places
+    if (pins.length < Number(numberOfPlaces)) {
+      showToast(`You specified ${numberOfPlaces} places but only added ${pins.length}. Please add at least ${numberOfPlaces} places.`, 'error')
       return
     }
 
     // Check that all places have valid Google Maps URLs
     const placesWithValidUrls = pins.filter(pin => pin.google_maps_url && pin.google_maps_url.trim() !== '')
-    if (placesWithValidUrls.length !== Number(numberOfPlaces)) {
+    if (placesWithValidUrls.length < Number(numberOfPlaces)) {
       const missingUrls = Number(numberOfPlaces) - placesWithValidUrls.length
       showToast(`Missing URLs for ${missingUrls} place(s). Please ensure all places have valid Google Maps URLs.`, 'error')
       return
@@ -905,6 +912,72 @@ export default function CreatePackPage() {
 
   // Create new pack
   const createNewPack = async () => {
+    logger.log('createNewPack: invoked', {
+      uploadedImagesCount: uploadedImages.length,
+      firstImagePrefix: uploadedImages[0]?.slice(0, 32),
+    })
+    // Upload images to storage first
+    let finalUploadedImages: string[] = []
+    
+    if (uploadedImages.length > 0) {
+      showToast('Uploading images to storage...', 'info')
+      
+      try {
+        // Convert base64 images to File objects and upload (no fetch on data: URLs)
+        
+        const imageFiles: File[] = []
+        const packId = `pack_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        
+        // Convert base64 to File objects without network calls
+        for (let i = 0; i < uploadedImages.length; i++) {
+          const base64 = uploadedImages[i]
+          if (base64.startsWith('data:')) {
+            logger.log('createNewPack: converting data URL to File', {
+              index: i,
+              startsWith: base64.slice(0, 20),
+            })
+            const file = dataUrlToFile(base64, `image_${i}`)
+            imageFiles.push(file)
+          } else {
+            logger.log('createNewPack: non-data image entry skipped or already URL', {
+              index: i,
+              valuePrefix: base64.slice(0, 32)
+            })
+          }
+        }
+        logger.log('createNewPack: prepared File objects', {
+          fileCount: imageFiles.length,
+          files: imageFiles.map(f => ({ name: f.name, type: f.type, size: f.size }))
+        })
+        
+        if (imageFiles.length > 0) {
+          const basePathPrefix = `packs/${packId}`
+          logger.log('createNewPack: starting uploadMultipleImages', { basePathPrefix })
+          const uploadResults = await uploadMultipleImages(imageFiles, basePathPrefix)
+          
+          // Collect successful uploads
+          finalUploadedImages = uploadResults
+            .filter(result => result.url)
+            .map(result => result.url!)
+          logger.log('createNewPack: upload results', {
+            uploadResults,
+            finalUploadedImages
+          })
+          
+          if (finalUploadedImages.length === 0) {
+            throw new Error('All image uploads failed')
+          }
+          
+          showToast(`Successfully uploaded ${finalUploadedImages.length} images`, 'success')
+        }
+      } catch (error) {
+        logger.error('createNewPack: Image upload failed', error)
+        showToast('Failed to upload images. Pack will be created without images.', 'error')
+        // Continue pack creation without images
+        finalUploadedImages = []
+      }
+    }
+
     // Prepare maps list reference data
     const mapsListReference = googleMapsList ? {
       original_url: googleMapsList.url,
@@ -913,7 +986,13 @@ export default function CreatePackPage() {
       description: googleMapsList.description
     } : null
 
-    // Create pin pack data
+    // Update pins to use uploaded image URLs instead of base64
+    const pinsWithStorageImages = pins.map(pin => ({
+      ...pin,
+      photos: finalUploadedImages // All images go to all pins for now
+    }))
+
+    // Create pin pack data with pending status for review
     const pinPackData = {
       title: packTitle.trim(),
       description: packDescription.trim() || 'A curated collection of amazing places',
@@ -924,6 +1003,7 @@ export default function CreatePackPage() {
       pin_count: pins.length,
       categories: selectedCategories,
       maps_list_reference: mapsListReference,
+      status: 'pending', // Set to pending for admin review
       created_at: new Date().toISOString()
     }
 
@@ -933,12 +1013,12 @@ export default function CreatePackPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...pinPackData,
-        pins,
+        pins: pinsWithStorageImages,
       }),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: 'Unknown error' }))
-      logger.error('Error creating pin pack:', err)
+      logger.error('createNewPack: error creating pin pack', err)
       throw new Error(err.error || 'Failed to create pack')
     }
     const { id: newPackId } = await resp.json()
@@ -949,7 +1029,7 @@ export default function CreatePackPage() {
     try {
       logger.log('Starting review aggregation for new pack:', newPackId)
       // Convert pins to match the reviews utility interface
-      const pinsForReviews = pins.map(pin => ({
+      const pinsForReviews = pinsWithStorageImages.map(pin => ({
         ...pin,
         id: pin.id || `temp-${Date.now()}-${Math.random()}`
       }))
@@ -960,10 +1040,13 @@ export default function CreatePackPage() {
       // Don't fail the pack creation if review aggregation fails
     }
 
-    // Show success modal
+    // Show success modal with review message
     setCreatedPackTitle(packTitle.trim())
     setShowSuccessModal(true)
-    showToast(`Pack "${packTitle.trim()}" created successfully with ${pins.length} places and ${uploadedImages.length} photos!`, 'success')
+    const placeText = pins.length === Number(numberOfPlaces)
+      ? `${pins.length} places`
+      : `${pins.length} places (specified ${numberOfPlaces})`
+    showToast(`Pack \"${packTitle.trim()}\" submitted for review with ${placeText} and ${finalUploadedImages.length} images! It will be visible once approved.`, 'success')
 
     // Clear form data
     clearFormData()
@@ -1248,9 +1331,18 @@ export default function CreatePackPage() {
               
               {/* Import from Google Maps List */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Import from Google Maps List <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Import from Google Maps List <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    onClick={() => setShowListHelp(true)}
+                    className="ml-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="How to get Google Maps list URL"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="relative">
                   <input
                     type="text"
@@ -1369,12 +1461,11 @@ export default function CreatePackPage() {
                     value={numberOfPlaces}
                     onChange={(e) => {
                       const inputValue = e.target.value
-                      if (inputValue === '' || (Number(inputValue) >= 1 && Number(inputValue) <= 20)) {
+                      if (inputValue === '' || Number(inputValue) >= 1) {
                         setNumberOfPlaces(inputValue)
                       }
                     }}
                     min="1"
-                    max="15"
                     step="1"
                     placeholder="5"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -1499,9 +1590,18 @@ export default function CreatePackPage() {
               
               {/* Add Places */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Add Places
-                </label>
+                <div className="flex items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Add Places
+                  </label>
+                  <button
+                    onClick={() => setShowPlaceHelp(true)}
+                    className="ml-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="How to get Google Maps place URL"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="relative">
                   <input
                     type="text"
@@ -1679,6 +1779,66 @@ export default function CreatePackPage() {
                 Create Another
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Help Popup for Google Maps List */}
+      {showListHelp && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">How to get Google Maps List URL</h3>
+              <button
+                onClick={() => setShowListHelp(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm text-gray-600">
+              <p><strong>1.</strong> Open Google Maps on your phone or computer</p>
+              <p><strong>2.</strong> Create or find a saved list (like "Favorite Restaurants")</p>
+              <p><strong>3.</strong> Tap the share button</p>
+              <p><strong>4.</strong> Copy the link that looks like: <code className="bg-gray-100 px-1 rounded">maps.app.goo.gl/...</code></p>
+              <p><strong>5.</strong> Paste that URL in the field above</p>
+            </div>
+            <button
+              onClick={() => setShowListHelp(false)}
+              className="w-full mt-6 bg-sky-500 text-white py-2 px-4 rounded-lg hover:bg-sky-600 transition-colors"
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Help Popup for Place URLs */}
+      {showPlaceHelp && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">How to get Google Maps Place URL</h3>
+              <button
+                onClick={() => setShowPlaceHelp(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm text-gray-600">
+              <p><strong>1.</strong> Open Google Maps and find a place (restaurant, hotel, etc.)</p>
+              <p><strong>2.</strong> Click on the place to open its details</p>
+              <p><strong>3.</strong> Look for the share button (📤) in the place details</p>
+              <p><strong>4.</strong> Copy the link that looks like: <code className="bg-gray-100 px-1 rounded">https://maps.google.com/...</code></p>
+              <p><strong>5.</strong> Paste that URL in the field above and click the download button</p>
+            </div>
+            <button
+              onClick={() => setShowPlaceHelp(false)}
+              className="w-full mt-6 bg-sky-500 text-white py-2 px-4 rounded-lg hover:bg-sky-600 transition-colors"
+            >
+              Got it!
+            </button>
           </div>
         </div>
       )}

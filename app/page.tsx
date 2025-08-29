@@ -3,19 +3,12 @@
 import { MapPin, Users, Shield, Globe, Heart, Search, Star } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Image from 'next/image'
+import heroBg from '@/public/clouds-hero-bg.jpg'
 import { supabase } from '@/lib/supabase'
 import { logger } from '@/lib/logger'
 
-// Utility function to ensure hydration-safe rendering
-const useHydrationSafe = () => {
-  const [isHydrated, setIsHydrated] = useState(false)
-  
-  useEffect(() => {
-    setIsHydrated(true)
-  }, [])
-  
-  return isHydrated
-}
+// Note: We rely on Next/Image with priority + blur placeholder for the hero image
+// to ensure a smooth, single-stage appearance rather than progressive paint.
 
 // Cache for Google Maps ratings to avoid recalculation
 const ratingCache = new Map()
@@ -42,7 +35,7 @@ export default function LandingPage() {
   // State for real packs
   const [realPacks, setRealPacks] = useState<PinPackWithPhoto[]>([])
   const [loadingPacks, setLoadingPacks] = useState(true)
-  const isHydrated = useHydrationSafe()
+  const [heroLoaded, setHeroLoaded] = useState(false) // Controls hero image fade-in
 
   // Function to get Google Maps rating for a location - CACHED
   const getGoogleMapsRating = useCallback((city: string, country: string, packTitle: string) => {
@@ -148,24 +141,8 @@ export default function LandingPage() {
 
 
 
-  // Preload only critical images for better performance
-  useEffect(() => {
-    if (!isHydrated) return
-    
-    // Only preload the hero background and first category image
-    const criticalImages = [
-      '/clouds-hero-bg.jpg',
-      '/Nightlife.jpg'
-    ]
-    
-    criticalImages.forEach(src => {
-      const link = document.createElement('link')
-      link.rel = 'preload'
-      link.as = 'image'
-      link.href = src
-      document.head.appendChild(link)
-    })
-  }, [isHydrated])
+  // Removed manual <link rel="preload"> injection.
+  // Next/Image with priority handles preloading efficiently at build/runtime.
 
   // Skeleton loading component for better perceived performance
   const PackSkeleton = () => (
@@ -188,15 +165,24 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white">
       {/* New Hero Section with Dark Cloudy Background */}
       <div className="relative h-screen -mt-20 flex items-center justify-center overflow-hidden z-0">
-        {/* Cloud background image with optimized loading */}
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: `url('/clouds-hero-bg.jpg')`,
-          }}
-        >
-          {/* Subtle dark overlay for better text readability */}
-          <div className="absolute inset-0 bg-black/20"></div>
+        {/* Cloud background image using Next/Image for smooth loading */}
+        <div className="absolute inset-0">
+          {/* Neutral fallback background to avoid staged paint */}
+          <div className="absolute inset-0 bg-gray-100"></div>
+          <Image
+            src={heroBg}
+            alt=""
+            fill
+            priority
+            fetchPriority="high"
+            sizes="100vw"
+            quality={75}
+            className={`object-cover transition-opacity duration-500 ${heroLoaded ? 'opacity-100' : 'opacity-0'}`}
+            style={{ imageRendering: 'auto' }}
+            onLoadingComplete={() => setHeroLoaded(true)}
+          />
+          {/* Subtle dark overlay for better text readability, only after image is ready */}
+          {heroLoaded && <div className="absolute inset-0 bg-black/20"></div>}
         </div>
         
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
@@ -274,7 +260,6 @@ export default function LandingPage() {
                   fill
                   sizes="(max-width: 768px) 33vw, 25vw"
                   className="object-cover transition-transform duration-300"
-                  priority
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4">
