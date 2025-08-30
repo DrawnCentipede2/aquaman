@@ -35,10 +35,9 @@ export default function Navbar({ userRole: initialRole }: NavbarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo and Brand */}
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 transition-colors">
-              <PinCloudLogo className="h-8 w-8" />
-              <span className="text-xl font-bold">PinCloud</span>
+          <div className="rounded-lg p-2">
+          <Link href="/" className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 transition-colors">
+              <PinCloudLogo className="h-12 w-auto" />
             </Link>
           </div>
 

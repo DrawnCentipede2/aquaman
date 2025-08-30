@@ -635,7 +635,7 @@ export default function LandingPage() {
                 const userProfile = localStorage.getItem('pinpacks_user_profile')
                 if (!userProfile) {
                   e.preventDefault()
-                  window.location.href = '/signup'
+                  window.location.href = '/auth'
                 }
               }}
               className="btn-outline border-white text-white hover:bg-white hover:text-primary-500 inline-flex items-center text-lg px-8 py-4"

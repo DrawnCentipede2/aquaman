@@ -228,7 +228,7 @@ export default function SellPage() {
       window.location.href = '/manage'
     } else {
       // User doesn't have account → redirect to sign up with parameter to indicate they came from sell page
-      window.location.href = '/signup?from=sell'
+      window.location.href = '/auth?from=sell'
     }
   }
 

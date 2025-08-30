@@ -16,6 +16,9 @@ const PinCloudLogo = dynamic(() => import('@/components/PinCloudLogo'), {
 const ToastProvider = dynamic(() => import('@/components/ui/toast').then(mod => ({ default: mod.ToastProvider })), {
   ssr: true
 })
+const Footer = dynamic(() => import('@/components/Footer'), {
+  ssr: true
+})
 
 // Only load PerformanceMonitor in development or when explicitly needed
 const PerformanceMonitor = dynamic(() => import('@/components/PerformanceMonitor'), {
@@ -61,11 +64,10 @@ export default function RootLayout({
                     >
                       <div>
                         {/* PinCloud logo with pins raining from cloud */}
-                        <PinCloudLogo className="h-8 w-8" animate={false} />
+                        <div className="rounded-lg p-2">
+                          <PinCloudLogo className="h-12 w-auto" animate={false} />
+                        </div>
                       </div>
-                      <span className="text-2xl font-bold tracking-tight">
-                        PinCloud
-                      </span>
                     </a>
                     <span 
                       id="tagline" 
@@ -91,72 +93,8 @@ export default function RootLayout({
               {children}
             </main>
 
-            {/* Airbnb-inspired footer */}
-            <footer className="bg-gray-50 border-t border-gray-200 mt-16">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-                  {/* About Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
-                      About
-                    </h3>
-                    <ul className="space-y-3">
-                      <li><a href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">How it works</a></li>
-                      <li><a href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">Our mission</a></li>
-                      <li><a href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">Careers</a></li>
-                    </ul>
-                  </div>
-                  
-                  {/* Community Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
-                      Community
-                    </h3>
-                    <ul className="space-y-3">
-                      <li><a href="/browse" className="text-gray-600 hover:text-gray-900 transition-colors">Browse packs</a></li>
-                      <li><a href="/create" className="text-gray-600 hover:text-gray-900 transition-colors">Create a pack</a></li>
-                      <li><a href="/manage" className="text-gray-600 hover:text-gray-900 transition-colors">Your pins</a></li>
-                    </ul>
-                  </div>
-                  
-                  {/* Support Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
-                      Support
-                    </h3>
-                    <ul className="space-y-3">
-                      <li><a href="/help" className="text-gray-600 hover:text-gray-900 transition-colors">Help center</a></li>
-                      <li><a href="/contact" className="text-gray-600 hover:text-gray-900 transition-colors">Contact us</a></li>
-                      <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Safety</a></li>
-                    </ul>
-                  </div>
-                  
-                  {/* Connect Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-4">
-                      Connect
-                    </h3>
-                    <ul className="space-y-3">
-                      <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Newsletter</a></li>
-                      <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Social media</a></li>
-                      <li><a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">Blog</a></li>
-                    </ul>
-                  </div>
-                </div>
-                
-                {/* Footer bottom */}
-                <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center">
-                  <div className="text-sm text-gray-600 mb-4 md:mb-0">
-                    &copy; 2024 PinCloud. Connecting travelers with local insights.
-                  </div>
-                  <div className="flex space-x-6 text-sm text-gray-600">
-                    <a href="/privacy" className="hover:text-gray-900 transition-colors">Privacy</a>
-                    <a href="/terms" className="hover:text-gray-900 transition-colors">Terms</a>
-                    <a href="#" className="hover:text-gray-900 transition-colors">Sitemap</a>
-                  </div>
-                </div>
-              </div>
-            </footer>
+            {/* Footer */}
+            <Footer />
           </div>
         </ToastProvider>
       </body>

@@ -1759,7 +1759,7 @@ export default function BrowsePage() {
                 const userProfile = localStorage.getItem('pinpacks_user_profile')
                 if (!userProfile) {
                   e.preventDefault()
-                  window.location.href = '/signup'
+                  window.location.href = '/auth'
                 }
               }}
               className="btn-primary inline-flex items-center text-lg px-8 py-4"
@@ -1927,7 +1927,7 @@ export default function BrowsePage() {
               <button
                 onClick={() => {
                   setShowLoginModal(false)
-                  window.location.href = '/signup'
+                  window.location.href = '/auth'
                 }}
                 className="w-full btn-secondary py-3 text-base"
               >

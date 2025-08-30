@@ -17,7 +17,7 @@ const SENSITIVE_FILE_PATTERNS = [
   /secret/,
   /key/,
   /password/,
-  /auth/,
+  // Do NOT block our app's public auth route
   /credential/,
   // Additional patterns from security audit
   /\.tsconfig/,

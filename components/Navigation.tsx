@@ -291,16 +291,24 @@ export default function Navigation() {
       }
     }
     
-    logger.log('📡 Navigation - Adding storage event listeners')
+    // Listen for global request to open login popup (from Footer or elsewhere)
+    const handleOpenLoginPopup = () => {
+      logger.log('🪟 Navigation - Received open-login-popup event')
+      setShowLoginPopup(true)
+    }
+
+    logger.log('📡 Navigation - Adding storage and custom event listeners')
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('storage', handleCustomStorageEvent)
     window.addEventListener('custom-auth-event', handleCustomAuthEvent)
+    window.addEventListener('open-login-popup', handleOpenLoginPopup as EventListener)
     
     return () => {
       logger.log('🧹 Navigation - Cleaning up event listeners and intervals')
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('storage', handleCustomStorageEvent)
       window.removeEventListener('custom-auth-event', handleCustomAuthEvent)
+      window.removeEventListener('open-login-popup', handleOpenLoginPopup as EventListener)
       if (authCheckInterval) {
         clearInterval(authCheckInterval)
       }
@@ -688,14 +696,6 @@ export default function Navigation() {
                         Sign In
                       </a>
                       
-                      <a
-                        href="/signup"
-                        onClick={() => setIsDropdownOpen(false)}
-                        className="flex items-center w-full px-4 py-3 text-sm font-medium text-primary-600 hover:bg-primary-50 transition-colors"
-                      >
-                        <Plus className="h-4 w-4 mr-3 text-primary-500" />
-                        Create Account
-                      </a>
                     </div>
                   </>
                 ) : (
@@ -1111,7 +1111,7 @@ export default function Navigation() {
                   </a>
                   
                   <a
-                    href="/signup"
+                    href="/auth"
                     className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
                   >
                     <Plus className="h-4 w-4 mr-2" />

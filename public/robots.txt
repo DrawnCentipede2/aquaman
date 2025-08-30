@@ -21,7 +21,7 @@ Disallow: /edit
 Disallow: /profile
 Disallow: /cart
 Disallow: /sell
-Disallow: /signup
+Disallow: /auth
 Disallow: /dashboard
 Disallow: /creator-dashboard
 Disallow: /pinventory

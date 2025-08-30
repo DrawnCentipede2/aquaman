@@ -1170,7 +1170,7 @@ export default function BrowsePage() {
                 <button
                   onClick={() => {
                     setShowLoginModal(false)
-                    window.location.href = '/signup'
+                    window.location.href = '/auth'
                   }}
                   className="w-full btn-secondary py-3 text-base"
                 >
